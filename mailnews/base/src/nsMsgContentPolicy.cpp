@@ -439,9 +439,9 @@ bool nsMsgContentPolicy::IsExposedProtocol(nsIURI *aContentLocation) {
   // admitted purely based on their scheme.
   // news, snews, nntp, imap and mailbox are checked before the call
   // to this function by matching content location and requesting location.
-  if (MsgLowerCaseEqualsLiteral(contentScheme, "mailto") ||
-      MsgLowerCaseEqualsLiteral(contentScheme, "addbook") ||
-      MsgLowerCaseEqualsLiteral(contentScheme, "about"))
+  if (contentScheme.LowerCaseEqualsLiteral("mailto") ||
+      contentScheme.LowerCaseEqualsLiteral("addbook") ||
+      contentScheme.LowerCaseEqualsLiteral("about"))
     return true;
 
   // check if customized exposed scheme
@@ -712,7 +712,8 @@ void nsMsgContentPolicy::ComposeShouldLoad(nsIMsgCompose *aMsgCompose,
     if (*aDecision == nsIContentPolicy::REJECT_REQUEST) {
       bool insertingQuotedContent = true;
       aMsgCompose->GetInsertingQuotedContent(&insertingQuotedContent);
-      nsCOMPtr<Element> element = do_QueryInterface(aRequestingContext);
+      nsCOMPtr<mozilla::dom::Element> element =
+          do_QueryInterface(aRequestingContext);
       RefPtr<mozilla::dom::HTMLImageElement> image =
           mozilla::dom::HTMLImageElement::FromNodeOrNull(element);
       if (image) {
@@ -818,12 +819,10 @@ nsresult nsMsgContentPolicy::SetDisableItemsOnMailNewsUrlDocshells(
     rv = docShell->SetAllowContentRetargetingOnChildren(false);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    uint32_t sandboxFlags;
-    rv = docShell->GetSandboxFlags(&sandboxFlags);
-    sandboxFlags |= SANDBOXED_FORMS;
-    NS_ENSURE_SUCCESS(rv, rv);
-    rv = docShell->SetSandboxFlags(sandboxFlags);
-    NS_ENSURE_SUCCESS(rv, rv);
+    RefPtr<mozilla::dom::BrowsingContext> browsingContext =
+        docShell->GetBrowsingContext();
+    browsingContext->SetSandboxFlags(browsingContext->GetSandboxFlags() |
+                                     SANDBOXED_FORMS);
   } else {
     // JavaScript is allowed on non-message URLs.
     rv = docShell->SetAllowJavascript(true);

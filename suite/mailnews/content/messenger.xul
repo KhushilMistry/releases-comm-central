@@ -50,6 +50,7 @@
 <script type="application/javascript" src="chrome://messenger/content/mailContextMenus.js"/>
 <script type="application/javascript" src="chrome://messenger/content/messengerdnd.js"/>
 <script type="application/javascript" src="chrome://messenger/content/accountUtils.js"/>
+<script type="application/javascript" src="chrome://messenger/content/folderPane.js"/>
 <script type="application/javascript" src="chrome://messenger/content/phishingDetector.js"/>
 <script type="application/javascript" src="chrome://communicator/content/contentAreaClick.js"/>
 <script type="application/javascript" src="chrome://global/content/nsDragAndDrop.js"/>
@@ -77,6 +78,7 @@
         events="focus"
         oncommandupdate="FocusRingUpdate_Mail()"/>
   <commandset id="tasksCommands"/>
+  <command id="cmd_close" oncommand="MsgCloseTabOrWindow();"/>
 </commandset>
 
 <broadcasterset id="mailBroadcasters">
@@ -90,6 +92,14 @@
 <broadcasterset id="mainBroadcasterSet"/>
 
 <keyset id="mailKeys">
+  <!-- Tab/F6 Keys -->
+  <key keycode="VK_TAB" oncommand="SwitchPaneFocus(event);" modifiers="control,shift"/>
+  <key keycode="VK_TAB" oncommand="SwitchPaneFocus(event);" modifiers="control"/>
+  <key keycode="VK_F6" oncommand="SwitchPaneFocus(event);" modifiers="control,shift"/>
+  <key keycode="VK_F6" oncommand="SwitchPaneFocus(event);" modifiers="control"/>
+  <key keycode="VK_F6" oncommand="SwitchPaneFocus(event);" modifiers="shift"/>
+  <key keycode="VK_F6" oncommand="SwitchPaneFocus(event);"/>
+
   <keyset id="tasksKeys"/>
 </keyset>
 

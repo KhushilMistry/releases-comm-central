@@ -25,7 +25,7 @@ add_task(async () => {
 
   let addedItemId = await new Promise(resolve => {
     storage.addItem(storageItem, {
-      onOperationComplete: function(calendar, status, opType, id, addedItem) {
+      onOperationComplete(calendar, status, opType, id, addedItem) {
         addedItem.QueryInterface(Ci.calIEvent);
         resolve(addedItem.id);
       },
@@ -38,14 +38,14 @@ add_task(async () => {
   await new Promise(resolve => {
     storage.getItem(addedItemId, {
       found: false,
-      onGetResult: function(calendar, status, type, detail, count, items) {
+      onGetResult(calendar, status, type, detail, items) {
         let item = items[0];
 
         // Check start date
         equal(item.startDate.compare(cal.createDateTime("20120101T010101Z")), 0);
 
         // Check attachment
-        let attaches = item.getAttachments({});
+        let attaches = item.getAttachments();
         let attach = attaches[0];
         equal(attaches.length, 1);
         equal(attach.uri.spec, "http://example.com/test.ics");
@@ -54,7 +54,7 @@ add_task(async () => {
         equal(attach.getParameter("FILENAME"), "test.ics");
 
         // Check attendee
-        let attendees = item.getAttendees({});
+        let attendees = item.getAttendees();
         let attendee = attendees[0];
         equal(attendees.length, 1);
         equal(attendee.id, "mailto:test@example.com");
@@ -67,7 +67,7 @@ add_task(async () => {
         equal(attendee.getProperty("X-THING"), "BAR");
 
         // Check relation
-        let relations = item.getRelations({});
+        let relations = item.getRelations();
         let rel = relations[0];
         equal(relations.length, 1);
         equal(rel.relType, "SIBLING");
@@ -75,13 +75,13 @@ add_task(async () => {
         equal(rel.getParameter("FOO"), "BAR");
 
         // Check recurrence item
-        for (let ritem of item.recurrenceInfo.getRecurrenceItems({})) {
+        for (let ritem of item.recurrenceInfo.getRecurrenceItems()) {
           if (ritem instanceof Ci.calIRecurrenceRule) {
             equal(ritem.type, "MONTHLY");
             equal(ritem.interval, 2);
             equal(ritem.count, 5);
             equal(ritem.isByCount, true);
-            equal(ritem.getComponent("BYDAY", {}).toString(), [2].toString());
+            equal(ritem.getComponent("BYDAY").toString(), [2].toString());
             equal(ritem.isNegative, false);
           } else if (ritem instanceof Ci.calIRecurrenceDate) {
             if (ritem.isNegative) {
@@ -96,7 +96,7 @@ add_task(async () => {
 
         this.found = true;
       },
-      onOperationComplete: function() {
+      onOperationComplete() {
         if (!this.found) {
           do_throw("Could not find item");
         }

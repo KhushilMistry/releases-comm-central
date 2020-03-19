@@ -117,7 +117,7 @@
     }
 
     /**
-     * Sets the visiblity (collapsed state) of this modebox and (optionally) updates the
+     * Sets the visibility (collapsed state) of this modebox and (optionally) updates the
      * `collapsedinmode` attribute and (optionally) notifies the `refcontrol`.
      *
      * @param {boolean} visible  Whether the modebox should become visible or not.
@@ -242,7 +242,7 @@
         return;
       }
       super.connectedCallback();
-      this.orient = "vertical";
+      this.setAttribute("orient", "vertical");
     }
   }
 

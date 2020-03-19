@@ -7,9 +7,9 @@
 /* import-globals-from ../calendar-ui-utils.js */
 
 var { splitRecurrenceRules } = ChromeUtils.import(
-  "resource://calendar/modules/calRecurrenceUtils.jsm"
+  "resource:///modules/calendar/calRecurrenceUtils.jsm"
 );
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 var gIsReadOnly = false;
@@ -87,7 +87,7 @@ const RecurrencePreview = {
     let hboxIterator = hbox;
     while (hboxIterator) {
       numRows++;
-      hboxIterator = hboxIterator.nextSibling;
+      hboxIterator = hboxIterator.nextElementSibling;
     }
 
     // Adjust rows
@@ -97,22 +97,22 @@ const RecurrencePreview = {
       numRows++;
     }
     while (numRows > numVertical) {
-      vbox.firstChild.remove();
+      vbox.firstElementChild.remove();
       numRows--;
     }
 
     // Walk all rows and adjust column elements
     hbox = this.node.querySelector("hbox");
     while (hbox) {
-      let firstChild = hbox.firstChild;
-      while (hbox.childNodes.length - 1 < numHorizontal) {
-        let newNode = firstChild.cloneNode(true);
-        firstChild.parentNode.insertBefore(newNode, firstChild);
+      let firstElementChild = hbox.firstElementChild;
+      while (hbox.children.length - 1 < numHorizontal) {
+        let newNode = firstElementChild.cloneNode(true);
+        firstElementChild.parentNode.insertBefore(newNode, firstElementChild);
       }
-      while (hbox.childNodes.length - 1 > numHorizontal) {
-        hbox.firstChild.remove();
+      while (hbox.children.length - 1 > numHorizontal) {
+        hbox.firstElementChild.remove();
       }
-      hbox = hbox.nextSibling;
+      hbox = hbox.nextElementSibling;
     }
 
     this.updateContent();
@@ -125,13 +125,13 @@ const RecurrencePreview = {
     let date = cal.dtz.dateTimeToJsDate(this.dateTime);
     let hbox = this.node.querySelector("hbox");
     while (hbox) {
-      let numChilds = hbox.childNodes.length - 1;
+      let numChilds = hbox.children.length - 1;
       for (let i = 0; i < numChilds; i++) {
-        let minimonth = hbox.childNodes[i];
+        let minimonth = hbox.children[i];
         minimonth.showMonth(date);
         date.setMonth(date.getMonth() + 1);
       }
-      hbox = hbox.nextSibling;
+      hbox = hbox.nextElementSibling;
     }
   },
   /**
@@ -156,11 +156,11 @@ const RecurrencePreview = {
     while (hbox) {
       // now iterate all the child nodes of this row
       // in order to visit each minimonth in turn.
-      let numChilds = hbox.childNodes.length - 1;
+      let numChilds = hbox.children.length - 1;
       for (let i = 0; i < numChilds; i++) {
         // we now have one of the minimonth controls while 'start'
         // and 'end' are set to the interval this minimonth shows.
-        minimonth = hbox.childNodes[i];
+        minimonth = hbox.children[i];
         minimonth.showMonth(cal.dtz.dateTimeToJsDate(start));
         if (recurrenceInfo) {
           // retrieve an array of dates that represents all occurrences
@@ -169,7 +169,7 @@ const RecurrencePreview = {
           // dates that are strictly monotonically increasing.
           // should getOccurrenceDates() not enforce this assumption we
           // need to fall back to some different algorithm.
-          let dates = recurrenceInfo.getOccurrenceDates(start, end, 0, {});
+          let dates = recurrenceInfo.getOccurrenceDates(start, end, 0);
 
           // now run through all days of this month and set the
           // 'busy' attribute with respect to the occurrence array.
@@ -213,7 +213,7 @@ const RecurrencePreview = {
         start.month++;
         end.month++;
       }
-      hbox = hbox.nextSibling;
+      hbox = hbox.nextElementSibling;
     }
   },
 };
@@ -229,9 +229,9 @@ const DaypickerWeekday = {
     this.weekStartOffset = Services.prefs.getIntPref("calendar.week.start", 0);
 
     let mainbox = document.getElementById("daypicker-weekday");
-    let numChilds = mainbox.childNodes.length;
+    let numChilds = mainbox.children.length;
     for (let i = 0; i < numChilds; i++) {
-      let child = mainbox.childNodes[i];
+      let child = mainbox.children[i];
       let dow = i + this.weekStartOffset;
       if (dow >= 7) {
         dow -= 7;
@@ -246,10 +246,10 @@ const DaypickerWeekday = {
    */
   get days() {
     let mainbox = document.getElementById("daypicker-weekday");
-    let numChilds = mainbox.childNodes.length;
+    let numChilds = mainbox.children.length;
     let days = [];
     for (let i = 0; i < numChilds; i++) {
-      let child = mainbox.childNodes[i];
+      let child = mainbox.children[i];
       if (child.getAttribute("checked") == "true") {
         let index = i + this.weekStartOffset;
         if (index >= 7) {
@@ -268,7 +268,7 @@ const DaypickerWeekday = {
    */
   set days(val) {
     let mainbox = document.getElementById("daypicker-weekday");
-    for (let child of mainbox.childNodes) {
+    for (let child of mainbox.children) {
       child.removeAttribute("checked");
     }
     for (let i in val) {
@@ -276,7 +276,7 @@ const DaypickerWeekday = {
       if (index < 0) {
         index += 7;
       }
-      mainbox.childNodes[index].setAttribute("checked", "true");
+      mainbox.children[index].setAttribute("checked", "true");
     }
     return val;
   },
@@ -292,8 +292,8 @@ const DaypickerMonthday = {
   init() {
     let mainbox = document.querySelector(".daypicker-monthday-mainbox");
     let child = null;
-    for (let row of mainbox.childNodes) {
-      for (child of row.childNodes) {
+    for (let row of mainbox.children) {
+      for (child of row.children) {
         child.calendar = mainbox;
       }
     }
@@ -309,8 +309,8 @@ const DaypickerMonthday = {
   set days(val) {
     let mainbox = document.querySelector(".daypicker-monthday-mainbox");
     let days = [];
-    for (let row of mainbox.childNodes) {
-      for (let child of row.childNodes) {
+    for (let row of mainbox.children) {
+      for (let child of row.children) {
         child.removeAttribute("checked");
         days.push(child);
       }
@@ -328,8 +328,8 @@ const DaypickerMonthday = {
   get days() {
     let mainbox = document.querySelector(".daypicker-monthday-mainbox");
     let days = [];
-    for (let row of mainbox.childNodes) {
-      for (let child of row.childNodes) {
+    for (let row of mainbox.children) {
+      for (let child of row.children) {
         if (child.getAttribute("checked") == "true") {
           days.push(Number(child.label) ? Number(child.label) : -1);
         }
@@ -342,8 +342,8 @@ const DaypickerMonthday = {
    */
   disable() {
     let mainbox = document.querySelector(".daypicker-monthday-mainbox");
-    for (let row of mainbox.childNodes) {
-      for (let child of row.childNodes) {
+    for (let row of mainbox.children) {
+      for (let child of row.children) {
         child.setAttribute("disabled", "true");
       }
     }
@@ -353,8 +353,8 @@ const DaypickerMonthday = {
    */
   enable() {
     let mainbox = document.querySelector(".daypicker-monthday-mainbox");
-    for (let row of mainbox.childNodes) {
-      for (let child of row.childNodes) {
+    for (let row of mainbox.children) {
+      for (let child of row.children) {
         child.removeAttribute("disabled");
       }
     }
@@ -479,9 +479,9 @@ function initializeControls(rule) {
       break;
   }
 
-  let byDayRuleComponent = rule.getComponent("BYDAY", {});
-  let byMonthDayRuleComponent = rule.getComponent("BYMONTHDAY", {});
-  let byMonthRuleComponent = rule.getComponent("BYMONTH", {});
+  let byDayRuleComponent = rule.getComponent("BYDAY");
+  let byMonthDayRuleComponent = rule.getComponent("BYMONTHDAY");
+  let byMonthRuleComponent = rule.getComponent("BYMONTH");
   let kDefaultTimezone = cal.dtz.defaultTimezone;
   let startDate = gStartTime.getInTimezone(kDefaultTimezone);
 
@@ -640,7 +640,7 @@ function onSave(item) {
       } else {
         recRule.interval = 1;
         let onDays = [2, 3, 4, 5, 6];
-        recRule.setComponent("BYDAY", onDays.length, onDays);
+        recRule.setComponent("BYDAY", onDays);
       }
       break;
     }
@@ -650,7 +650,7 @@ function onSave(item) {
       recRule.interval = ndays;
       let onDays = DaypickerWeekday.days;
       if (onDays.length > 0) {
-        recRule.setComponent("BYDAY", onDays.length, onDays);
+        recRule.setComponent("BYDAY", onDays);
       }
       break;
     }
@@ -665,20 +665,20 @@ function onSave(item) {
         if (monthlyDOW < 0) {
           if (monthlyOrdinal == 0) {
             // Monthly rule "Every day of the month".
-            recRule.setComponent("BYDAY", 7, ALL_WEEKDAYS);
+            recRule.setComponent("BYDAY", ALL_WEEKDAYS);
           } else {
             // One of the first five days or the last day of the month.
-            recRule.setComponent("BYMONTHDAY", 1, [monthlyOrdinal]);
+            recRule.setComponent("BYMONTHDAY", [monthlyOrdinal]);
           }
         } else {
           let sign = monthlyOrdinal < 0 ? -1 : 1;
           let onDays = [(Math.abs(monthlyOrdinal) * 8 + monthlyDOW) * sign];
-          recRule.setComponent("BYDAY", onDays.length, onDays);
+          recRule.setComponent("BYDAY", onDays);
         }
       } else {
         let monthlyDays = DaypickerMonthday.days;
         if (monthlyDays.length > 0) {
-          recRule.setComponent("BYMONTHDAY", monthlyDays.length, monthlyDays);
+          recRule.setComponent("BYMONTHDAY", monthlyDays);
         }
       }
       break;
@@ -690,26 +690,26 @@ function onSave(item) {
       let yearlyGroup = document.getElementById("yearly-group");
       if (yearlyGroup.selectedIndex == 0) {
         let yearlyByMonth = [Number(getElementValue("yearly-month-ordinal"))];
-        recRule.setComponent("BYMONTH", yearlyByMonth.length, yearlyByMonth);
+        recRule.setComponent("BYMONTH", yearlyByMonth);
         let yearlyByDay = [Number(getElementValue("yearly-days"))];
-        recRule.setComponent("BYMONTHDAY", yearlyByDay.length, yearlyByDay);
+        recRule.setComponent("BYMONTHDAY", yearlyByDay);
       } else {
         let yearlyByMonth = [Number(getElementValue("yearly-month-rule"))];
-        recRule.setComponent("BYMONTH", yearlyByMonth.length, yearlyByMonth);
+        recRule.setComponent("BYMONTH", yearlyByMonth);
         let yearlyOrdinal = Number(getElementValue("yearly-ordinal"));
         let yearlyDOW = Number(getElementValue("yearly-weekday"));
         if (yearlyDOW < 0) {
           if (yearlyOrdinal == 0) {
             // Yearly rule "Every day of a month".
-            recRule.setComponent("BYDAY", 7, ALL_WEEKDAYS);
+            recRule.setComponent("BYDAY", ALL_WEEKDAYS);
           } else {
             // One of the first five days or the last of a month.
-            recRule.setComponent("BYMONTHDAY", 1, [yearlyOrdinal]);
+            recRule.setComponent("BYMONTHDAY", [yearlyOrdinal]);
           }
         } else {
           let sign = yearlyOrdinal < 0 ? -1 : 1;
           let onDays = [(Math.abs(yearlyOrdinal) * 8 + yearlyDOW) * sign];
-          recRule.setComponent("BYDAY", onDays.length, onDays);
+          recRule.setComponent("BYDAY", onDays);
         }
       }
       break;

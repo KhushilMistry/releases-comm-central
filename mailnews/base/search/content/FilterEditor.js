@@ -623,12 +623,7 @@ function _checkActionsReorder() {
   // Compare the two lists.
   let statusBar = document.getElementById("statusbar");
   for (let index = 0; index < gActionListOrdered.length; index++) {
-    if (
-      index !=
-      gTempFilter.getActionIndex(
-        gActionListOrdered.queryElementAt(index, nsIMsgRuleAction)
-      )
-    ) {
+    if (index != gTempFilter.getActionIndex(gActionListOrdered[index])) {
       // If the lists are not the same unhide the status bar and show warning.
       statusBar.style.visibility = "visible";
       return;
@@ -649,9 +644,9 @@ function showActionsOrder() {
   let actionStrings = [];
   for (let i = 0; i < gFilterActionList.itemCount; i++) {
     let ruleAction = gFilterActionList.getItemAtIndex(i);
-    let actionTarget = ruleAction.childNodes[1];
+    let actionTarget = ruleAction.children[1];
     let actionItem = actionTarget.ruleactiontargetElement;
-    let actionItemLabel = actionItem && actionItem.childNodes[0].label;
+    let actionItemLabel = actionItem && actionItem.children[0].label;
 
     let actionString = {
       label: ruleAction.mRuleActionType.label,
@@ -661,7 +656,7 @@ function showActionsOrder() {
       if (actionItemLabel) {
         actionString.argument = actionItemLabel;
       } else {
-        actionString.argument = actionItem.childNodes[0].value;
+        actionString.argument = actionItem.children[0].value;
       }
     }
     actionStrings.push(actionString);
@@ -670,9 +665,7 @@ function showActionsOrder() {
   // Present a nicely formatted list of action names and arguments.
   let actionList = gFilterBundle.getString("filterActionOrderExplanation");
   for (let i = 0; i < gActionListOrdered.length; i++) {
-    let actionIndex = gTempFilter.getActionIndex(
-      gActionListOrdered.queryElementAt(i, nsIMsgRuleAction)
-    );
+    let actionIndex = gTempFilter.getActionIndex(gActionListOrdered[i]);
     let action = actionStrings[actionIndex];
     actionList += gFilterBundle.getFormattedString("filterActionItem", [
       i + 1,
@@ -707,7 +700,7 @@ function AssignMeaningfulName() {
     // Assign a name based on the first search term.
     let searchValue = termRoot.searchvalue;
     let selIndex = searchValue.getAttribute("selectedIndex");
-    let children = searchValue.childNodes;
+    let children = searchValue.children;
     let activeItem = children[selIndex];
     let attribs = Ci.nsMsgSearchAttrib;
 
@@ -809,12 +802,7 @@ function doHelpButton() {
 function getCustomActions() {
   if (!gCustomActions) {
     gCustomActions = [];
-    let customActionsEnum = MailServices.filters.getCustomActions();
-    while (customActionsEnum.hasMoreElements()) {
-      gCustomActions.push(
-        customActionsEnum.getNext().QueryInterface(Ci.nsIMsgFilterCustomAction)
-      );
-    }
+    gCustomActions = [...MailServices.filters.getCustomActions()];
   }
 }
 

@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -96,25 +96,6 @@ NS_IMETHODIMP
 nsImapFlagAndUidState::GetSupportedUserFlags(uint16_t *aFlags) {
   NS_ENSURE_ARG_POINTER(aFlags);
   *aFlags = fSupportedUserFlags;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsImapFlagAndUidState::SetOtherKeywords(uint16_t index,
-                                        const nsACString &otherKeyword) {
-  if (index == 0) fOtherKeywords.Clear();
-  nsAutoCString flag(otherKeyword);
-  ToLowerCase(flag);
-  fOtherKeywords.AppendElement(flag);
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-nsImapFlagAndUidState::GetOtherKeywords(uint16_t index, nsACString &aKeyword) {
-  if (index < fOtherKeywords.Length())
-    aKeyword = fOtherKeywords[index];
-  else
-    aKeyword = EmptyCString();
   return NS_OK;
 }
 
@@ -260,8 +241,8 @@ NS_IMETHODIMP nsImapFlagAndUidState::AddUidCustomFlagPair(
            (oldValue.CharAt(existingCustomFlagPos - 1) == ' ')))
         return NS_OK;
       // else, advance to next flag
-      existingCustomFlagPos = MsgFind(oldValue, customFlagString, false,
-                                      existingCustomFlagPos + customFlagLen);
+      existingCustomFlagPos = oldValue.Find(
+          customFlagString, false, existingCustomFlagPos + customFlagLen);
     }
     ourCustomFlags.Assign(oldValue);
     ourCustomFlags.Append(' ');

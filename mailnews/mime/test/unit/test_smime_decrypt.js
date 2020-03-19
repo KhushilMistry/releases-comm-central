@@ -23,10 +23,10 @@ var { SmimeUtils } = ChromeUtils.import(
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
 
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 /* import-globals-from ../../../test/resources/messageModifier.js */
 /* import-globals-from ../../../test/resources/messageInjection.js */
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 load("../../../resources/messageModifier.js");
 load("../../../resources/messageInjection.js");
 
@@ -208,7 +208,7 @@ let smimeHeaderSink = {
  *             Because of the sequential processing caused by nested
  *             messages, additional calls to signedStatus() might
  *             override an earlier decision.
- *             (An earlier bad status report cannot be overriden by a
+ *             (An earlier bad status report cannot be overridden by a
  *              later report of a good status.)
  * - extra: If set to a number > 0, we expect that nested processing of
  *          MIME parts will trigger the given number of additional

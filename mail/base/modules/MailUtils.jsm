@@ -253,7 +253,7 @@ var MailUtils = {
 
     Services.ww.openWindow(
       null,
-      "chrome://messenger/content/messageWindow.xul",
+      "chrome://messenger/content/messageWindow.xhtml",
       "",
       "all,chrome,dialog=no,status,toolbar",
       args
@@ -303,7 +303,7 @@ var MailUtils = {
       args.wrappedJSObject = args;
       Services.ww.openWindow(
         null,
-        "chrome://messenger/content/",
+        "chrome://messenger/content/messenger.xhtml",
         "",
         "all,chrome,dialog=no,status,toolbar",
         args
@@ -530,6 +530,25 @@ var MailUtils = {
       return rootMsgFolder.getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox);
     } catch (ex) {
       dump(ex + "\n");
+    }
+    return null;
+  },
+
+  /**
+   * Finds a mailing list anywhere in the address books.
+   *
+   * @param {string} entryName - Value against which dirName is checked.
+   * @returns {nsIAbDirectory|null} - Found list or null.
+   */
+  findListInAddressBooks(entryName) {
+    for (let abDir of MailServices.ab.directories) {
+      if (abDir.supportsMailingLists) {
+        for (let dir of abDir.childNodes) {
+          if (dir.isMailList && dir.dirName == entryName) {
+            return dir;
+          }
+        }
+      }
     }
     return null;
   },

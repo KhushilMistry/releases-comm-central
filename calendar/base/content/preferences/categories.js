@@ -5,10 +5,10 @@
 /* exported gCategoriesPane */
 
 /* import-globals-from ../../../lightning/content/messenger-overlay-preferences.js */
-// From categories.xul.
-/* globals noneLabel, newTitle, editTitle, overwrite, overwriteTitle, noBlankCategories */
+// From categories.xhtml.
+/* globals newTitle, editTitle, overwrite, overwriteTitle, noBlankCategories */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { AppConstants } = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
 
@@ -28,7 +28,7 @@ var gCategoriesPane = {
    * Initialize the categories pref pane. Sets up dialog controls to show the
    * categories saved in preferences.
    */
-  init: function() {
+  init() {
     // On non-instant-apply platforms, once this pane has been loaded,
     // attach our "revert all changes" function to the parent prefwindow's
     // "ondialogcancel" event.
@@ -51,7 +51,7 @@ var gCategoriesPane = {
 
     this.updateCategoryList();
 
-    this.mCategoryDialog = "chrome://calendar/content/preferences/editCategory.xul";
+    this.mCategoryDialog = "chrome://calendar/content/preferences/editCategory.xhtml";
 
     // Workaround for Bug 1151440 - the HTML color picker won't work
     // in linux when opened from modal dialog
@@ -66,19 +66,19 @@ var gCategoriesPane = {
    * in preferences.
    */
 
-  updatePrefs: function() {
+  updatePrefs() {
     cal.l10n.sortArrayByLocaleCollator(gCategoryList);
     Preferences.get("calendar.categories.names").value = cal.category.arrayToString(gCategoryList);
   },
 
-  updateCategoryList: function() {
+  updateCategoryList() {
     this.updatePrefs();
     let listbox = document.getElementById("categorieslist");
 
     listbox.clearSelection();
     this.updateButtons();
 
-    while (listbox.lastChild) {
+    while (listbox.lastElementChild) {
       listbox.lastChild.remove();
     }
 
@@ -92,12 +92,9 @@ var gCategoriesPane = {
 
       let categoryColor = document.createXULElement("box");
       categoryColor.setAttribute("width", "150");
-      try {
-        let colorCode = categoryPrefBranch.getCharPref(categoryNameFix);
-        categoryColor.setAttribute("id", colorCode);
-        categoryColor.setAttribute("style", "background-color: " + colorCode + ";");
-      } catch (ex) {
-        categoryColor.setAttribute("label", noneLabel);
+      let colorCode = categoryPrefBranch.getCharPref(categoryNameFix, "");
+      if (colorCode) {
+        categoryColor.style.backgroundColor = colorCode;
       }
 
       newListItem.appendChild(categoryName);
@@ -110,7 +107,7 @@ var gCategoriesPane = {
    * Adds a category, opening the edit category dialog to prompt the user to
    * set up the category.
    */
-  addCategory: function() {
+  addCategory() {
     let listbox = document.getElementById("categorieslist");
     listbox.clearSelection();
     this.updateButtons();
@@ -125,7 +122,7 @@ var gCategoriesPane = {
   /**
    * Edits the currently selected category using the edit category dialog.
    */
-  editCategory: function() {
+  editCategory() {
     let list = document.getElementById("categorieslist");
     let categoryNameFix = cal.view.formatStringForCSSRule(gCategoryList[list.selectedIndex]);
     let currentColor = categoryPrefBranch.getCharPref(categoryNameFix, "");
@@ -143,7 +140,7 @@ var gCategoriesPane = {
   /**
    * Removes the selected category.
    */
-  deleteCategory: function() {
+  deleteCategory() {
     let list = document.getElementById("categorieslist");
     if (list.selectedCount < 1) {
       return;
@@ -158,12 +155,13 @@ var gCategoriesPane = {
     }
 
     // Remove category entry from listbox and gCategoryList.
-    let newSelection = list.selectedItem.nextSibling || list.selectedItem.previousSibling;
+    let newSelection =
+      list.selectedItem.nextElementSibling || list.selectedItem.previousElementSibling;
     let selectedItems = Array.from(list.selectedItems);
     for (let i = list.selectedCount - 1; i >= 0; i--) {
       let item = selectedItems[i];
       if (item == newSelection) {
-        newSelection = newSelection.nextSibling || newSelection.previousSibling;
+        newSelection = newSelection.nextElementSibling || newSelection.previousElementSibling;
       }
       gCategoryList.splice(list.getIndexOfItem(item), 1);
       item.remove();
@@ -181,7 +179,7 @@ var gCategoriesPane = {
    * @param categoryName      The name of the category.
    * @param categoryColor     The color of the category
    */
-  saveCategory: function(categoryName, categoryColor) {
+  saveCategory(categoryName, categoryColor) {
     let list = document.getElementById("categorieslist");
     // Check to make sure another category doesn't have the same name
     let toBeDeleted = -1;
@@ -218,15 +216,7 @@ var gCategoriesPane = {
     } else {
       this.backupData(categoryNameFix);
       gCategoryList.splice(list.selectedIndex, 1, categoryName);
-      if (categoryColor) {
-        categoryPrefBranch.setCharPref(categoryNameFix, categoryColor);
-      } else {
-        try {
-          categoryPrefBranch.clearUserPref(categoryNameFix);
-        } catch (ex) {
-          dump("Exception caught in 'saveCategory': " + ex + "\n");
-        }
-      }
+      categoryPrefBranch.setCharPref(categoryNameFix, categoryColor || "");
     }
 
     // If 'Overwrite' was chosen, delete category that was being edited
@@ -245,7 +235,7 @@ var gCategoriesPane = {
   /**
    * Enable the edit and delete category buttons.
    */
-  updateButtons: function() {
+  updateButtons() {
     let categoriesList = document.getElementById("categorieslist");
     document.getElementById("deleteCButton").disabled = categoriesList.selectedCount <= 0;
     document.getElementById("editCButton").disabled = categoriesList.selectedCount != 1;
@@ -257,7 +247,7 @@ var gCategoriesPane = {
    * @see formatStringForCSSRule
    * @param categoryNameFix     The formatted category name.
    */
-  backupData: function(categoryNameFix) {
+  backupData(categoryNameFix) {
     let currentColor = categoryPrefBranch.getCharPref(categoryNameFix, "##NEW");
 
     for (let i = 0; i < parent.backupPrefList.length; i++) {
@@ -276,7 +266,7 @@ var gCategoriesPane = {
    * list. If the edit function is enabled and the user doubleclicked on a
    * list item, then edit the selected category.
    */
-  listOnDblClick: function(event) {
+  listOnDblClick(event) {
     if (event.target.localName == "listitem" && !document.getElementById("editCButton").disabled) {
       this.editCategory();
     }
@@ -285,7 +275,7 @@ var gCategoriesPane = {
   /**
    * Reverts category preferences in case the cancel button is pressed.
    */
-  panelOnCancel: function() {
+  panelOnCancel() {
     for (let i = 0; i < parent.backupPrefList.length; i++) {
       if (parent.backupPrefList[i].color == "##NEW") {
         try {

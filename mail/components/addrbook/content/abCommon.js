@@ -5,7 +5,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* import-globals-from ../../../../../toolkit/content/globalOverlay.js */
-/* import-globals-from ../../../../mailnews/addrbook/content/abResultsPane.js */
 /* import-globals-from ../../../base/content/utilityOverlay.js */
 /* import-globals-from abTrees.js */
 /* import-globals-from addressbook.js */
@@ -13,7 +12,7 @@
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
-var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.js");
+var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { FileUtils } = ChromeUtils.import("resource://gre/modules/FileUtils.jsm");
 var { PrivateBrowsingUtils } = ChromeUtils.import(
@@ -39,14 +38,8 @@ const kMaxYear = 9999;
 const kMinYear = 1;
 var kAllDirectoryRoot = "moz-abdirectory://";
 var kLdapUrlPrefix = "moz-abldapdirectory://";
-var stillUsingMabFiles =
-  Services.prefs.getIntPref("ldap_2.servers.pab.dirType") == 2;
-var kPersonalAddressbookURI = stillUsingMabFiles
-  ? "moz-abmdbdirectory://abook.mab"
-  : "jsaddrbook://abook.sqlite";
-var kCollectedAddressbookURI = stillUsingMabFiles
-  ? "moz-abmdbdirectory://history.mab"
-  : "jsaddrbook://history.sqlite";
+var kPersonalAddressbookURI = "jsaddrbook://abook.sqlite";
+var kCollectedAddressbookURI = "jsaddrbook://history.sqlite";
 // The default, generic contact image is displayed via CSS when the photoURI is
 // blank.
 var defaultPhotoURI = "";
@@ -218,8 +211,8 @@ function SendCommandToResultsPane(command) {
 }
 
 function AbNewLDAPDirectory() {
-  window.openDialog(
-    "chrome://messenger/content/addressbook/pref-directory-add.xul",
+  window.docShell.rootTreeItem.domWindow.openDialog(
+    "chrome://messenger/content/addressbook/pref-directory-add.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen",
     null
@@ -228,7 +221,7 @@ function AbNewLDAPDirectory() {
 
 function AbNewAddressBook() {
   window.openDialog(
-    "chrome://messenger/content/addressbook/abAddressBookNameDialog.xul",
+    "chrome://messenger/content/addressbook/abAddressBookNameDialog.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen",
     null
@@ -432,7 +425,7 @@ function AbDelete() {
       confirmDeleteTitleID = "confirmDelete2orMoreMailingListsTitle";
       break;
     case kCardsOnly:
-      if (selectedDir.isMailList) {
+      if (selectedDir && selectedDir.isMailList) {
         // Contact(s) in mailing lists will be removed from the list, not deleted.
         if (numSelectedItems == 1) {
           confirmDeleteMessageID = "confirmRemoveThisContact";
@@ -498,7 +491,7 @@ function AbDelete() {
     return;
   }
 
-  if (selectedDir.URI == kAllDirectoryRoot + "?") {
+  if (selectedDir === null) {
     // Delete cards from "All Address Books" view.
     let cards = GetSelectedAbCards();
     for (let i = 0; i < cards.length; i++) {
@@ -766,7 +759,7 @@ function AbNewList() {
 
 function goNewListDialog(selectedAB) {
   window.openDialog(
-    "chrome://messenger/content/addressbook/abMailListDialog.xul",
+    "chrome://messenger/content/addressbook/abMailListDialog.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen",
     { selectedAB }
@@ -780,7 +773,7 @@ function goEditListDialog(abCard, listURI) {
     refresh: false, // This is an out param, true if OK in dialog is clicked.
   };
   window.openDialog(
-    "chrome://messenger/content/addressbook/abEditListDialog.xul",
+    "chrome://messenger/content/addressbook/abEditListDialog.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen",
     params
@@ -792,7 +785,7 @@ function goEditListDialog(abCard, listURI) {
 
 function goNewCardDialog(selectedAB) {
   window.openDialog(
-    "chrome://messenger/content/addressbook/abNewCardDialog.xul",
+    "chrome://messenger/content/addressbook/abNewCardDialog.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen",
     { selectedAB }
@@ -801,7 +794,7 @@ function goNewCardDialog(selectedAB) {
 
 function goEditCardDialog(abURI, card) {
   window.openDialog(
-    "chrome://messenger/content/addressbook/abEditCardDialog.xul",
+    "chrome://messenger/content/addressbook/abEditCardDialog.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen",
     { abURI, card }

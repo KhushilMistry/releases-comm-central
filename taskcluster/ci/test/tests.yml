@@ -49,63 +49,36 @@ xpcshell:
                 windows.*: true
                 default: false
     fetches:
-        build:
-            - gdata-provider.xpi
         toolchain:
             by-test-platform:
                 linux.*:
+                    - linux64-fix-stacks
                     - linux64-node
+                    - linux64-minidump-stackwalk
                 macosx.*:
+                    - macosx64-fix-stacks
                     - macosx64-node
+                    - macosx64-minidump-stackwalk
                 win.*64.*:
+                    - win32-fix-stacks
                     - win64-node
+                    - win32-minidump-stackwalk
                 win.*32.*:
+                    - win32-fix-stacks
                     - win32-node
+                    - win32-minidump-stackwalk
                 default: []
-
-mozmill:
-    description: "mozmill test run"
-    suite: mozmill
-    treeherder-symbol: Z(Z)
-    run-on-projects: built-projects
-    docker-image:
-        in-tree: "desktop1604-test"
-    chunks:
-        by-test-platform:
-            linux32/debug: 8
-            linux64/debug: 8
-            default: 4
-    instance-size: default
-    max-run-time: 5400
-    e10s: false
-    allow-software-gl-layers: false
-    mozharness:
-        script: desktop_unittest.py
-        config:
-            by-test-platform:
-                windows.*:
-                    - unittests/win_unittest.py
-                    - unittests/thunderbird_extra.py
-                macosx.*64.*:
-                    - unittests/mac_unittest.py
-                    - unittests/thunderbird_extra.py
-                linux.*:
-                    - unittests/linux_unittest.py
-                    - remove_executables.py
-                    - unittests/thunderbird_extra.py
-        extra-options:
-            - "--mozmill-suite=mozmill"
-        requires-signed-builds: false
 
 mochitest-thunderbird:
     description: "Mochitest browser-chrome-thunderbird run"
     suite:
         category: mochitest
-        name: browser-chrome-thunderbird
+        name: mochitest-browser-chrome-thunderbird
     treeherder-symbol: M(bct)
     run-on-projects: built-projects
     loopback-video: true
     max-run-time: 3600
+    chunks: 5
     e10s: false
     mozharness:
         script: desktop_unittest.py

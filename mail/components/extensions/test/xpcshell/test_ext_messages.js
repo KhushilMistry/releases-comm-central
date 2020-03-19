@@ -4,6 +4,9 @@
 
 "use strict";
 
+var { toXPCOMArray } = ChromeUtils.import(
+  "resource:///modules/iteratorUtils.jsm"
+);
 var { ExtensionTestUtils } = ChromeUtils.import(
   "resource://testing-common/ExtensionXPCShellUtils.jsm"
 );
@@ -20,6 +23,12 @@ async function run_test() {
   createMessages(subFolders[0], 99); // Trash
   createMessages(subFolders[1], 1); // Unsent messages
   createMessages(subFolders[2], 5); // test1
+
+  let messageArray = toXPCOMArray(
+    [[...subFolders[1].messages][0]],
+    Ci.nsIMutableArray
+  );
+  subFolders[1].addKeywordsToMessages(messageArray, "testKeyword");
 
   run_next_test();
 }
@@ -114,6 +123,8 @@ add_task(async function test_update() {
       let message = messageList.messages[0];
       browser.test.assertFalse(message.flagged);
       browser.test.assertFalse(message.read);
+      browser.test.assertFalse(message.junk);
+      browser.test.assertEq(0, message.junkScore);
       browser.test.assertEq(0, message.tags.length);
 
       // Test that setting flagged works.
@@ -123,6 +134,10 @@ add_task(async function test_update() {
       // Test that setting read works.
       await browser.messages.update(message.id, { read: true });
       await awaitMessage("read");
+
+      // Test that setting junk works.
+      await browser.messages.update(message.id, { junk: true });
+      await awaitMessage("junk");
 
       // Test that setting one tag works.
       await browser.messages.update(message.id, { tags: [tags[0].key] });
@@ -138,13 +153,30 @@ add_task(async function test_update() {
       await browser.messages.update(message.id, {});
       await awaitMessage("empty");
 
+      message = await browser.messages.get(message.id);
+      browser.test.assertTrue(message.flagged);
+      browser.test.assertTrue(message.read);
+      browser.test.assertTrue(message.junk);
+      browser.test.assertEq(100, message.junkScore);
+      browser.test.assertEq(2, message.tags.length);
+      browser.test.assertEq(tags[1].key, message.tags[0]);
+      browser.test.assertEq(tags[2].key, message.tags[1]);
+
       // Test that clearing properties works.
       await browser.messages.update(message.id, {
         flagged: false,
         read: false,
+        junk: false,
         tags: [],
       });
       await awaitMessage("clear");
+
+      message = await browser.messages.get(message.id);
+      browser.test.assertFalse(message.flagged);
+      browser.test.assertFalse(message.read);
+      browser.test.assertFalse(message.junk);
+      browser.test.assertEq(0, message.junkScore);
+      browser.test.assertEq(0, message.tags.length);
 
       browser.test.notifyPass("finished");
     },
@@ -156,7 +188,7 @@ add_task(async function test_update() {
   let message = [...subFolders[1].messages][0];
   ok(!message.isFlagged);
   ok(!message.isRead);
-  equal(message.getProperty("keywords"), "");
+  equal(message.getProperty("keywords"), "testKeyword");
 
   await extension.startup();
   extension.sendMessage({ accountId: account.key, path: "/Unsent Messages" });
@@ -169,24 +201,29 @@ add_task(async function test_update() {
   ok(message.isRead);
   extension.sendMessage();
 
+  await extension.awaitMessage("junk");
+  equal(message.getStringProperty("junkscore"), 100);
+  extension.sendMessage();
+
   await extension.awaitMessage("tags1");
-  equal(message.getProperty("keywords"), "$label1");
+  equal(message.getProperty("keywords"), "testKeyword $label1");
   extension.sendMessage();
 
   await extension.awaitMessage("tags2");
-  equal(message.getProperty("keywords"), "$label2 $label3");
+  equal(message.getProperty("keywords"), "testKeyword $label2 $label3");
   extension.sendMessage();
 
   await extension.awaitMessage("empty");
   ok(message.isFlagged);
   ok(message.isRead);
-  equal(message.getProperty("keywords"), "$label2 $label3");
+  equal(message.getProperty("keywords"), "testKeyword $label2 $label3");
   extension.sendMessage();
 
   await extension.awaitMessage("clear");
   ok(!message.isFlagged);
   ok(!message.isRead);
-  equal(message.getProperty("keywords"), "");
+  equal(message.getStringProperty("junkscore"), 0);
+  equal(message.getProperty("keywords"), "testKeyword");
   extension.sendMessage();
 
   await extension.awaitFinish("finished");
@@ -385,23 +422,39 @@ add_task(async function test_archive() {
       await browser.messages.archive(messagesBefore.messages.map(m => m.id));
 
       let accountAfter = await browser.accounts.get(accountId);
-      browser.test.assertEq(7, accountAfter.folders.length);
+      browser.test.assertEq(4, accountAfter.folders.length);
       browser.test.assertEq("/test", accountAfter.folders[2].path);
       browser.test.assertEq("/Archives", accountAfter.folders[3].path);
-      browser.test.assertEq("/Archives/2018", accountAfter.folders[4].path);
-      browser.test.assertEq("/Archives/2019", accountAfter.folders[5].path);
-      browser.test.assertEq("/Archives/2020", accountAfter.folders[6].path);
+      browser.test.assertEq(3, accountAfter.folders[3].subFolders.length);
+      browser.test.assertEq(
+        "/Archives/2018",
+        accountAfter.folders[3].subFolders[0].path
+      );
+      browser.test.assertEq(
+        "/Archives/2019",
+        accountAfter.folders[3].subFolders[1].path
+      );
+      browser.test.assertEq(
+        "/Archives/2020",
+        accountAfter.folders[3].subFolders[2].path
+      );
 
       let messagesAfter = await browser.messages.list(accountAfter.folders[2]);
       browser.test.assertEq(0, messagesAfter.messages.length);
 
-      let messages2018 = await browser.messages.list(accountAfter.folders[4]);
+      let messages2018 = await browser.messages.list(
+        accountAfter.folders[3].subFolders[0]
+      );
       browser.test.assertEq(2, messages2018.messages.length);
 
-      let messages2019 = await browser.messages.list(accountAfter.folders[5]);
+      let messages2019 = await browser.messages.list(
+        accountAfter.folders[3].subFolders[1]
+      );
       browser.test.assertEq(12, messages2019.messages.length);
 
-      let messages2020 = await browser.messages.list(accountAfter.folders[6]);
+      let messages2020 = await browser.messages.list(
+        accountAfter.folders[3].subFolders[2]
+      );
       browser.test.assertEq(1, messages2020.messages.length);
 
       browser.test.notifyPass("finished");

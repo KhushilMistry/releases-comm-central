@@ -23,13 +23,14 @@ this.browserAction = class extends ToolbarButtonAPI {
   close() {
     super.close();
     browserActionMap.delete(this.extension);
+    windowTracker.removeListener("TabSelect", this);
   }
 
   static onUninstall(extensionId) {
     let widgetId = makeWidgetId(extensionId);
     let id = `${widgetId}-browserAction-toolbarbutton`;
 
-    let windowURL = "chrome://messenger/content/messenger.xul";
+    let windowURL = "chrome://messenger/content/messenger.xhtml";
     let currentSet = Services.xulStore.getValue(
       windowURL,
       "mail-bar3",
@@ -49,13 +50,14 @@ this.browserAction = class extends ToolbarButtonAPI {
   }
 
   constructor(extension) {
-    super(extension);
+    super(extension, global);
     this.manifest_name = "browser_action";
     this.manifestName = "browserAction";
-    this.windowURLs = ["chrome://messenger/content/messenger.xul"];
+    this.windowURLs = ["chrome://messenger/content/messenger.xhtml"];
     this.toolboxId = "mail-toolbox";
     this.toolbarId = "mail-bar3";
-    this.global = global;
+
+    windowTracker.addListener("TabSelect", this);
   }
 };
 

@@ -37,7 +37,7 @@ function loadListener(event) {
   setTimeout(function() {
     let prefWin = Services.wm.getMostRecentWindow("Mail:Preferences");
     prefWin.gSubDialog.open(
-      "chrome://messenger/content/preferences/dockoptions.xul"
+      "chrome://messenger/content/preferences/dockoptions.xhtml"
     );
   });
 }
@@ -68,7 +68,7 @@ function openDockOptions() {
 
   if (win) {
     openOptionsDialog("paneGeneral");
-    win.gSubDialog("chrome://messenger/content/preferences/dockoptions.xul");
+    win.gSubDialog("chrome://messenger/content/preferences/dockoptions.xhtml");
   } else {
     Services.ww.registerNotification(new PrefWindowObserver());
     openOptionsDialog("paneGeneral");
@@ -101,7 +101,7 @@ function openAddressBookDock() {
   } else {
     Services.ww.openWindow(
       null,
-      "chrome://messenger/content/addressbook/addressbook.xul",
+      "chrome://messenger/content/addressbook/addressbook.xhtml",
       null,
       "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar",
       null

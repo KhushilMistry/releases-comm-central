@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/* globals MsgAccountManager */
+
 var { AppConstants } = ChromeUtils.import(
   "resource://gre/modules/AppConstants.jsm"
 );
@@ -13,12 +15,12 @@ var { PluralForm } = ChromeUtils.import(
   "resource://gre/modules/PluralForm.jsm"
 );
 var { StringBundle } = ChromeUtils.import(
-  "resource:///modules/StringBundle.js"
+  "resource:///modules/StringBundle.jsm"
 );
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
-var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 
 // Get a configured logger for this component.
 // To debug, set mail.provider.logging.dump (or .console)="All"
@@ -209,20 +211,7 @@ var EmailAccountProvisioner = {
     document
       .getElementById("success-signature")
       .addEventListener("click", function() {
-        var existingAccountManager = Services.wm.getMostRecentWindow(
-          "mailnews:accountmanager"
-        );
-
-        if (existingAccountManager) {
-          existingAccountManager.focus();
-        } else {
-          window.openDialog(
-            "chrome://messenger/content/AccountManager.xul",
-            "AccountManager",
-            "chrome,centerscreen,modal,titlebar",
-            { server: account.incomingServer }
-          );
-        }
+        MsgAccountManager(null, account.incomingServer);
       });
 
     document.getElementById("window").style.display = "none";

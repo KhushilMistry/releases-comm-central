@@ -428,7 +428,7 @@ SendOperationListener::SetMessageKey(nsMsgKey aKey) {
 
 NS_IMETHODIMP
 SendOperationListener::GetMessageId(nsACString &messageId) {
-  MOZ_ASSERT_UNREACHABLE("SendOperationListener::GetMessageId()\n");
+  MOZ_ASSERT_UNREACHABLE("SendOperationListener::GetMessageId()");
   return NS_ERROR_NOT_IMPLEMENTED;
 }
 
@@ -615,13 +615,12 @@ nsMsgSendLater::HasUnsentMessages(nsIMsgIdentity *aIdentity, bool *aResult) {
       do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIArray> accounts;
-  accountManager->GetAccounts(getter_AddRefs(accounts));
+  nsTArray<RefPtr<nsIMsgAccount>> accounts;
+  rv = accountManager->GetAccounts(accounts);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  uint32_t cnt = 0;
-  rv = accounts->GetLength(&cnt);
-  if (cnt == 0) return NS_OK;  // no account set up -> no unsent messages
+  if (accounts.IsEmpty())
+    return NS_OK;  // no account set up -> no unsent messages
 
   // XXX This code should be set up for multiple unsent folders, however we
   // don't support that at the moment, so for now just assume one folder.
@@ -691,7 +690,7 @@ nsresult nsMsgSendLater::InternalSendMessages(bool aUserInitiated,
 
   // Protect against being called whilst we're already sending.
   if (mSendingMessages) {
-    NS_ERROR("nsMsgSendLater is already sending messages\n");
+    NS_ERROR("nsMsgSendLater is already sending messages");
     return NS_ERROR_FAILURE;
   }
 
@@ -1140,15 +1139,15 @@ nsMsgSendLater::GetSendingMessages(bool *aResult) {
   return NS_OK;
 }
 
-#define NOTIFY_LISTENERS(propertyfunc_, params_)                              \
-  PR_BEGIN_MACRO                                                              \
-  nsTObserverArray<nsCOMPtr<nsIMsgSendLaterListener> >::ForwardIterator iter( \
-      mListenerArray);                                                        \
-  nsCOMPtr<nsIMsgSendLaterListener> listener;                                 \
-  while (iter.HasMore()) {                                                    \
-    listener = iter.GetNext();                                                \
-    listener->propertyfunc_ params_;                                          \
-  }                                                                           \
+#define NOTIFY_LISTENERS(propertyfunc_, params_)                             \
+  PR_BEGIN_MACRO                                                             \
+  nsTObserverArray<nsCOMPtr<nsIMsgSendLaterListener>>::ForwardIterator iter( \
+      mListenerArray);                                                       \
+  nsCOMPtr<nsIMsgSendLaterListener> listener;                                \
+  while (iter.HasMore()) {                                                   \
+    listener = iter.GetNext();                                               \
+    listener->propertyfunc_ params_;                                         \
+  }                                                                          \
   PR_END_MACRO
 
 void nsMsgSendLater::NotifyListenersOnStartSending(
@@ -1336,8 +1335,8 @@ nsMsgSendLater::OnItemRemoved(nsIMsgFolder *aParentItem, nsISupports *aItem) {
 NS_IMETHODIMP
 nsMsgSendLater::OnItemPropertyChanged(nsIMsgFolder *aItem,
                                       const nsACString &aProperty,
-                                      const char *aOldValue,
-                                      const char *aNewValue) {
+                                      const nsACString &aOldValue,
+                                      const nsACString &aNewValue) {
   return NS_OK;
 }
 
@@ -1358,8 +1357,8 @@ nsMsgSendLater::OnItemBoolPropertyChanged(nsIMsgFolder *aItem,
 NS_IMETHODIMP
 nsMsgSendLater::OnItemUnicharPropertyChanged(nsIMsgFolder *aItem,
                                              const nsACString &aProperty,
-                                             const char16_t *aOldValue,
-                                             const char16_t *aNewValue) {
+                                             const nsAString &aOldValue,
+                                             const nsAString &aNewValue) {
   return NS_OK;
 }
 

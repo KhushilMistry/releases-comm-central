@@ -5,7 +5,7 @@
 /* global MozElements MozXULElement */
 /* import-globals-from ../../../../../toolkit/content/globalOverlay.js */
 
-// This file is loaded in messenger.xul.
+// This file is loaded in messenger.xhtml.
 /* globals fixIterator, MailToolboxCustomizeDone, openIMAccountMgr,
    PROTO_TREE_VIEW, Services, Status, statusSelector, ZoomManager */
 
@@ -90,15 +90,23 @@ function enableInlineSpellCheck(aEnableInlineSpellCheck) {
 }
 
 function buddyListContextMenu(aXulMenu) {
-  this.target = aXulMenu.triggerNode;
+  // Clear the context menu from OTR related entries.
+  OTRUI.removeBuddyContextMenu(document);
+
+  this.target = aXulMenu.triggerNode.closest("richlistitem");
+  if (!this.target) {
+    this.shouldDisplay = false;
+    return;
+  }
+
   this.menu = aXulMenu;
   let localName = this.target.localName;
   this.onContact =
     localName == "richlistitem" &&
-    this.target.getAttribute("is") == "chat-contact";
+    this.target.getAttribute("is") == "chat-contact-richlistitem";
   this.onConv =
     localName == "richlistitem" &&
-    this.target.getAttribute("is") == "chat-imconv";
+    this.target.getAttribute("is") == "chat-imconv-richlistitem";
   this.shouldDisplay = this.onContact || this.onConv;
 
   let hide = !this.onContact;
@@ -115,8 +123,18 @@ function buddyListContextMenu(aXulMenu) {
   document.getElementById("context-openconversation").disabled =
     !hide && !this.target.canOpenConversation();
 
-  if (gOtrEnabled) {
-    OTRUI.addBuddyContextMenu(this.menu, document);
+  // Show OTR related context menu items if:
+  // - The OTR feature is currently enabled.
+  // - The target's status is not currently offline or unknown.
+  // - The target can send messages.
+  if (
+    gOtrEnabled &&
+    this.target.contact &&
+    this.target.contact.statusType != Ci.imIStatusInfo.STATUS_UNKNOWN &&
+    this.target.contact.statusType != Ci.imIStatusInfo.STATUS_OFFLINE &&
+    this.target.contact.canSendMessage
+  ) {
+    OTRUI.addBuddyContextMenu(this.menu, document, this.target.contact);
   }
 }
 
@@ -296,7 +314,7 @@ var chatTabType = {
     gChatTab = aTab;
     chatHandler._onTabActivated();
     // The next call may change the selected conversation, but that
-    // will be handled by the selected mutation observer of the chat-imconv.
+    // will be handled by the selected mutation observer of the chat-imconv-richlistitem.
     chatHandler._updateSelectedConversation();
     chatHandler._updateFocus();
   },
@@ -403,14 +421,14 @@ var chatTabType = {
 
 var chatHandler = {
   get msgNotificationBar() {
-    delete this.msgNotificationBar;
+    delete this._msgNotificationBar;
 
     let newNotificationBox = new MozElements.NotificationBox(element => {
       element.setAttribute("notificationside", "top");
       document.getElementById("chat-notification-top").prepend(element);
     });
 
-    return (this.msgNotificationBar = newNotificationBox);
+    return (this._msgNotificationBar = newNotificationBox);
   },
 
   _addConversation(aConv) {
@@ -422,8 +440,8 @@ var chatHandler = {
       gChatTab.tabNode.selected &&
       (!selectedItem ||
         (selectedItem == convs &&
-          convs.nextSibling.localName != "richlistitem" &&
-          convs.nextSibling.getAttribute("is") != "chat-imconv"));
+          convs.nextElementSibling.localName != "richlistitem" &&
+          convs.nextSibling.getAttribute("is") != "chat-imconv-richlistitem"));
     let elt = convs.addContact(aConv, "imconv");
     if (shouldSelect) {
       list.selectedItem = elt;
@@ -472,26 +490,32 @@ var chatHandler = {
       return;
     }
 
-    let [unreadTargettedCount, unreadTotalCount] = this.countUnreadMessages();
-    chatButton.badgeCount = unreadTargettedCount;
+    let [
+      unreadTargettedCount,
+      unreadTotalCount,
+      unreadOTRNotificationCount,
+    ] = this.countUnreadMessages();
+    let unreadMsgAndNotificationCount =
+      unreadTargettedCount + unreadOTRNotificationCount;
+    chatButton.badgeCount = unreadMsgAndNotificationCount;
 
-    if (unreadTotalCount) {
+    if (unreadTotalCount || unreadOTRNotificationCount) {
       chatButton.setAttribute("unreadMessages", "true");
     } else {
       chatButton.removeAttribute("unreadMessages");
     }
 
-    if (unreadTargettedCount != this._notifiedUnreadCount) {
+    if (unreadMsgAndNotificationCount != this._notifiedUnreadCount) {
       let unreadInt = Cc["@mozilla.org/supports-PRInt32;1"].createInstance(
         Ci.nsISupportsPRInt32
       );
-      unreadInt.data = unreadTargettedCount;
+      unreadInt.data = unreadMsgAndNotificationCount;
       Services.obs.notifyObservers(
         unreadInt,
         "unread-im-count-changed",
-        unreadTargettedCount
+        unreadMsgAndNotificationCount
       );
-      this._notifiedUnreadCount = unreadTargettedCount;
+      this._notifiedUnreadCount = unreadMsgAndNotificationCount;
     }
   },
 
@@ -499,11 +523,13 @@ var chatHandler = {
     let convs = imServices.conversations.getUIConversations();
     let unreadTargettedCount = 0;
     let unreadTotalCount = 0;
+    let unreadOTRNotificationCount = 0;
     for (let conv of convs) {
       unreadTargettedCount += conv.unreadTargetedMessageCount;
       unreadTotalCount += conv.unreadIncomingMessageCount;
+      unreadOTRNotificationCount += conv.unreadOTRNotificationCount;
     }
-    return [unreadTargettedCount, unreadTotalCount];
+    return [unreadTargettedCount, unreadTotalCount, unreadOTRNotificationCount];
   },
 
   updateTitle() {
@@ -520,7 +546,7 @@ var chatHandler = {
       if (
         selectedItem &&
         selectedItem.localName == "richlistitem" &&
-        selectedItem.getAttribute("is") == "chat-imconv" &&
+        selectedItem.getAttribute("is") == "chat-imconv-richlistitem" &&
         !selectedItem.hidden
       ) {
         title += " - " + selectedItem.getAttribute("displayname");
@@ -590,9 +616,7 @@ var chatHandler = {
     cti.setAttribute("displayName", aConversation.title);
 
     // Find and display the contact for this log.
-    let accounts = imServices.accounts.getAccounts();
-    while (accounts.hasMoreElements()) {
-      let account = accounts.getNext();
+    for (let account of imServices.accounts.getAccounts()) {
       if (
         account.normalizedName == aConversation.account.normalizedName &&
         account.protocol.normalizedName == aConversation.account.protocol.name
@@ -746,7 +770,7 @@ var chatHandler = {
     }
     if (
       item.localName == "richlistitem" &&
-      item.getAttribute("is") == "chat-imconv"
+      item.getAttribute("is") == "chat-imconv-richlistitem"
     ) {
       document.getElementById("conversationsDeck").selectedPanel =
         item.convView;
@@ -754,7 +778,7 @@ var chatHandler = {
       item.convView.focus();
     } else if (
       item.localName == "richlistitem" &&
-      item.getAttribute("is") == "chat-contact"
+      item.getAttribute("is") == "chat-contact-richlistitem"
     ) {
       item.openConversation();
     }
@@ -808,7 +832,7 @@ var chatHandler = {
     let item = document.getElementById("contactlistbox").selectedItem;
     if (
       item.localName == "richlistitem" &&
-      item.getAttribute("is") == "chat-imconv" &&
+      item.getAttribute("is") == "chat-imconv-richlistitem" &&
       item.convView
     ) {
       item.convView.focus();
@@ -821,7 +845,7 @@ var chatHandler = {
       !item ||
       item.hidden ||
       (item.localName == "richlistitem" &&
-        item.getAttribute("is") == "chat-group")
+        item.getAttribute("is") == "chat-group-richlistitem")
     ) {
       this._hideContextPane(true);
       document.getElementById(
@@ -868,7 +892,7 @@ var chatHandler = {
       });
     } else if (
       item.localName == "richlistitem" &&
-      item.getAttribute("is") == "chat-imconv"
+      item.getAttribute("is") == "chat-imconv-richlistitem"
     ) {
       let convDeck = document.getElementById("conversationsDeck");
       if (!item.convView) {
@@ -893,7 +917,7 @@ var chatHandler = {
         // Set "mail editor mask" so changing the language doesn't
         // affect the global preference and multiple chats can have
         // individual languages.
-        conv.editor.editor.flags |= Ci.nsIPlaintextEditor.eEditorMailMask;
+        conv.editor.editor.flags |= Ci.nsIEditor.eEditorMailMask;
 
         // Initialise language to the default.
         conv.editor.setAttribute(
@@ -941,7 +965,7 @@ var chatHandler = {
       this.observedContact = null;
     } else if (
       item.localName == "richlistitem" &&
-      item.getAttribute("is") == "chat-contact"
+      item.getAttribute("is") == "chat-contact-richlistitem"
     ) {
       if (gOtrEnabled) {
         OTRUI.hideOTRButton();
@@ -953,7 +977,7 @@ var chatHandler = {
         this.observedContact.id == contact.id
       ) {
         return; // onselect has just been fired again because a status
-        // change caused the chat-contact to move.
+        // change caused the chat-contact-richlistitem to move.
         // Return early to avoid flickering and changing the selected log.
       }
 
@@ -1026,7 +1050,7 @@ var chatHandler = {
   _openDialog(aType) {
     let features = "chrome,modal,titlebar,centerscreen";
     window.openDialog(
-      "chrome://messenger/content/chat/" + aType + ".xul",
+      "chrome://messenger/content/chat/" + aType + ".xhtml",
       "",
       features
     );
@@ -1074,7 +1098,7 @@ var chatHandler = {
     let connected = false;
     let hasAccount = false;
     let canJoinChat = false;
-    for (let account of fixIterator(imServices.accounts.getAccounts())) {
+    for (let account of imServices.accounts.getAccounts()) {
       hasAccount = true;
       if (account.connected) {
         connected = true;
@@ -1152,7 +1176,7 @@ var chatHandler = {
     if (
       selectedItem &&
       selectedItem.localName == "richlistitem" &&
-      selectedItem.getAttribute("is") == "chat-imconv" &&
+      selectedItem.getAttribute("is") == "chat-imconv-richlistitem" &&
       selectedItem.directedUnreadCount
     ) {
       selectedItem.update();
@@ -1161,7 +1185,7 @@ var chatHandler = {
 
     let firstConv;
     let convs = document.getElementById("conversationsGroup");
-    let conv = convs.nextSibling;
+    let conv = convs.nextElementSibling;
     while (conv.id != "searchResultConv") {
       if (!firstConv) {
         firstConv = conv;
@@ -1171,7 +1195,7 @@ var chatHandler = {
         list.selectedItem = conv;
         return;
       }
-      conv = conv.nextSibling;
+      conv = conv.nextElementSibling;
     }
 
     // No unread messages, select the first conversation, but only if
@@ -1180,7 +1204,7 @@ var chatHandler = {
       if (
         !selectedItem ||
         (selectedItem.localName == "richlistitem" &&
-          selectedItem.getAttribute("is") == "chat-group")
+          selectedItem.getAttribute("is") == "chat-group-richlistitem")
       ) {
         list.selectedItem = firstConv;
       }
@@ -1216,7 +1240,7 @@ var chatHandler = {
     if (
       !selectedItem ||
       (selectedItem.localName != "richlistitem" &&
-        selectedItem.getAttribute("is") != "chat-imconv")
+        selectedItem.getAttribute("is") != "chat-imconv-richlistitem")
     ) {
       return null;
     }
@@ -1479,7 +1503,7 @@ var chatHandler = {
     let current;
     if (
       aList.selectedItem.localName == "richlistitem" &&
-      aList.selectedItem.getAttribute("is") == "chat-imconv"
+      aList.selectedItem.getAttribute("is") == "chat-imconv-richlistitem"
     ) {
       current = aList.selectedIndex - aList.getIndexOfItem(conversations[0]);
     }
@@ -1566,7 +1590,7 @@ var chatHandler = {
         let item = listbox.selectedItem;
         if (
           item.localName == "richlistitem" &&
-          item.getAttribute("is") == "chat-imconv" &&
+          item.getAttribute("is") == "chat-imconv-richlistitem" &&
           item.convView
         ) {
           item.convView.focus();
@@ -1743,8 +1767,7 @@ chatLogTreeView.prototype = {
 
     // Build a chatLogTreeLogItem for each log, and put it in the right group.
     let groups = {};
-    while (this._logs.hasMoreElements()) {
-      let log = this._logs.getNext();
+    for (let log of this._logs) {
       let logDate = new Date(log.time * 1000);
       // Calculate elapsed time between the log and 00:00:00 today.
       let timeFromToday = todayDate - logDate;

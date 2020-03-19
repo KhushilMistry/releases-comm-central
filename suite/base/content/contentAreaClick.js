@@ -57,7 +57,11 @@
     if (ceParams) {
       var href = ceParams.href;
       if (isKeyCommand) {
-        openNewTabWith(href, event.target, event.altKey);
+        var doc = event.target.ownerDocument;
+        urlSecurityCheck(href, doc.nodePrincipal);
+        openLinkIn(href, event && event.altKey ? "tabshifted" : "tab",
+                   { charset: doc.characterSet,
+                     referrerURI: doc.documentURIObject });
         event.stopPropagation();
       }
       else {
@@ -88,59 +92,59 @@
     return true;
   }
 
-  function openNewTabOrWindow(event, href, node)
-  {
-    // should we open it in a new tab?
-    if (Services.prefs.getBoolPref("browser.tabs.opentabfor.middleclick")) {
-      openNewTabWith(href, node, null, event);
-      event.stopPropagation();
-      return true;
-    }
-
-    // should we open it in a new window?
-    if (Services.prefs.getBoolPref("middlemouse.openNewWindow")) {
-      if (gPrivate)
-        openNewPrivateWith(href, node);
-      else
-        openNewWindowWith(href, node);
-      event.stopPropagation();
-      return true;
-    }
-
-    // let someone else deal with it
+function handleLinkClick(event, href, linkNode) {
+  if (event.button == 2) // right click
     return false;
+
+  var where = whereToOpenLink(event);
+  if (where == "current")
+    return false;
+
+  var doc = event.target.ownerDocument;
+
+  if (where == "save") {
+    saveURL(href, linkNode ? gatherTextUnder(linkNode) : "", null, false,
+            true, doc.documentURIObject, doc);
+    event.preventDefault();
+    return true;
   }
 
-  function handleLinkClick(event, href, linkNode)
-  {
-    // Checking to make sure we are allowed to open this URL
-    // (call to urlSecurityCheck) is now done within openNew... functions
+  var referrerURI = doc.documentURIObject;
+  // if the mixedContentChannel is present and the referring URI passes
+  // a same origin check with the target URI, we can preserve the users
+  // decision of disabling MCB on a page for it's child tabs.
+  var persistAllowMixedContentInChildTab = false;
 
-    switch (event.button) {
-      case 0:                                                         // if left button clicked
-        if (event.metaKey || event.ctrlKey) {                         // and meta or ctrl are down
-          if (openNewTabOrWindow(event, href, linkNode))
-            return true;
-        }
-        var saveModifier = Services.prefs.getBoolPref("ui.key.saveLink.shift", true);
-        saveModifier = saveModifier ? event.shiftKey : event.altKey;
-
-        if (saveModifier) {                                           // if saveModifier is down
-          var doc = linkNode.ownerDocument;
-          saveURL(href, gatherTextUnder(linkNode), "SaveLinkTitle",
-                  false, true, doc.documentURIObject, doc);
-          return true;
-        }
-        if (event.altKey)                                             // if alt is down
-          return true;                                                // do nothing
-        return false;
-      case 1:                                                         // if middle button clicked
-        if (openNewTabOrWindow(event, href, linkNode))
-          return true;
-        break;
+  if (where == "tab" && getBrowser().docShell.mixedContentChannel) {
+    const sm = Services.scriptSecurityManager;
+    try {
+      var targetURI = makeURI(href);
+      sm.checkSameOriginURI(referrerURI, targetURI, false);
+      persistAllowMixedContentInChildTab = true;
     }
-    return false;
+    catch (e) { }
   }
+
+  urlSecurityCheck(href, doc.nodePrincipal);
+  let params = {
+    charset: doc.characterSet,
+    private: gPrivate ? true : false,
+    allowMixedContent: persistAllowMixedContentInChildTab,
+    referrerURI: referrerURI,
+    noReferrer: BrowserUtils.linkHasNoReferrer(linkNode),
+    originPrincipal: doc.nodePrincipal,
+    triggeringPrincipal: doc.nodePrincipal,
+  };
+
+  // The new tab/window must use the same userContextId
+  if (doc.nodePrincipal.originAttributes.userContextId) {
+    params.userContextId = doc.nodePrincipal.originAttributes.userContextId;
+  }
+
+  openLinkIn(href, where, params);
+  event.preventDefault();
+  return true;
+}
 
   var gURIFixup = null;
 
@@ -185,7 +189,7 @@
           lastLocationChange == gBrowser.selectedBrowser.lastLocationChange) {
         openUILink(data.url, event,
                    { ignoreButton: true,
-                       disallowInheritPrincipal: !data.mayInheritPrincipal });
+                     disallowInheritPrincipal: !data.mayInheritPrincipal });
       }
     });
 

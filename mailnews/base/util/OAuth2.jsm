@@ -3,30 +3,34 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
- * Provides OAuth 2.0 authentication
+ * Provides OAuth 2.0 authentication.
+ * @see RFC 6749
  */
 var EXPORTED_SYMBOLS = ["OAuth2"];
 
-const { httpRequest } = ChromeUtils.import("resource://gre/modules/Http.jsm");
 const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 
-function parseURLData(aData) {
-  let result = {};
-  aData
-    .split(/[?#]/, 2)[1]
-    .split("&")
-    .forEach(function(aParam) {
-      let [key, value] = aParam.split("=");
-      result[key] = value;
-    });
-  return result;
-}
+Cu.importGlobalProperties(["fetch"]);
 
 // Only allow one connecting window per endpoint.
 var gConnecting = {};
 
-function OAuth2(aBaseURI, aScope, aAppKey, aAppSecret) {
+/**
+ * Constructor for the OAuth2 object.
+ *
+ * @constructor
+ * @param {string} aBaseURI - The base URI for authentication and token
+ *   requests, oauth2/auth or oauth2/token will be added for the actual
+ *   requests.
+ * @param {?string} aScope - The scope as specified by RFC 6749 Section 3.3.
+ *   Will not be included in the requests if falsy.
+ * @param {string} aAppKey - The client_id as specified by RFC 6749 Section
+ *   2.3.1.
+ * @param {string} [aAppSecret=null] - The client_secret as specified in
+ *    RFC 6749 section 2.3.1. Will not be included in the requests if null.
+ */
+function OAuth2(aBaseURI, aScope, aAppKey, aAppSecret = null) {
   this.authURI = aBaseURI + "oauth2/auth";
   this.tokenURI = aBaseURI + "oauth2/token";
   this.consumerKey = aAppKey;
@@ -37,15 +41,11 @@ function OAuth2(aBaseURI, aScope, aAppKey, aAppSecret) {
   this.log = Log4Moz.getConfiguredLogger("TBOAuth");
 }
 
-OAuth2.CODE_AUTHORIZATION = "authorization_code";
-OAuth2.CODE_REFRESH = "refresh_token";
-
 OAuth2.prototype = {
-  responseType: "code",
   consumerKey: null,
   consumerSecret: null,
   completionURI: "http://localhost",
-  requestWindowURI: "chrome://messenger/content/browserRequest.xul",
+  requestWindowURI: "chrome://messenger/content/browserRequest.xhtml",
   requestWindowFeatures: "chrome,private,centerscreen,width=980,height=750",
   requestWindowTitle: "",
   scope: null,
@@ -61,7 +61,7 @@ OAuth2.prototype = {
     if (!aRefresh && this.accessToken) {
       aSuccess();
     } else if (this.refreshToken) {
-      this.requestAccessToken(this.refreshToken, OAuth2.CODE_REFRESH);
+      this.requestAccessToken(this.refreshToken, true);
     } else {
       if (!aWithUI) {
         aFailure('{ "error": "auth_noui" }');
@@ -76,25 +76,31 @@ OAuth2.prototype = {
   },
 
   requestAuthorization() {
-    let params = [
-      ["response_type", this.responseType],
-      ["client_id", this.consumerKey],
-      ["redirect_uri", this.completionURI],
-    ];
-    // The scope can be optional.
+    let params = new URLSearchParams({
+      response_type: "code",
+      client_id: this.consumerKey,
+      redirect_uri: this.completionURI,
+    });
+
+    // The scope is optional.
     if (this.scope) {
-      params.push(["scope", this.scope]);
+      params.append("scope", this.scope);
     }
 
-    // Add extra parameters
-    params.push(...this.extraAuthParams);
+    for (let [name, value] of this.extraAuthParams) {
+      params.append(name, value);
+    }
 
-    // Now map the parameters to a string
-    params = params.map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&");
+    let authEndpointURI = this.authURI + "?" + params.toString();
+    this.log.info(
+      "Interacting with the resource owner to obtain an authorization grant " +
+        "from the authorization endpoint: " +
+        authEndpointURI
+    );
 
     this._browserRequest = {
       account: this,
-      url: this.authURI + "?" + params,
+      url: authEndpointURI,
       _active: true,
       iconURI: "",
       cancelled() {
@@ -183,15 +189,14 @@ OAuth2.prototype = {
     delete this._browserRequest;
   },
 
-  onAuthorizationReceived(aData) {
-    this.log.info("authorization received" + aData);
-    let results = parseURLData(aData);
-    if (this.responseType == "code" && results.code) {
-      this.requestAccessToken(results.code, OAuth2.CODE_AUTHORIZATION);
-    } else if (this.responseType == "token") {
-      this.onAccessTokenReceived(JSON.stringify(results));
+  // @see RFC 6749 section 4.1.2: Authorization Response
+  onAuthorizationReceived(aURL) {
+    this.log.info("OAuth2 authorization received: url=" + aURL);
+    let params = new URLSearchParams(aURL.split("?", 2)[1]);
+    if (params.has("code")) {
+      this.requestAccessToken(params.get("code"), false);
     } else {
-      this.onAuthorizationFailed(null, aData);
+      this.onAuthorizationFailed(null, aURL);
     }
   },
 
@@ -199,49 +204,79 @@ OAuth2.prototype = {
     this.connectFailureCallback(aData);
   },
 
-  requestAccessToken(aCode, aType) {
-    let params = [
-      ["client_id", this.consumerKey],
-      ["client_secret", this.consumerSecret],
-      ["grant_type", aType],
-    ];
+  /**
+   * Request a new access token, or refresh an existing one.
+   * @param {string} aCode - The token issued to the client.
+   * @param {boolean} aRefresh - Whether it's a refresh of a token or not.
+   */
+  requestAccessToken(aCode, aRefresh) {
+    // @see RFC 6749 section 4.1.3. Access Token Request
+    // @see RFC 6749 section 6. Refreshing an Access Token
 
-    if (aType == OAuth2.CODE_AUTHORIZATION) {
-      params.push(["code", aCode]);
-      params.push(["redirect_uri", this.completionURI]);
-    } else if (aType == OAuth2.CODE_REFRESH) {
-      params.push(["refresh_token", aCode]);
+    let data = new URLSearchParams();
+    data.append("client_id", this.consumerKey);
+    if (this.consumerSecret !== null) {
+      // Section 2.3.1. of RFC 6749 states that empty secrets MAY be omitted
+      // by the client. This OAuth implementation delegates this decission to
+      // the caller: If the secret is null, it will be omitted.
+      data.append("client_secret", this.consumerSecret);
     }
 
-    let options = {
-      postData: params,
-      onLoad: this.onAccessTokenReceived.bind(this),
-      onError: this.onAccessTokenFailed.bind(this),
-    };
-    httpRequest(this.tokenURI, options);
-  },
-
-  onAccessTokenFailed(aError, aData) {
-    if (aError != "offline") {
-      this.refreshToken = null;
-    }
-    this.connectFailureCallback(aData);
-  },
-
-  onAccessTokenReceived(aData) {
-    let result = JSON.parse(aData);
-
-    this.accessToken = result.access_token;
-    if ("refresh_token" in result) {
-      this.refreshToken = result.refresh_token;
-    }
-    if ("expires_in" in result) {
-      this.tokenExpires = new Date().getTime() + result.expires_in * 1000;
+    if (aRefresh) {
+      this.log.info(
+        `Making a refresh request to the token endpoint: ${this.tokenURI}`
+      );
+      data.append("grant_type", "refresh_token");
+      data.append("refresh_token", aCode);
     } else {
-      this.tokenExpires = Number.MAX_VALUE;
+      this.log.info(
+        `Making access token request to the token endpoint: ${this.tokenURI}`
+      );
+      data.append("grant_type", "authorization_code");
+      data.append("code", aCode);
+      data.append("redirect_uri", this.completionURI);
     }
-    this.tokenType = result.token_type;
 
-    this.connectSuccessCallback();
+    fetch(this.tokenURI, {
+      method: "POST",
+      cache: "no-cache",
+      body: data,
+    })
+      .then(response => response.json())
+      .then(result => {
+        if ("error" in result) {
+          // RFC 6749 section 5.2. Error Response
+          this.log.info(
+            `The authorization server returned an error response: ${JSON.stringify(
+              result
+            )}`
+          );
+          // Typically in production this would be {"error": "invalid_grant"}.
+          // That is, the token expired or was revoked (user changed password?).
+          // Reset the tokens we have and call success so that the auth flow
+          // will be re-triggered.
+          this.accessToken = null;
+          this.refreshToken = null;
+          this.connectSuccessCallback();
+          return;
+        }
+
+        // RFC 6749 section 5.1. Successful Response
+        this.log.info("The authorization server issued an access token.");
+        this.accessToken = result.access_token;
+        if ("refresh_token" in result) {
+          this.refreshToken = result.refresh_token;
+        }
+        if ("expires_in" in result) {
+          this.tokenExpires = new Date().getTime() + result.expires_in * 1000;
+        } else {
+          this.tokenExpires = Number.MAX_VALUE;
+        }
+        this.connectSuccessCallback();
+      })
+      .catch(err => {
+        this.log.info(`Connection to authorization server failed: ${err}`);
+        this.connectFailureCallback(err);
+      });
   },
 };

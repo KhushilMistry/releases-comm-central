@@ -21,7 +21,7 @@ nsresult nsMsgLocalStoreUtils::AddDirectorySeparator(nsIFile *path) {
   return path->SetLeafName(leafName);
 }
 
-bool nsMsgLocalStoreUtils::nsShouldIgnoreFile(nsAString &name) {
+bool nsMsgLocalStoreUtils::nsShouldIgnoreFile(nsAString &name, nsIFile *path) {
   if (name.IsEmpty()) return true;
 
   char16_t firstChar = name.First();
@@ -54,6 +54,14 @@ bool nsMsgLocalStoreUtils::nsShouldIgnoreFile(nsAString &name) {
       StringBeginsWith(name, NS_LITERAL_STRING("feeditems_error")))
     return true;
 
+  // Ignore hidden and other special system files.
+  bool specialFile = false;
+  path->IsHidden(&specialFile);
+  if (specialFile) return true;
+  specialFile = false;
+  path->IsSpecial(&specialFile);
+  if (specialFile) return true;
+
   // The .mozmsgs dir is for spotlight support
   return (StringEndsWith(name, NS_LITERAL_STRING(".mozmsgs")) ||
           StringEndsWith(name, NS_LITERAL_STRING(FOLDER_SUFFIX)) ||
@@ -76,7 +84,7 @@ bool nsMsgLocalStoreUtils::nsShouldIgnoreFile(nsAString &name) {
 
 void nsMsgLocalStoreUtils::ChangeKeywordsHelper(
     nsIMsgDBHdr *message, uint64_t desiredOffset,
-    nsLineBuffer<char> *lineBuffer, nsTArray<nsCString> &keywordArray,
+    nsLineBuffer<char> &lineBuffer, nsTArray<nsCString> &keywordArray,
     bool aAdd, nsIOutputStream *outputStream, nsISeekableStream *seekableStream,
     nsIInputStream *inputStream) {
   uint32_t bytesWritten;
@@ -91,7 +99,7 @@ void nsMsgLocalStoreUtils::ChangeKeywordsHelper(
     keywordToWrite.Append(keywordArray[i]);
     seekableStream->Seek(nsISeekableStream::NS_SEEK_SET, desiredOffset);
     // need to reset lineBuffer, which is cheaper than creating a new one.
-    lineBuffer->start = lineBuffer->end = lineBuffer->buf;
+    lineBuffer.start = lineBuffer.end = lineBuffer.buf;
     bool inKeywordHeader = false;
     bool foundKeyword = false;
     int64_t offsetToAddKeyword = 0;
@@ -103,10 +111,11 @@ void nsMsgLocalStoreUtils::ChangeKeywordsHelper(
       seekableStream->Tell(&lineStartPos);
       // we need to adjust the linestart pos by how much extra the line
       // buffer has read from the stream.
-      lineStartPos -= (lineBuffer->end - lineBuffer->start);
+      lineStartPos -= (lineBuffer.end - lineBuffer.start);
       // NS_ReadLine doesn't return line termination chars.
       nsCString keywordHeaders;
-      nsresult rv = NS_ReadLine(inputStream, lineBuffer, keywordHeaders, &more);
+      nsresult rv =
+          NS_ReadLine(inputStream, &lineBuffer, keywordHeaders, &more);
       if (NS_SUCCEEDED(rv)) {
         if (keywordHeaders.IsEmpty())
           break;  // passed headers; no x-mozilla-keywords header; give up.

@@ -3,29 +3,6 @@
     "namespace": "mailTabs",
     "types": [
       {
-        "id": "QuickFilterTagsDetail",
-        "type": "object",
-        "properties": {
-          "tags": {
-            "type": "object",
-            "description": "Object keys are tags to filter on, values are <code>true</code> if the message must have the tag, or <code>false</code> if it must not have the tag. For a list of available tags, call the :ref:`messages.listTags` method.",
-            "patternProperties": {
-              ".*": {
-                "type": "boolean"
-              }
-            }
-          },
-          "mode": {
-            "type": "string",
-            "description": "Whether all of the tag filters must apply, or any of them.",
-            "enum": [
-              "all",
-              "any"
-            ]
-          }
-        }
-      },
-      {
         "id": "QuickFilterTextDetail",
         "type": "object",
         "properties": {
@@ -37,12 +14,6 @@
             "type": "boolean",
             "description": "Shows messages where <var>text</var> matches the recipients.",
             "optional": true
-          },
-          "sender": {
-            "type": "boolean",
-            "description": "Use <var>author</var> instead.",
-            "optional": true,
-            "deprecated": true
           },
           "author": {
             "type": "boolean",
@@ -185,6 +156,7 @@
         "name": "getSelectedMessages",
         "type": "function",
         "description": "Lists the selected messages in the current folder. A messages permission is required to do this.",
+        "permissions": ["messagesRead"],
         "async": true,
         "parameters": [
           {
@@ -223,12 +195,6 @@
                 "description": "Shows only unread messages.",
                 "optional": true
               },
-              "starred": {
-                "type": "boolean",
-                "description": "Use <var>flagged</var> instead.",
-                "optional": true,
-                "deprecated": true
-              },
               "flagged": {
                 "type": "boolean",
                 "description": "Shows only flagged messages.",
@@ -246,7 +212,7 @@
                     "type": "boolean"
                   },
                   {
-                    "$ref": "QuickFilterTagsDetail"
+                    "$ref": "messages.TagsDetail"
                   }
                 ],
                 "description": "Shows only messages with tags on them."
@@ -271,12 +237,14 @@
         "name": "onDisplayedFolderChanged",
         "type": "function",
         "description": "Fired when the displayed folder changes in any mail tab.",
+        "permissions": ["accountsRead"],
         "parameters": []
       },
       {
         "name": "onSelectedMessagesChanged",
         "type": "function",
         "description": "Fired when the selected messages change in any mail tab.",
+        "permissions": ["messagesRead"],
         "parameters": []
       }
     ]

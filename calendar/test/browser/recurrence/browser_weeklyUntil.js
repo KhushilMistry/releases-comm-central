@@ -29,7 +29,7 @@ var { plan_for_modal_dialog, wait_for_modal_dialog } = ChromeUtils.import(
   "resource://testing-common/mozmill/WindowHelpers.jsm"
 );
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 var controller = mozmill.getMail3PaneController();
 var { lookupEventBox } = helpersForController(controller);
@@ -37,14 +37,14 @@ var { lookupEventBox } = helpersForController(controller);
 const ENDDATE = new Date(2009, 0, 26); // Last Monday in month.
 const HOUR = 8;
 
-add_task(function testWeeklyUntilRecurrence() {
+add_task(async function testWeeklyUntilRecurrence() {
   createCalendar(controller, CALENDARNAME);
   switchToView(controller, "day");
   goToDate(controller, 2009, 1, 5); // Monday
 
   // Create weekly recurring event.
   let eventBox = lookupEventBox("day", CANVAS_BOX, null, 1, HOUR);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
     plan_for_modal_dialog("Calendar:EventDialog:Recurrence", setRecurrence);

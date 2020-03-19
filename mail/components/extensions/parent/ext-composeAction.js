@@ -10,11 +10,11 @@ ChromeUtils.defineModuleGetter(
 
 this.composeAction = class extends ToolbarButtonAPI {
   constructor(extension) {
-    super(extension);
+    super(extension, global);
     this.manifest_name = "compose_action";
     this.manifestName = "composeAction";
     this.windowURLs = [
-      "chrome://messenger/content/messengercompose/messengercompose.xul",
+      "chrome://messenger/content/messengercompose/messengercompose.xhtml",
     ];
 
     let format =
@@ -25,8 +25,6 @@ this.composeAction = class extends ToolbarButtonAPI {
     if (format) {
       this.paint = this.paintFormatToolbar;
     }
-
-    this.global = global;
   }
 
   paintFormatToolbar(window) {
@@ -49,7 +47,7 @@ this.composeAction = class extends ToolbarButtonAPI {
     let id = `${widgetId}-composeAction-toolbarbutton`;
 
     let windowURL =
-      "chrome://messenger/content/messengercompose/messengercompose.xul";
+      "chrome://messenger/content/messengercompose/messengercompose.xhtml";
     let currentSet = Services.xulStore.getValue(
       windowURL,
       "composeToolbar2",

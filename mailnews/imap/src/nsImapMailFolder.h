@@ -12,7 +12,6 @@
 #include "nsIImapMessageSink.h"
 #include "nsICopyMessageListener.h"
 #include "nsIUrlListener.h"
-#include "nsAutoPtr.h"
 #include "nsIImapIncomingServer.h"  // we need this for its IID
 #include "nsIMsgParseMailMsgState.h"
 #include "nsImapUndoTxn.h"
@@ -231,7 +230,7 @@ class nsImapMailFolder : public nsMsgDBFolder,
       nsIInputStream *aIStream, int32_t aLength,
       nsIOutputStream *outputStream) override;
   NS_IMETHOD CopyDataDone() override;
-  NS_IMETHOD Delete() override;
+  NS_IMETHOD DeleteStorage() override;
   NS_IMETHOD Rename(const nsAString &newName, nsIMsgWindow *msgWindow) override;
   NS_IMETHOD RenameSubFolders(nsIMsgWindow *msgWindow,
                               nsIMsgFolder *oldFolder) override;
@@ -302,7 +301,7 @@ class nsImapMailFolder : public nsMsgDBFolder,
                                    nsIMsgWindow *msgWindow) override;
   NS_IMETHOD GetCanFileMessages(bool *aCanFileMessages) override;
   NS_IMETHOD GetCanDeleteMessages(bool *aCanDeleteMessages) override;
-  NS_IMETHOD FetchMsgPreviewText(nsMsgKey *aKeysToFetch, uint32_t aNumKeys,
+  NS_IMETHOD FetchMsgPreviewText(nsTArray<nsMsgKey> const &aKeysToFetch,
                                  bool aLocalOnly, nsIUrlListener *aUrlListener,
                                  bool *aAsyncResults) override;
 
@@ -360,7 +359,7 @@ class nsImapMailFolder : public nsMsgDBFolder,
   // send notification to copy service listener.
   nsresult OnCopyCompleted(nsISupports *srcSupport, nsresult exitCode);
 
-  static nsresult AllocateUidStringFromKeys(nsMsgKey *keys, uint32_t numKeys,
+  static nsresult AllocateUidStringFromKeys(const nsTArray<nsMsgKey> &keys,
                                             nsCString &msgIds);
   static nsresult BuildIdsAndKeyArray(nsIArray *messages, nsCString &msgIds,
                                       nsTArray<nsMsgKey> &keyArray);
@@ -389,8 +388,7 @@ class nsImapMailFolder : public nsMsgDBFolder,
 
   nsresult SyncFlags(nsIImapFlagAndUidState *flagState);
   nsresult HandleCustomFlags(nsMsgKey uidOfMessage, nsIMsgDBHdr *dbHdr,
-                             uint16_t userFlags, nsCString &keywords,
-                             nsIImapFlagAndUidState *flagState);
+                             uint16_t userFlags, nsCString &keywords);
   nsresult NotifyMessageFlagsFromHdr(nsIMsgDBHdr *dbHdr, nsMsgKey msgKey,
                                      uint32_t flags);
 

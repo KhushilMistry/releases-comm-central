@@ -3,8 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-DIRS += ['profile']
-
 if CONFIG['MOZ_NO_PIE_COMPAT']:
     GeckoProgram(CONFIG['MOZ_APP_NAME'] + '-bin')
 
@@ -37,6 +35,10 @@ if CONFIG['MOZ_SANDBOX'] and CONFIG['OS_ARCH'] == 'WINNT':
     LOCAL_INCLUDES += [
         '/%s/security/sandbox/chromium' % CONFIG['mozreltopsrcdir'],
         '/%s/security/sandbox/chromium-shim' % CONFIG['mozreltopsrcdir'],
+    ]
+
+    OS_LIBS += [
+        'version',
     ]
 
     USE_LIBS += [
@@ -92,3 +94,7 @@ if CONFIG['MOZ_LINUX_32_SSE2_STARTUP_ERROR']:
 JS_PREFERENCE_PP_FILES += [
     'profile/all-thunderbird.js',
 ]
+
+for icon in ('messengerWindow', 'newmail', 'writeMessage', 'addressbook'):
+    DEFINES[icon.upper() + '_ICO'] = '"%s/%s/%s.ico"' % (
+        TOPSRCDIR, CONFIG['MOZ_BRANDING_DIRECTORY'], icon)

@@ -24,10 +24,10 @@ add_task(function setupModule(module) {
   createCalendar(controller, CALENDARNAME);
 });
 
-add_task(function testEventDialog() {
-  dump("#ltnNewEvent click\n");
-  controller.mainMenu.click("#ltnNewEvent");
-  invokeEventDialog(controller, null, (event, iframe) => {
+add_task(async function testEventDialog() {
+  dump("#calendar-new-event-menuitem click\n");
+  controller.mainMenu.click("#calendar-new-event-menuitem");
+  await invokeEventDialog(controller, null, (event, iframe) => {
     checkLargeEnough(event, iframe);
 
     // Much larger than necessary.
@@ -37,12 +37,12 @@ add_task(function testEventDialog() {
     event.keypress(null, "VK_ESCAPE", {});
   });
 
-  checkWithinTolerance(getPersistedValue("event", "width"), 640, LARGE_TOLERANCE);
-  checkWithinTolerance(getPersistedValue("event", "height"), 690, LARGE_TOLERANCE);
+  checkWithinTolerance(getPersistedValue("width"), 640, LARGE_TOLERANCE);
+  checkWithinTolerance(getPersistedValue("height"), 690, LARGE_TOLERANCE);
 
-  dump("#ltnNewEvent click\n");
-  controller.mainMenu.click("#ltnNewEvent");
-  invokeEventDialog(controller, null, (event, iframe) => {
+  dump("#calendar-new-event-menuitem click\n");
+  controller.mainMenu.click("#calendar-new-event-menuitem");
+  await invokeEventDialog(controller, null, (event, iframe) => {
     checkWithinTolerance(event.window.outerWidth, 640, LARGE_TOLERANCE);
     checkWithinTolerance(event.window.outerHeight, 690, LARGE_TOLERANCE);
     checkLargeEnough(event, iframe);
@@ -57,9 +57,9 @@ add_task(function testEventDialog() {
     event.keypress(null, "VK_ESCAPE", {});
   });
 
-  dump("#ltnNewEvent click\n");
-  controller.mainMenu.click("#ltnNewEvent");
-  invokeEventDialog(controller, null, (event, iframe) => {
+  dump("#calendar-new-event-menuitem click\n");
+  controller.mainMenu.click("#calendar-new-event-menuitem");
+  await invokeEventDialog(controller, null, (event, iframe) => {
     checkLargeEnough(event, iframe);
 
     // Much larger than necessary.
@@ -69,18 +69,18 @@ add_task(function testEventDialog() {
     event.keypress(null, "VK_ESCAPE", {});
   });
 
-  checkWithinTolerance(getPersistedValue("event", "width"), 640, LARGE_TOLERANCE);
-  checkWithinTolerance(getPersistedValue("event", "height"), 690, LARGE_TOLERANCE);
+  checkWithinTolerance(getPersistedValue("width"), 640, LARGE_TOLERANCE);
+  checkWithinTolerance(getPersistedValue("height"), 690, LARGE_TOLERANCE);
 
   Assert.ok(true, "Test ran to completion");
 });
 
-add_task(function testTaskDialog() {
-  dump("#ltnNewTask click\n");
-  controller.mainMenu.click("#ltnNewTask");
-  invokeEventDialog(controller, null, (task, iframe) => {
-    checkWithinTolerance(getPersistedValue("event", "width"), 640, LARGE_TOLERANCE);
-    checkWithinTolerance(getPersistedValue("event", "height"), 690, LARGE_TOLERANCE);
+add_task(async function testTaskDialog() {
+  dump("#calendar-new-task-menuitem click\n");
+  controller.mainMenu.click("#calendar-new-task-menuitem");
+  await invokeEventDialog(controller, null, (task, iframe) => {
+    checkWithinTolerance(getPersistedValue("width"), 640, LARGE_TOLERANCE);
+    checkWithinTolerance(getPersistedValue("height"), 690, LARGE_TOLERANCE);
 
     checkLargeEnough(task, iframe);
 
@@ -91,12 +91,12 @@ add_task(function testTaskDialog() {
     task.keypress(null, "VK_ESCAPE", {});
   });
 
-  checkWithinTolerance(getPersistedValue("task", "width"), 650, LARGE_TOLERANCE);
-  checkWithinTolerance(getPersistedValue("task", "height"), 700, LARGE_TOLERANCE);
+  checkWithinTolerance(getPersistedValue("width"), 650, LARGE_TOLERANCE);
+  checkWithinTolerance(getPersistedValue("height"), 700, LARGE_TOLERANCE);
 
-  dump("#ltnNewTask click\n");
-  controller.mainMenu.click("#ltnNewTask");
-  invokeEventDialog(controller, null, (task, iframe) => {
+  dump("#calendar-new-task-menuitem click\n");
+  controller.mainMenu.click("#calendar-new-task-menuitem");
+  await invokeEventDialog(controller, null, (task, iframe) => {
     checkWithinTolerance(task.window.outerWidth, 650, LARGE_TOLERANCE);
     checkWithinTolerance(task.window.outerHeight, 700, LARGE_TOLERANCE);
     checkLargeEnough(task, iframe);
@@ -111,9 +111,9 @@ add_task(function testTaskDialog() {
     task.keypress(null, "VK_ESCAPE", {});
   });
 
-  dump("#ltnNewTask click\n");
-  controller.mainMenu.click("#ltnNewTask");
-  invokeEventDialog(controller, null, (task, iframe) => {
+  dump("#calendar-new-task-menuitem click\n");
+  controller.mainMenu.click("#calendar-new-task-menuitem");
+  await invokeEventDialog(controller, null, (task, iframe) => {
     checkLargeEnough(task, iframe);
 
     // Much larger than necessary.
@@ -146,10 +146,10 @@ function checkLargeEnough(outer, inner) {
   dump(`Dialog is ${outer.window.outerWidth} by ${outer.window.outerHeight}\n`);
 }
 
-function getPersistedValue(type, which) {
+function getPersistedValue(which) {
   return Services.xulStore.getValue(
-    "chrome://calendar/content/calendar-event-dialog.xul",
-    `calendar-${type}-dialog`,
+    "chrome://calendar/content/calendar-event-dialog.xhtml",
+    "calendar-event-window",
     which
   );
 }

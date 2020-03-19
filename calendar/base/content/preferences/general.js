@@ -5,9 +5,9 @@
 /* exported gCalendarGeneralPane */
 
 /* import-globals-from ../../../lightning/content/messenger-overlay-preferences.js */
-/* globals labelLong, labelShort */ // From general.xul.
+/* globals labelLong, labelShort */ // From general.xhtml.
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 Preferences.addAll([
   { id: "calendar.date.format", type: "int" },
@@ -32,7 +32,7 @@ var gCalendarGeneralPane = {
    * Initialize the general pref pane. Sets up dialog controls to match the
    * values set in prefs.
    */
-  init: function() {
+  init() {
     let formatter = Cc["@mozilla.org/calendar/datetime-formatter;1"].getService(
       Ci.calIDateTimeFormatter
     );
@@ -56,12 +56,11 @@ var gCalendarGeneralPane = {
     let tzMenuPopup = document.getElementById("calendar-timezone-menupopup");
 
     let tzService = cal.getTimezoneService();
-    let enumerator = tzService.timezoneIds;
     let tzids = {};
     let displayNames = [];
     // don't rely on what order the timezone-service gives you
-    while (enumerator.hasMore()) {
-      let timezone = tzService.getTimezone(enumerator.getNext());
+    for (let timezoneId of tzService.timezoneIds) {
+      let timezone = tzService.getTimezone(timezoneId);
       if (timezone && !timezone.isFloating && !timezone.isUTC) {
         let displayName = timezone.displayName;
         displayNames.push(displayName);
@@ -84,7 +83,7 @@ var gCalendarGeneralPane = {
     this.initializeTodaypaneMenu();
   },
 
-  updateDefaultTodoDates: function() {
+  updateDefaultTodoDates() {
     let defaultDue = document.getElementById("default_task_due").value;
     let defaultStart = document.getElementById("default_task_start").value;
     let offsetValues = ["offsetcurrent", "offsetnexthour"];
@@ -104,7 +103,7 @@ var gCalendarGeneralPane = {
     updateMenuLabelsPlural("default_task_due_offset_text", "default_task_due_offset_units");
   },
 
-  initializeTodaypaneMenu: function() {
+  initializeTodaypaneMenu() {
     // Assign the labels for the menuitem
     let soondaysMenu = document.getElementById("soondays-menulist");
     let items = soondaysMenu.getElementsByTagName("menuitem");

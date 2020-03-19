@@ -84,8 +84,8 @@ NS_IMETHODIMP nsMsgMailSession::RemoveFolderListener(
 NS_IMETHODIMP
 nsMsgMailSession::OnItemPropertyChanged(nsIMsgFolder *aItem,
                                         const nsACString &aProperty,
-                                        const char *aOldValue,
-                                        const char *aNewValue) {
+                                        const nsACString &aOldValue,
+                                        const nsACString &aNewValue) {
   NOTIFY_FOLDER_LISTENERS(propertyChanged, OnItemPropertyChanged,
                           (aItem, aProperty, aOldValue, aNewValue));
   return NS_OK;
@@ -94,8 +94,8 @@ nsMsgMailSession::OnItemPropertyChanged(nsIMsgFolder *aItem,
 NS_IMETHODIMP
 nsMsgMailSession::OnItemUnicharPropertyChanged(nsIMsgFolder *aItem,
                                                const nsACString &aProperty,
-                                               const char16_t *aOldValue,
-                                               const char16_t *aNewValue) {
+                                               const nsAString &aOldValue,
+                                               const nsAString &aNewValue) {
   NOTIFY_FOLDER_LISTENERS(unicharPropertyChanged, OnItemUnicharPropertyChanged,
                           (aItem, aProperty, aOldValue, aNewValue));
   return NS_OK;
@@ -259,7 +259,7 @@ nsresult nsMsgMailSession::GetTopmostMsgWindow(nsIMsgWindow **aMsgWindow) {
       mozilla::dom::Document *domDocument = topMostWindow->GetDoc();
       NS_ENSURE_TRUE(domDocument, NS_ERROR_FAILURE);
 
-      Element *domElement = domDocument->GetDocumentElement();
+      mozilla::dom::Element *domElement = domDocument->GetDocumentElement();
       NS_ENSURE_TRUE(domElement, NS_ERROR_FAILURE);
 
       domElement->GetAttribute(NS_LITERAL_STRING("windowtype"), windowType);
@@ -372,39 +372,6 @@ nsMsgMailSession::ConvertMsgURIToMsgURL(const char *aURI,
 nsresult nsMsgMailSession::GetSelectedLocaleDataDir(nsIFile *defaultsDir) {
   NS_ENSURE_ARG_POINTER(defaultsDir);
 
-  bool baseDirExists = false;
-  nsresult rv = defaultsDir->Exists(&baseDirExists);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  if (baseDirExists) {
-    nsCOMPtr<nsIXULChromeRegistry> packageRegistry =
-        mozilla::services::GetXULChromeRegistryService();
-    if (packageRegistry) {
-      nsAutoCString localeName;
-      rv = packageRegistry->GetSelectedLocale(
-          NS_LITERAL_CSTRING("global-region"), false, localeName);
-
-      if (NS_SUCCEEDED(rv) && !localeName.IsEmpty()) {
-        bool localeDirExists = false;
-        nsCOMPtr<nsIFile> localeDataDir;
-
-        rv = defaultsDir->Clone(getter_AddRefs(localeDataDir));
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        rv = localeDataDir->AppendNative(localeName);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        rv = localeDataDir->Exists(&localeDirExists);
-        NS_ENSURE_SUCCESS(rv, rv);
-
-        if (localeDirExists) {
-          // use locale provider instead
-          rv = defaultsDir->AppendNative(localeName);
-          NS_ENSURE_SUCCESS(rv, rv);
-        }
-      }
-    }
-  }
   return NS_OK;
 }
 
@@ -622,7 +589,7 @@ NS_IMETHODIMP nsMsgShutdownService::Observe(nsISupports *aSubject,
 
     mMsgProgress->OpenProgressDialog(
         internalDomWin, topMsgWindow,
-        "chrome://messenger/content/shutdownWindow.xul", false, nullptr);
+        "chrome://messenger/content/shutdownWindow.xhtml", false, nullptr);
 
     if (mQuitForced) {
       nsCOMPtr<nsIThread> thread(do_GetCurrentThread());

@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -48,7 +48,7 @@ nsresult nsImapMoveCopyMsgTxn::Init(nsIMsgFolder* srcFolder,
     rv = srcDB->GetMsgHdrForKey(m_srcKeyArray[i], getter_AddRefs(srcHdr));
     if (NS_SUCCEEDED(rv)) {
       // ** jt -- only do this for mailbox protocol
-      if (MsgLowerCaseEqualsLiteral(protocolType, "mailbox")) {
+      if (protocolType.LowerCaseEqualsLiteral("mailbox")) {
         m_srcIsPop3 = true;
         uint32_t msgSize;
         rv = srcHdr->GetMessageSize(&msgSize);
@@ -293,8 +293,7 @@ nsresult nsImapMoveCopyMsgTxn::RedoMailboxDelete() {
     if (NS_FAILED(rv) || !srcFolder) return rv;
     rv = srcFolder->GetMsgDatabase(getter_AddRefs(srcDB));
     if (NS_SUCCEEDED(rv)) {
-      srcDB->DeleteMessages(m_srcKeyArray.Length(), m_srcKeyArray.Elements(),
-                            nullptr);
+      srcDB->DeleteMessages(m_srcKeyArray, nullptr);
       srcDB->SetSummaryValid(true);
     }
     return NS_OK;  // always return NS_OK
@@ -391,8 +390,7 @@ NS_IMETHODIMP nsImapMoveCopyMsgTxn::OnStopRunningUrl(nsIURI* aUrl,
       }
       if (dstKeys.Length()) {
         nsAutoCString uids;
-        nsImapMailFolder::AllocateUidStringFromKeys(dstKeys.Elements(),
-                                                    dstKeys.Length(), uids);
+        nsImapMailFolder::AllocateUidStringFromKeys(dstKeys, uids);
         rv = imapService->OnlineMessageCopy(dstFolder, uids, srcFolder, true,
                                             true, nullptr, nullptr, nullptr,
                                             nullptr);

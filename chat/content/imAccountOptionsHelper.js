@@ -44,13 +44,11 @@ var accountOptionsHelper = {
     hbox.appendChild(label);
     vbox.appendChild(hbox);
 
-    aList.QueryInterface(Ci.nsISimpleEnumerator);
     let menulist = document.createXULElement("menulist");
     menulist.setAttribute("id", aName);
     menulist.setAttribute("flex", "1");
     let popup = menulist.appendChild(document.createXULElement("menupopup"));
-    while (aList.hasMoreElements()) {
-      let elt = aList.getNext();
+    for (let elt of aList) {
       let item = document.createXULElement("menuitem");
       item.setAttribute("label", elt.name);
       item.setAttribute("value", elt.value);
@@ -93,7 +91,7 @@ var accountOptionsHelper = {
           break;
         case Ci.prplIPref.typeString:
           vbox.appendChild(
-            this.createTextbox(null, opt.getString(), text, name)
+            this.createTextbox("text", opt.getString(), text, name)
           );
           break;
         case Ci.prplIPref.typeList:

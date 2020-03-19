@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calHashedArray.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calHashedArray.jsm");
 
 function run_test() {
   test_array_base();
@@ -37,9 +37,8 @@ function titleComptor(a, b) {
     return 1;
   } else if (a.title < b.title) {
     return -1;
-  } else {
-    return 0;
   }
+  return 0;
 }
 
 /**

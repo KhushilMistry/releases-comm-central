@@ -26,18 +26,23 @@ var { eid, getEventBoxPath, lookup, lookupEventBox } = helpersForController(cont
 const STARTYEAR = 1950;
 const EPOCH = 1970;
 
-add_task(function testAnnualRecurrence() {
+add_task(async function testAnnualRecurrence() {
   createCalendar(controller, CALENDARNAME);
   switchToView(controller, "day");
   goToDate(controller, STARTYEAR, 1, 1);
 
   // Rotate view.
   controller.mainMenu.click("#ltnViewRotated");
-  controller.waitFor(() => eid("day-view").getNode().orient == "horizontal");
+  controller.waitFor(
+    () =>
+      eid("day-view")
+        .getNode()
+        .getAttribute("orient") == "horizontal"
+  );
 
   // Create yearly recurring all-day event.
   let eventBox = lookupEventBox("day", ALLDAY, null, 1, null);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
     menulistSelect(eventid("item-repeat"), "yearly", event);
@@ -82,9 +87,18 @@ add_task(function testAnnualRecurrence() {
 registerCleanupFunction(function teardownModule(module) {
   deleteCalendars(controller, CALENDARNAME);
   // Reset view.
-  if (eid("day-view").getNode().orient == "horizontal") {
+  if (
+    eid("day-view")
+      .getNode()
+      .getAttribute("orient") == "horizontal"
+  ) {
     controller.mainMenu.click("#ltnViewRotated");
   }
-  controller.waitFor(() => eid("day-view").getNode().orient == "vertical");
+  controller.waitFor(
+    () =>
+      eid("day-view")
+        .getNode()
+        .getAttribute("orient") == "vertical"
+  );
   closeAllEventDialogs();
 });

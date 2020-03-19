@@ -66,6 +66,8 @@ AddrBookDirectory.prototype = {
   _query: null,
 
   init(uri) {
+    this._uri = uri;
+
     let index = uri.indexOf("?");
     if (index >= 0) {
       this._query = uri.substring(index + 1);
@@ -85,33 +87,12 @@ AddrBookDirectory.prototype = {
       throw Cr.NS_ERROR_UNEXPECTED;
     }
 
-    this.__proto__ = bookPrototype;
-    this._uri = uri;
-
-    if (!this.dirPrefId) {
-      let filename = uri.substring("jsaddrbook://".length);
-      for (let child of Services.prefs.getChildList("ldap_2.servers.")) {
-        if (
-          child.endsWith(".filename") &&
-          Services.prefs.getStringPref(child) == filename
-        ) {
-          this.dirPrefId = child.substring(
-            0,
-            child.length - ".filename".length
-          );
-          break;
-        }
-      }
-      if (!this.dirPrefId) {
-        throw Cr.NS_ERROR_UNEXPECTED;
-      }
-      // Make sure we always have a file. If a file is not created, the
-      // filename may be accidentally reused.
-      let file = FileUtils.getFile("ProfD", [filename]);
-      if (!file.exists()) {
-        file.create(Ci.nsIFile.NORMAL_FILE_TYPE, 0o644);
-      }
+    let fileName = uri.substring("jsaddrbook://".length);
+    if (fileName.includes("/")) {
+      fileName = fileName.substring(0, fileName.indexOf("/"));
     }
+    this.__proto__ =
+      directories.get(fileName) || new AddrBookDirectoryInner(fileName);
   },
 };
 
@@ -119,16 +100,21 @@ AddrBookDirectory.prototype = {
 // nothing else ever tells us to close them.
 
 var connections = new Map();
-var closeObserver = {
-  observe() {
-    for (let connection of connections.values()) {
-      connection.close();
-    }
-    connections.clear();
-  },
-};
-Services.obs.addObserver(closeObserver, "addrbook-reload");
-Services.obs.addObserver(closeObserver, "quit-application");
+Services.obs.addObserver(() => {
+  for (let connection of connections.values()) {
+    connection.asyncClose();
+  }
+  connections.clear();
+  directories.clear();
+}, "quit-application");
+
+// Close a connection on demand. This serves as an escape hatch from C++ code.
+
+Services.obs.addObserver(async file => {
+  file.QueryInterface(Ci.nsIFile);
+  await closeConnectionTo(file);
+  Services.obs.notifyObservers(file, "addrbook-close-ab-complete");
+}, "addrbook-close-ab");
 
 /**
  * Opens an SQLite connection to `file`, caches the connection, and upgrades
@@ -138,21 +124,31 @@ function openConnectionTo(file) {
   let connection = connections.get(file.path);
   if (!connection) {
     connection = Services.storage.openDatabase(file);
-    if (connection.schemaVersion == 0) {
-      connection.executeSimpleSQL("PRAGMA journal_mode=WAL");
-      connection.executeSimpleSQL(
-        "CREATE TABLE cards (uid TEXT PRIMARY KEY, localId INTEGER)"
-      );
-      connection.executeSimpleSQL(
-        "CREATE TABLE properties (card TEXT, name TEXT, value TEXT)"
-      );
-      connection.executeSimpleSQL(
-        "CREATE TABLE lists (uid TEXT PRIMARY KEY, localId INTEGER, name TEXT, nickName TEXT, description TEXT)"
-      );
-      connection.executeSimpleSQL(
-        "CREATE TABLE list_cards (list TEXT, card TEXT, PRIMARY KEY(list, card))"
-      );
-      connection.schemaVersion = 1;
+    switch (connection.schemaVersion) {
+      case 0:
+        connection.executeSimpleSQL("PRAGMA journal_mode=WAL");
+        connection.executeSimpleSQL(
+          "CREATE TABLE cards (uid TEXT PRIMARY KEY, localId INTEGER)"
+        );
+        connection.executeSimpleSQL(
+          "CREATE TABLE properties (card TEXT, name TEXT, value TEXT)"
+        );
+        connection.executeSimpleSQL(
+          "CREATE TABLE lists (uid TEXT PRIMARY KEY, localId INTEGER, name TEXT, nickName TEXT, description TEXT)"
+        );
+        connection.executeSimpleSQL(
+          "CREATE TABLE list_cards (list TEXT, card TEXT, PRIMARY KEY(list, card))"
+        );
+      // Falls through.
+      case 1:
+        connection.executeSimpleSQL(
+          "CREATE INDEX properties_card ON properties(card)"
+        );
+        connection.executeSimpleSQL(
+          "CREATE INDEX properties_name ON properties(name)"
+        );
+        connection.schemaVersion = 2;
+        break;
     }
     connections.set(file.path, connection);
   }
@@ -163,20 +159,61 @@ function openConnectionTo(file) {
  * Closes the SQLite connection to `file` and removes it from the cache.
  */
 function closeConnectionTo(file) {
+  directories.delete(file.leafName);
   let connection = connections.get(file.path);
   if (connection) {
-    connection.close();
-    connections.delete(file.path);
+    return new Promise(resolve => {
+      connection.asyncClose({
+        complete() {
+          resolve();
+        },
+      });
+      connections.delete(file.path);
+    });
   }
+  return Promise.resolve();
 }
+
+// One AddrBookDirectoryInner exists for each address book, multiple
+// AddrBookDirectory objects (e.g. queries) can use it as their prototype.
+
+var directories = new Map();
 
 /**
  * Prototype for nsIAbDirectory objects that aren't mailing lists.
  *
- * @implements {nsIAbCollection}
  * @implements {nsIAbDirectory}
  */
-var bookPrototype = {
+function AddrBookDirectoryInner(fileName) {
+  for (let child of Services.prefs.getChildList("ldap_2.servers.")) {
+    if (
+      child.endsWith(".filename") &&
+      Services.prefs.getStringPref(child) == fileName
+    ) {
+      this.dirPrefId = child.substring(0, child.length - ".filename".length);
+      break;
+    }
+  }
+  if (!this.dirPrefId) {
+    throw Cr.NS_ERROR_UNEXPECTED;
+  }
+
+  // Make sure we always have a file. If a file is not created, the
+  // filename may be accidentally reused.
+  let file = FileUtils.getFile("ProfD", [fileName]);
+  if (!file.exists()) {
+    file.create(Ci.nsIFile.NORMAL_FILE_TYPE, 0o644);
+  }
+
+  directories.set(fileName, this);
+  this._inner = this;
+  this._fileName = fileName;
+}
+AddrBookDirectoryInner.prototype = {
+  QueryInterface: ChromeUtils.generateQI([Ci.nsIAbDirectory]),
+  classID: Components.ID("{e96ee804-0bd3-472f-81a6-8a9d65277ad3}"),
+
+  _uid: null,
   _nextCardId: null,
   _nextListId: null,
   get _prefBranch() {
@@ -189,8 +226,7 @@ var bookPrototype = {
     let file = FileUtils.getFile("ProfD", [this.fileName]);
     let connection = openConnectionTo(file);
 
-    delete this._dbConnection;
-    Object.defineProperty(this, "_dbConnection", {
+    Object.defineProperty(this._inner, "_dbConnection", {
       enumerable: true,
       value: connection,
       writable: false,
@@ -198,12 +234,12 @@ var bookPrototype = {
     return connection;
   },
   get _lists() {
+    let listCache = new Map();
     let selectStatement = this._dbConnection.createStatement(
       "SELECT uid, localId, name, nickName, description FROM lists"
     );
-    let results = new Map();
     while (selectStatement.executeStep()) {
-      results.set(selectStatement.row.uid, {
+      listCache.set(selectStatement.row.uid, {
         uid: selectStatement.row.uid,
         localId: selectStatement.row.localId,
         name: selectStatement.row.name,
@@ -212,25 +248,51 @@ var bookPrototype = {
       });
     }
     selectStatement.finalize();
-    return results;
+
+    Object.defineProperty(this._inner, "_lists", {
+      enumerable: true,
+      value: listCache,
+      writable: false,
+    });
+    return listCache;
   },
   get _cards() {
+    let cardCache = new Map();
     let cardStatement = this._dbConnection.createStatement(
       "SELECT uid, localId FROM cards"
     );
-    let results = new Map();
     while (cardStatement.executeStep()) {
-      results.set(cardStatement.row.uid, {
+      cardCache.set(cardStatement.row.uid, {
         uid: cardStatement.row.uid,
         localId: cardStatement.row.localId,
+        properties: new Map(),
       });
     }
     cardStatement.finalize();
-    return results;
+    let propertiesStatement = this._dbConnection.createStatement(
+      "SELECT card, name, value FROM properties"
+    );
+    while (propertiesStatement.executeStep()) {
+      let card = cardCache.get(propertiesStatement.row.card);
+      if (card) {
+        card.properties.set(
+          propertiesStatement.row.name,
+          propertiesStatement.row.value
+        );
+      }
+    }
+    propertiesStatement.finalize();
+
+    Object.defineProperty(this._inner, "_cards", {
+      enumerable: true,
+      value: cardCache,
+      writable: false,
+    });
+    return cardCache;
   },
 
   _getNextCardId() {
-    if (this._nextCardId === null) {
+    if (this._inner._nextCardId === null) {
       let value = 0;
       let selectStatement = this._dbConnection.createStatement(
         "SELECT MAX(localId) AS localId FROM cards"
@@ -238,14 +300,14 @@ var bookPrototype = {
       if (selectStatement.executeStep()) {
         value = selectStatement.row.localId;
       }
-      this._nextCardId = value;
+      this._inner._nextCardId = value;
       selectStatement.finalize();
     }
-    this._nextCardId++;
-    return this._nextCardId.toString();
+    this._inner._nextCardId++;
+    return this._inner._nextCardId.toString();
   },
   _getNextListId() {
-    if (this._nextListId === null) {
+    if (this._inner._nextListId === null) {
       let value = 0;
       let selectStatement = this._dbConnection.createStatement(
         "SELECT MAX(localId) AS localId FROM lists"
@@ -253,11 +315,11 @@ var bookPrototype = {
       if (selectStatement.executeStep()) {
         value = selectStatement.row.localId;
       }
-      this._nextListId = value;
+      this._inner._nextListId = value;
       selectStatement.finalize();
     }
-    this._nextListId++;
-    return this._nextListId.toString();
+    this._inner._nextListId++;
+    return this._inner._nextListId.toString();
   },
   _getCard({ uid, localId = null }) {
     let card = new AddrBookCard();
@@ -268,6 +330,12 @@ var bookPrototype = {
     return card.QueryInterface(Ci.nsIAbCard);
   },
   _loadCardProperties(uid) {
+    if (this._inner.hasOwnProperty("_cards")) {
+      let cachedCard = this._inner._cards.get(uid);
+      if (cachedCard) {
+        return new Map(cachedCard.properties);
+      }
+    }
     let properties = new Map();
     let propertyStatement = this._dbConnection.createStatement(
       "SELECT name, value FROM properties WHERE card = :card"
@@ -280,6 +348,12 @@ var bookPrototype = {
     return properties;
   },
   _saveCardProperties(card) {
+    let cachedCard;
+    if (this._inner.hasOwnProperty("_cards")) {
+      cachedCard = this._inner._cards.get(card.UID);
+      cachedCard.properties.clear();
+    }
+
     this._dbConnection.beginTransaction();
     let deleteStatement = this._dbConnection.createStatement(
       "DELETE FROM properties WHERE card = :card"
@@ -296,6 +370,10 @@ var bookPrototype = {
         insertStatement.params.value = value;
         insertStatement.execute();
         insertStatement.reset();
+
+        if (cachedCard) {
+          cachedCard.properties.set(name, value);
+        }
       }
     }
     this._dbConnection.commitTransaction();
@@ -303,6 +381,9 @@ var bookPrototype = {
     insertStatement.finalize();
   },
   _saveList(list) {
+    // Ensure list cache exists.
+    this._lists;
+
     let replaceStatement = this._dbConnection.createStatement(
       "REPLACE INTO lists (uid, localId, name, nickName, description) " +
         "VALUES (:uid, :localId, :name, :nickName, :description)"
@@ -314,9 +395,125 @@ var bookPrototype = {
     replaceStatement.params.description = list._description;
     replaceStatement.execute();
     replaceStatement.finalize();
+
+    this._lists.set(list._uid, {
+      uid: list._uid,
+      localId: list._localId,
+      name: list._name,
+      nickName: list._nickName,
+      description: list._description,
+    });
+  },
+  async _bulkAddCards(cards) {
+    let usedUIDs = new Set();
+    let cardStatement = this._dbConnection.createStatement(
+      "INSERT INTO cards (uid, localId) VALUES (:uid, :localId)"
+    );
+    let propertiesStatement = this._dbConnection.createStatement(
+      "INSERT INTO properties VALUES (:card, :name, :value)"
+    );
+    let cardArray = cardStatement.newBindingParamsArray();
+    let propertiesArray = propertiesStatement.newBindingParamsArray();
+    for (let card of cards) {
+      let uid = card.UID;
+      if (!uid || usedUIDs.has(uid)) {
+        // A card cannot have the same UID as one that already exists.
+        // Assign a new UID to avoid losing data.
+        uid = newUID();
+      }
+      usedUIDs.add(uid);
+      let localId = this._getNextCardId();
+      let cardParams = cardArray.newBindingParams();
+      cardParams.bindByName("uid", uid);
+      cardParams.bindByName("localId", localId);
+      cardArray.addParams(cardParams);
+
+      let cachedCard;
+      if (this._inner.hasOwnProperty("_cards")) {
+        cachedCard = {
+          uid,
+          localId,
+          properties: new Map(),
+        };
+        this._inner._cards.set(uid, cachedCard);
+      }
+
+      for (let { name, value } of fixIterator(
+        card.properties,
+        Ci.nsIProperty
+      )) {
+        if (
+          [
+            "DbRowID",
+            "LowercasePrimaryEmail",
+            "LowercaseSecondEmail",
+            "RecordKey",
+            "UID",
+          ].includes(name)
+        ) {
+          continue;
+        }
+        let propertiesParams = propertiesArray.newBindingParams();
+        propertiesParams.bindByName("card", uid);
+        propertiesParams.bindByName("name", name);
+        propertiesParams.bindByName("value", value);
+        propertiesArray.addParams(propertiesParams);
+
+        if (cachedCard) {
+          cachedCard.properties.set(name, value);
+        }
+      }
+    }
+    try {
+      this._dbConnection.beginTransaction();
+      if (cardArray.length > 0) {
+        cardStatement.bindParameters(cardArray);
+        await new Promise((resolve, reject) => {
+          cardStatement.executeAsync({
+            handleError(error) {
+              this._error = error;
+            },
+            handleCompletion(status) {
+              if (status == Ci.mozIStorageStatementCallback.REASON_ERROR) {
+                reject(
+                  Components.Exception(this._error.message, Cr.NS_ERROR_FAILURE)
+                );
+              } else {
+                resolve();
+              }
+            },
+          });
+        });
+        cardStatement.finalize();
+      }
+      if (propertiesArray.length > 0) {
+        propertiesStatement.bindParameters(propertiesArray);
+        await new Promise((resolve, reject) => {
+          propertiesStatement.executeAsync({
+            handleError(error) {
+              this._error = error;
+            },
+            handleCompletion(status) {
+              if (status == Ci.mozIStorageStatementCallback.REASON_ERROR) {
+                reject(
+                  Components.Exception(this._error.message, Cr.NS_ERROR_FAILURE)
+                );
+              } else {
+                resolve();
+              }
+            },
+          });
+        });
+        propertiesStatement.finalize();
+      }
+      this._dbConnection.commitTransaction();
+    } catch (ex) {
+      this._dbConnection.rollbackTransaction();
+      throw ex;
+    }
   },
 
-  /* nsIAbCollection */
+  /* nsIAbDirectory */
 
   get readOnly() {
     return false;
@@ -327,45 +524,8 @@ var bookPrototype = {
   get isSecure() {
     return false;
   },
-  cardForEmailAddress(emailAddress) {
-    return (
-      this.getCardFromProperty("PrimaryEmail", emailAddress, false) ||
-      this.getCardFromProperty("SecondEmail", emailAddress, false)
-    );
-  },
-  getCardFromProperty(property, value, caseSensitive) {
-    let sql = caseSensitive
-      ? "SELECT card FROM properties WHERE name = :name AND value = :value LIMIT 1"
-      : "SELECT card FROM properties WHERE name = :name AND LOWER(value) = LOWER(:value) LIMIT 1";
-    let selectStatement = this._dbConnection.createStatement(sql);
-    selectStatement.params.name = property;
-    selectStatement.params.value = value;
-    let result = null;
-    if (selectStatement.executeStep()) {
-      result = this._getCard({ uid: selectStatement.row.card });
-    }
-    selectStatement.finalize();
-    return result;
-  },
-  getCardsFromProperty(property, value, caseSensitive) {
-    let sql = caseSensitive
-      ? "SELECT card FROM properties WHERE name = :name AND value = :value"
-      : "SELECT card FROM properties WHERE name = :name AND LOWER(value) = LOWER(:value)";
-    let selectStatement = this._dbConnection.createStatement(sql);
-    selectStatement.params.name = property;
-    selectStatement.params.value = value;
-    let results = [];
-    while (selectStatement.executeStep()) {
-      results.push(this._getCard({ uid: selectStatement.row.card }));
-    }
-    selectStatement.finalize();
-    return new SimpleEnumerator(results);
-  },
-
-  /* nsIAbDirectory */
-
   get propertiesChromeURI() {
-    return "chrome://messenger/content/addressbook/abAddressBookNameDialog.xul";
+    return "chrome://messenger/content/addressbook/abAddressBookNameDialog.xhtml";
   },
   get dirName() {
     return this.getLocalizedStringValue("description", "");
@@ -379,21 +539,18 @@ var bookPrototype = {
     return 101;
   },
   get fileName() {
-    if (!this._fileName) {
-      this._fileName = this._prefBranch.getStringPref("filename", "");
-    }
     return this._fileName;
   },
   get UID() {
     if (!this._uid) {
       if (this._prefBranch.getPrefType("uid") == Services.prefs.PREF_STRING) {
-        this._uid = this._prefBranch.getStringPref("uid");
+        this._inner._uid = this._prefBranch.getStringPref("uid");
       } else {
-        this._uid = newUID();
-        this._prefBranch.setStringPref("uid", this._uid);
+        this._inner._uid = newUID();
+        this._prefBranch.setStringPref("uid", this._inner._uid);
       }
     }
-    return this._uid;
+    return this._inner._uid;
   },
   get URI() {
     return this._uri;
@@ -561,6 +718,40 @@ var bookPrototype = {
   generateName(generateFormat, bundle) {
     return this.dirName;
   },
+  cardForEmailAddress(emailAddress) {
+    return (
+      this.getCardFromProperty("PrimaryEmail", emailAddress, false) ||
+      this.getCardFromProperty("SecondEmail", emailAddress, false)
+    );
+  },
+  getCardFromProperty(property, value, caseSensitive) {
+    let sql = caseSensitive
+      ? "SELECT card FROM properties WHERE name = :name AND value = :value LIMIT 1"
+      : "SELECT card FROM properties WHERE name = :name AND LOWER(value) = LOWER(:value) LIMIT 1";
+    let selectStatement = this._dbConnection.createStatement(sql);
+    selectStatement.params.name = property;
+    selectStatement.params.value = value;
+    let result = null;
+    if (selectStatement.executeStep()) {
+      result = this._getCard({ uid: selectStatement.row.card });
+    }
+    selectStatement.finalize();
+    return result;
+  },
+  getCardsFromProperty(property, value, caseSensitive) {
+    let sql = caseSensitive
+      ? "SELECT card FROM properties WHERE name = :name AND value = :value"
+      : "SELECT card FROM properties WHERE name = :name AND LOWER(value) = LOWER(:value)";
+    let selectStatement = this._dbConnection.createStatement(sql);
+    selectStatement.params.name = property;
+    selectStatement.params.value = value;
+    let results = [];
+    while (selectStatement.executeStep()) {
+      results.push(this._getCard({ uid: selectStatement.row.card }));
+    }
+    selectStatement.finalize();
+    return new SimpleEnumerator(results);
+  },
   deleteDirectory(directory) {
     let list = this._lists.get(directory.UID);
     list = new AddrBookMailingList(
@@ -578,6 +769,10 @@ var bookPrototype = {
     deleteListStatement.params.uid = directory.UID;
     deleteListStatement.execute();
     deleteListStatement.finalize();
+
+    if (this._inner.hasOwnProperty("_lists")) {
+      this._inner._lists.delete(directory.UID);
+    }
 
     this._dbConnection.executeSimpleSQL(
       "DELETE FROM list_cards WHERE list NOT IN (SELECT DISTINCT uid FROM lists)"
@@ -617,9 +812,16 @@ var bookPrototype = {
     }
     for (let [name, newValue] of newProperties.entries()) {
       let oldValue = oldProperties.get(name);
+      if (oldValue == null && newValue == "") {
+        continue;
+      }
       if (oldValue != newValue) {
-        // TODO We can do better than null. But MDB doesn't.
-        MailServices.ab.notifyItemPropertyChanged(card, null, null, null);
+        MailServices.ab.notifyItemPropertyChanged(
+          card,
+          name,
+          oldValue,
+          newValue
+        );
       }
     }
     Services.obs.notifyObservers(card, "addrbook-contact-updated", this.UID);
@@ -636,6 +838,10 @@ var bookPrototype = {
       deleteCardStatement.params.uid = card.UID;
       deleteCardStatement.execute();
       deleteCardStatement.reset();
+
+      if (this._inner.hasOwnProperty("_cards")) {
+        this._inner._cards.delete(card.UID);
+      }
     }
     this._dbConnection.executeSimpleSQL(
       "DELETE FROM properties WHERE card NOT IN (SELECT DISTINCT uid FROM cards)"
@@ -653,10 +859,14 @@ var bookPrototype = {
     deleteCardStatement.finalize();
   },
   dropCard(card, needToCopyCard) {
+    if (!card.UID) {
+      throw new Error("Card must have a UID to be added to this directory.");
+    }
+
     let newCard = new AddrBookCard();
     newCard.directoryId = this.uuid;
-    newCard.localId = this._getNextCardId().toString();
-    newCard._uid = needToCopyCard || !card.UID ? newUID() : card.UID;
+    newCard.localId = this._getNextCardId();
+    newCard._uid = needToCopyCard ? newUID() : card.UID;
 
     let insertStatement = this._dbConnection.createStatement(
       "INSERT INTO cards (uid, localId) VALUES (:uid, :localId)"
@@ -666,7 +876,28 @@ var bookPrototype = {
     insertStatement.execute();
     insertStatement.finalize();
 
+    if (this._inner.hasOwnProperty("_cards")) {
+      this._inner._cards.set(newCard._uid, {
+        uid: newCard._uid,
+        localId: newCard.localId,
+        properties: new Map(),
+      });
+    }
+
     for (let { name, value } of fixIterator(card.properties, Ci.nsIProperty)) {
+      if (
+        [
+          "DbRowID",
+          "LowercasePrimaryEmail",
+          "LowercaseSecondEmail",
+          "RecordKey",
+          "UID",
+        ].includes(name)
+      ) {
+        // These properties are either stored elsewhere (DbRowID, UID), or no
+        // longer needed. Don't store them.
+        continue;
+      }
       newCard.setProperty(name, value);
     }
     this._saveCardProperties(newCard);
@@ -677,7 +908,10 @@ var bookPrototype = {
     return newCard;
   },
   useForAutocomplete(identityKey) {
-    return Services.prefs.getBoolPref("mail.enable_autocomplete");
+    return (
+      Services.prefs.getBoolPref("mail.enable_autocomplete") &&
+      this.getBoolValue("enable_autocomplete", true)
+    );
   },
   addMailList(list) {
     if (!list.isMailList) {
@@ -704,14 +938,6 @@ var bookPrototype = {
     throw Cr.NS_ERROR_NOT_IMPLEMENTED;
   },
   copyMailList(srcList) {
-    throw Cr.NS_ERROR_NOT_IMPLEMENTED;
-  },
-  createNewDirectory(dirName, uri, type, prefName) {
-    // Deliberately not implemented, this isn't the root directory.
-    throw Cr.NS_ERROR_NOT_IMPLEMENTED;
-  },
-  createDirectoryByURI(displayName, uri) {
-    // Deliberately not implemented, this isn't the root directory.
     throw Cr.NS_ERROR_NOT_IMPLEMENTED;
   },
   getIntValue(name, defaultValue) {

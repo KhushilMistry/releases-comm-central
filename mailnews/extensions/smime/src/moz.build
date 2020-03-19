@@ -10,11 +10,6 @@ SOURCES += [
     'nsSMimeJSHelper.cpp',
 ]
 
-EXTRA_COMPONENTS += [
-    'smime-service.js',
-    'smime-service.manifest',
-]
-
 FINAL_LIBRARY = 'mail'
 
 LOCAL_INCLUDES += [

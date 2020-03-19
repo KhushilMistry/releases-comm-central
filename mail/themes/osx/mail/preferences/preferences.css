@@ -24,8 +24,12 @@ html|h2 {
   padding-inline-start: 0;
 }
 
-groupbox > .groupbox-body {
-  padding: 0;
+html|legend {
+  margin: 0;
+}
+
+html|input[type="number"] {
+  min-height: 26px;
 }
 
 html|input[type="number"]::-moz-number-spin-up,
@@ -71,6 +75,5 @@ tab:-moz-focusring > .tab-middle > .tab-text {
 }
 
 #defaultWebSearchPopup > menuitem > .menu-iconic-left {
-  margin-inline-start: 5px;
-  margin-inline-end: 3px;
+  margin-inline: 5px 3px;
 }

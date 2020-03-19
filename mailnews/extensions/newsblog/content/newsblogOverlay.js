@@ -5,7 +5,7 @@
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MsgHdrToMimeMessage } = ChromeUtils.import(
-  "resource:///modules/gloda/mimemsg.js"
+  "resource:///modules/gloda/MimeMessage.jsm"
 );
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
@@ -300,8 +300,8 @@ function openSubscriptionsDialog(aFolder) {
 
     subscriptionsWindow.focus();
   } else {
-    window.openDialog(
-      "chrome://messenger-newsblog/content/feed-subscriptions.xul",
+    window.docShell.rootTreeItem.domWindow.openDialog(
+      "chrome://messenger-newsblog/content/feed-subscriptions.xhtml",
       "",
       "centerscreen,chrome,dialog=no,resizable",
       { folder: aFolder }

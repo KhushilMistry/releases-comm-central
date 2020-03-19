@@ -30,6 +30,15 @@ typedef long nsMsgBiffState;
 // enumerated type for determining if a message has been replied to, forwarded, etc.
 typedef long nsMsgDispositionState;
 
+/*
+ * The contract ID for this component is @mozilla.org/msgFolder/msgFolderService;1.
+ */
+[scriptable, uuid(5639c204-48ac-4115-897f-3b16821fe118)]
+interface nsIMsgFolderService : nsISupports
+{
+  void initializeFolderStrings();
+};
+
 [scriptable, uuid(5d253ba2-42aa-43a7-b584-0059855ababf)]
 interface nsIMsgFolder : nsISupports {
 
@@ -57,6 +66,8 @@ interface nsIMsgFolder : nsISupports {
 
   void startFolderLoading();
   void endFolderLoading();
+
+  void folderNamesReady(out boolean aReady);
 
   /* get new headers for db */
   void updateFolder(in nsIMsgWindow aWindow);
@@ -166,11 +177,39 @@ interface nsIMsgFolder : nsISupports {
    */
   void closeAndBackupFolderDB(in ACString newName);
 
-  void Delete ();
 
+  /**
+   * Delete the backing store of the folder, but not the folder itself.
+   */
+  [noscript]
+  void deleteStorage();
+
+  /**
+   * Delete the given subfolders of this folder.
+   *
+   * @param folders    an array of subfolders to delete
+   * @param msgWindow  msgWindow to display status feedback in
+   */
   void deleteSubFolders(in nsIArray folders, in nsIMsgWindow msgWindow);
+
+  /**
+   * Delete the given subfolder of this folder.
+   * It does not need to be a direct child.
+   *
+   * @param folder         a child subfolder to delete
+   * @param deleteStorage  whether to also delete the folder storage on disk
+   * @param msgWindow      msgWindow to display status feedback in
+   */
   void propagateDelete(in nsIMsgFolder folder, in boolean deleteStorage,
                        in nsIMsgWindow msgWindow);
+
+  /**
+   * Delete the folder and all of its subfolders.
+   *
+   * @param deleteStorage  whether to also delete the folder storage on disk
+   * @param msgWindow      msgWindow to display status feedback in
+   */
+  [noscript]
   void recursiveDelete(in boolean deleteStorage, in nsIMsgWindow msgWindow);
 
   /**
@@ -444,9 +483,9 @@ interface nsIMsgFolder : nsISupports {
                        in nsIMsgWindow msgWindow,
                        in nsIMsgCopyServiceListener listener);
 
-  void acquireSemaphore (in nsISupports semHolder);
-  void releaseSemaphore (in nsISupports semHolder);
-  boolean testSemaphore (in nsISupports semHolder);
+  void acquireSemaphore(in nsISupports semHolder);
+  void releaseSemaphore(in nsISupports semHolder);
+  boolean testSemaphore(in nsISupports semHolder);
   readonly attribute boolean locked;
 
   void getNewMessages(in nsIMsgWindow aWindow, in nsIUrlListener aListener);
@@ -470,7 +509,7 @@ interface nsIMsgFolder : nsISupports {
    * @param deep if true, descends into all subfolders and gets a grand total
    */
 
-   long getNumNewMessages (in boolean deep);
+   long getNumNewMessages(in boolean deep);
 
    void setNumNewMessages(in long numNewMessages);
 
@@ -605,13 +644,10 @@ interface nsIMsgFolder : nsISupports {
   void throwAlertMsg(in string msgName, in nsIMsgWindow msgWindow);
   AString getStringWithFolderNameFromBundle(in string msgName);
   void notifyCompactCompleted();
-  long compareSortKeys(in nsIMsgFolder msgFolder);
   /**
-   * Returns a sort key that can be used to sort a list of folders.
-   *
-   * Prefer nsIMsgFolder::compareSortKeys over this function.
+   * Calculate ordering of this folder against another.
    */
-  void getSortKey(out unsigned long length, [array, size_is(length), retval] out octet key);
+  long compareSortKeys(in nsIMsgFolder msgFolder);
 
   attribute nsIMsgRetentionSettings retentionSettings;
   attribute nsIMsgDownloadSettings downloadSettings;
@@ -726,7 +762,6 @@ interface nsIMsgFolder : nsISupports {
    * titletips/message preview in the thread pane.
    *
    * @param aKeysToFetch   keys of msgs to fetch
-   * @param aNumKeys       number of keys to fetch
    * @param aLocalOnly     whether to fetch msgs from server (imap msgs might
    *                       be in memory cache from junk filter)
    * @param aUrlListener   url listener to notify if we run url to fetch msgs
@@ -734,8 +769,8 @@ interface nsIMsgFolder : nsISupports {
    * @result aAsyncResults if true, we ran a url to fetch one or more of msg bodies
    *
    */
-  boolean fetchMsgPreviewText([array, size_is (aNumKeys)] in nsMsgKey aKeysToFetch,
-                      in unsigned long aNumKeys, in boolean aLocalOnly,
+  boolean fetchMsgPreviewText(in Array<nsMsgKey> aKeysToFetch,
+                      in boolean aLocalOnly,
                       in nsIUrlListener aUrlListener);
 
   // used to set/clear tags - we could have a single method to setKeywords which

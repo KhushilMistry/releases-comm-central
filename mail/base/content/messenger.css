@@ -132,8 +132,8 @@ toolbar[type="menubar"][autohide="true"][inactive="true"]:not([customizing="true
 /* Rules to help integrate WebExtension buttons */
 
 .webextension-action > .toolbarbutton-badge-stack > .toolbarbutton-icon {
-  height: 16px;
-  width: 16px;
+  height: 18px;
+  width: 18px;
 }
 
 @media not all and (min-resolution: 1.1dppx) {
@@ -205,7 +205,7 @@ statuspanel {
   left: 0;
   z-index: 20;
   max-width: 50%;
-  transition: opacity 100ms ease-out;
+  transition: opacity 120ms ease-out, visibility 120ms;
 }
 
 statuspanel:-moz-locale-dir(ltr)[mirror],
@@ -218,9 +218,31 @@ statuspanel[label=""],
 statuspanel:not([label]) {
   opacity: 0;
   pointer-events: none;
+  visibility: hidden;
 }
 
 .statuspanel-inner {
   height: 3em;
   -moz-box-align: end;
+}
+
+/* Frame used for rendering the DevTools inspector highlighters */
+iframe.devtools-highlighter-renderer {
+  border: none;
+  pointer-events: none;
+}
+
+/* Highlighter for the Developer Toolbox */
+:root > iframe.devtools-highlighter-renderer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+}
+
+/* Show hidden toolbars in customize mode */
+toolbar[customizing="true"][collapsed="true"] {
+  visibility: visible;
 }

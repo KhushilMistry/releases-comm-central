@@ -67,6 +67,13 @@ NS_IMETHODIMP nsNntpMockChannel::Cancel(nsresult status) {
   return NS_OK;
 }
 
+NS_IMETHODIMP nsNntpMockChannel::GetCanceled(bool *aCanceled) {
+  nsresult status = NS_ERROR_FAILURE;
+  GetStatus(&status);
+  *aCanceled = NS_FAILED(status);
+  return NS_OK;
+}
+
 NS_IMETHODIMP nsNntpMockChannel::Suspend() {
   MOZ_ASSERT_UNREACHABLE("nsNntpMockChannel::Suspend");
   return NS_ERROR_NOT_IMPLEMENTED;
@@ -87,6 +94,14 @@ NS_IMETHODIMP nsNntpMockChannel::GetLoadGroup(nsILoadGroup **aLoadGroup) {
   FORWARD_CALL(GetLoadGroup, aLoadGroup)
   NS_IF_ADDREF(*aLoadGroup = m_loadGroup);
   return NS_OK;
+}
+
+NS_IMETHODIMP nsNntpMockChannel::GetTRRMode(nsIRequest::TRRMode *aTRRMode) {
+  return GetTRRModeImpl(aTRRMode);
+}
+
+NS_IMETHODIMP nsNntpMockChannel::SetTRRMode(nsIRequest::TRRMode aTRRMode) {
+  return SetTRRModeImpl(aTRRMode);
 }
 
 NS_IMETHODIMP nsNntpMockChannel::GetLoadFlags(nsLoadFlags *aLoadFlags) {

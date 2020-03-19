@@ -13,7 +13,7 @@
 
 var { fixIterator } = ChromeUtils.import("resource:///modules/iteratorUtils.jsm");
 var { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 
 /**
@@ -22,11 +22,13 @@ var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm")
  */
 function ltnInitMailIdentitiesRow() {
   if (!gCalendar) {
-    document.getElementById("calendar-email-identity-row").setAttribute("collapsed", "true");
+    document.getElementById("calendar-email-identity-row").toggleAttribute("hidden", true);
   }
 
   let imipIdentityDisabled = gCalendar.getProperty("imip.identity.disabled");
-  setElementValue("calendar-email-identity-row", imipIdentityDisabled && "true", "collapsed");
+  document
+    .getElementById("calendar-email-identity-row")
+    .toggleAttribute("hidden", imipIdentityDisabled);
 
   if (imipIdentityDisabled) {
     // If the imip identity is disabled, we don't have to set up the
@@ -49,7 +51,7 @@ function ltnInitMailIdentitiesRow() {
   addMenuItem(menuPopup, cal.l10n.getLtnString("imipNoIdentity"), "none");
   let identities;
   if (gCalendar && gCalendar.aclEntry && gCalendar.aclEntry.hasAccessControl) {
-    identities = gCalendar.aclEntry.getOwnerIdentities({});
+    identities = gCalendar.aclEntry.getOwnerIdentities();
   } else {
     identities = MailServices.accounts.allIdentities;
   }
@@ -103,11 +105,15 @@ function ltnSaveMailIdentitySelection() {
  * (shared between calendar creation wizard and properties dialog)
  */
 function ltnNotifyOnIdentitySelection() {
+  let notificationBox = document.getElementById("no-identity-notification");
+  while (notificationBox.firstChild) {
+    notificationBox.firstChild.remove();
+  }
   let gNotification = {};
   XPCOMUtils.defineLazyGetter(gNotification, "notificationbox", () => {
     return new MozElements.NotificationBox(element => {
       element.setAttribute("flex", "1");
-      document.getElementById("no-identity-notification").append(element);
+      notificationBox.append(element);
     });
   });
 

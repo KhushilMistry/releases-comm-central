@@ -13,7 +13,7 @@
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 // Variables related to whether we are in a tab or a window dialog.
 var gInTab = false;
@@ -155,7 +155,7 @@ function editReminder() {
 
   // open the dialog modally
   openDialog(
-    "chrome://calendar/content/calendar-event-dialog-reminder.xul",
+    "chrome://calendar/content/calendar-event-dialog-reminder.xhtml",
     "_blank",
     "chrome,titlebar,modal,resizable",
     args
@@ -242,7 +242,7 @@ function matchCustomReminderToMenuitem(reminder) {
       minutes: 60,
     };
 
-    for (let menuitem of reminderPopup.childNodes) {
+    for (let menuitem of reminderPopup.children) {
       if (
         menuitem.localName == "menuitem" &&
         menuitem.hasAttribute("length") &&
@@ -302,7 +302,7 @@ function saveReminder(item) {
   // We want to compare the old alarms with the new ones. If these are not
   // the same, then clear the snooze/dismiss times
   let oldAlarmMap = {};
-  for (let alarm of item.getAlarms({})) {
+  for (let alarm of item.getAlarms()) {
     oldAlarmMap[alarm.icalString] = true;
   }
 
@@ -338,7 +338,7 @@ function saveReminder(item) {
   }
 
   // Compare alarms to see if something changed.
-  for (let alarm of item.getAlarms({})) {
+  for (let alarm of item.getAlarms()) {
     let ics = alarm.icalString;
     if (ics in oldAlarmMap) {
       // The new alarm is also in the old set, remember this
@@ -582,7 +582,7 @@ function setupAttendees() {
       let rowCount = attBox.getElementsByClassName("item-attendees-row").length;
       let reqAtt = rowCount == maxRows ? inLastRow : inRow;
       // we add as many attendee cells as required
-      while (row.childNodes.length < reqAtt) {
+      while (row.children.length < reqAtt) {
         let newCell = clonedCell.cloneNode(true);
         let cell = row.appendChild(newCell);
         let icon = cell.getElementsByTagName("img")[0];
@@ -638,7 +638,7 @@ function setupAttendees() {
       }
       // we fill the row with placeholders if required
       if (attBox.getElementsByClassName("item-attendees-row").length > 1 && inRow > 1) {
-        while (row.childNodes.length < inRow) {
+        while (row.children.length < inRow) {
           let newSpacer = clonedSpacer.cloneNode(true);
           newSpacer.removeAttribute("hidden");
           row.appendChild(newSpacer);
@@ -709,7 +709,7 @@ function adaptScheduleAgent(aItem) {
       // for attendees, we change schedule-agent only in case of an
       // organizer triggered action
       if (organizerAction) {
-        aItem.getAttendees({}).forEach(aAttendee => {
+        aItem.getAttendees().forEach(aAttendee => {
           // overwriting must always happen consistently for all
           // attendees regarding SERVER or CLIENT but must not override
           // e.g. NONE, so we only overwrite if the param is set to
@@ -735,7 +735,7 @@ function adaptScheduleAgent(aItem) {
         aItem.organizer.deleteProperty("SCHEDULE-FORCE-SEND");
       }
     } else if (organizerAction) {
-      aItem.getAttendees({}).forEach(aAttendee => {
+      aItem.getAttendees().forEach(aAttendee => {
         if (aAttendee.getProperty("SCHEDULE-AGENT") == "CLIENT") {
           aAttendee.deleteProperty("SCHEDULE-AGENT");
         }

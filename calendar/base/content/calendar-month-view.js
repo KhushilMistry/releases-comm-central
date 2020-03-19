@@ -10,7 +10,7 @@
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  const { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+  const { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
   /**
    * Implements the Drag and Drop class for the Month Day Box view.
@@ -54,7 +54,7 @@
       weekLabel.setAttribute("flex", "1");
       weekLabel.setAttribute("crop", "end");
       weekLabel.setAttribute("hidden", "true");
-      weekLabel.setAttribute("mousethrough", "always");
+      weekLabel.style.pointerEvents = "none";
       weekLabel.classList.add(
         "calendar-month-day-box-week-label",
         "calendar-month-day-box-date-label",
@@ -64,7 +64,7 @@
       let dayLabel = document.createXULElement("label");
       dayLabel.setAttribute("data-label", "day");
       dayLabel.setAttribute("flex", "1");
-      dayLabel.setAttribute("mousethrough", "always");
+      dayLabel.style.pointerEvents = "none";
       dayLabel.classList.add("calendar-month-day-box-date-label", "calendar-day-label");
 
       monthDayLabels.appendChild(weekLabel);
@@ -101,8 +101,10 @@
     set selected(val) {
       if (val) {
         this.setAttribute("selected", "true");
+        this.parentNode.setAttribute("selected", "true");
       } else {
         this.removeAttribute("selected");
+        this.parentNode.removeAttribute("selected");
       }
       return val;
     }
@@ -242,7 +244,7 @@
       }
 
       if (!(event.ctrlKey || event.metaKey)) {
-        this.calendarView.setSelectedItems(0, []);
+        this.calendarView.setSelectedItems([]);
       }
     }
 
@@ -292,13 +294,13 @@
                      flex="1">
                   <stack class="calendar-event-box-container"
                          flex="1">
-                    <hbox class="calendar-event-details" align="center">
+                    <hbox class="calendar-event-details">
                       <vbox pack="center">
                           <image class="calendar-item-image"></image>
                       </vbox>
                       <label class="calendar-month-day-box-item-label"></label>
                       <vbox class="event-name-label-container"
-                            align="left" flex="1">
+                            align="start" flex="1">
                         <label class="event-name-label"
                                crop="end"
                                flex="1"
@@ -312,7 +314,7 @@
                         <hbox align="center">
                           <hbox class="alarm-icons-box"
                                 pack="end"
-                                align="top">
+                                align="start">
                           </hbox>
                           <image class="item-classification-box"
                                  pack="end">
@@ -344,7 +346,7 @@
         true
       );
 
-      this.setAttribute("mousethrough", "never");
+      this.style.pointerEvents = "auto";
       this.setAttribute("tooltip", "itemTooltip");
       this.addEventNameTextboxListener();
       this.initializeAttributeInheritance();

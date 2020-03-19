@@ -1,144 +1,45 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 from __future__ import absolute_import, print_function, unicode_literals
 
 import os
-from taskgraph.util.treeherder import split_symbol, join_symbol, add_suffix
-from taskgraph.util.yaml import load_yaml
-from taskgraph.util.python_path import find_object
+import logging
+from importlib import import_module
+
+from taskgraph import GECKO
+from taskgraph.util.partials import populate_release_history
+
+logger = logging.getLogger(__name__)
+
+COMM = os.path.join(GECKO, 'comm')
+COMM_SCRIPTS = os.path.join(COMM, 'taskcluster', 'scripts')
+
+BALROG_PRODUCT = 'Thunderbird'
 
 
-def _get_aliases(kind, job):
-    aliases = {job['name']}
-
-    if kind == 'toolchain':
-        if job['run'].get('toolchain-alias'):
-            aliases.add(job['run'].get('toolchain-alias'))
-
-    return aliases
-
-
-def _get_loader(path, config):
-    try:
-        loader = config['loader']
-    except KeyError:
-        raise KeyError("{!r} does not define `loader`".format(path))
-    return find_object(loader)
-
-
-def _remove_suffix(text, suffix):
+def register(graph_config):
     """
-    Removes a suffix from a string.
+    Import all modules that are siblings of this one, triggering decorators in
+    the process.
     """
-    if text.endswith(suffix):
-        _drop = len(suffix) * -1
-        text = text[:_drop]
-    return text
+    logger.info("{} path registered".format(__name__))
+    _import_modules(['documentation'])
 
 
-def reference_loader(kind, path, config, params, loaded_tasks):
-    """
-    Loads selected jobs from a different taskgraph hierarchy.
-
-    This loads jobs of the given kind from the taskgraph rooted at `base-path`,
-    and includes all the jobs with names or aliaes matching the names in the
-    `jobs` key.
-    """
-    base_path = config.pop('base-path')
-    sub_path = os.path.join(base_path, kind)
-    sub_config = load_yaml(sub_path, "kind.yml")
-    loader = _get_loader(sub_path, sub_config)
-    inputs = loader(kind, sub_path, sub_config, params, loaded_tasks)
-
-    jobs = config.pop('jobs', None)
-
-    config.update(sub_config)
-
-    if jobs is not None:
-        jobs = set(jobs)
-        return (job for job in inputs if (_get_aliases(kind, job) & jobs))
-    else:
-        return inputs
+def _import_modules(modules):
+    for module in modules:
+        import_module(".{}".format(module), package=__name__)
 
 
-def remove_widevine(config, jobs):
-    """
-    Remove references to widevine signing.
+def get_decision_parameters(graph_config, parameters):
+    logger.info("{}.get_decision_parameters called".format(__name__))
+    # If the target method is nightly, we should build partials. This means
+    # knowing what has been released previously.
+    # An empty release_history is fine, it just means no partials will be built
+    project = parameters['project']
 
-    This is to avoid adding special cases for handling signed artifacts
-    in mozilla-central code. Artifact signature formats are determined in
-    taskgraph.util.signed_artifacts. There's no override mechanism so we
-    remove the autograph_widevine format here.
-    """
-    for job in jobs:
-        task = job['task']
-        payload = task['payload']
-
-        widevine_scope = 'project:comm:thunderbird:releng:signing:format' \
-                         ':autograph_widevine'
-        if widevine_scope in task['scopes']:
-            task['scopes'].remove(widevine_scope)
-        if 'upstreamArtifacts' in payload:
-            for artifact in payload['upstreamArtifacts']:
-                if 'autograph_widevine' in artifact.get('formats', []):
-                    artifact['formats'].remove('autograph_widevine')
-
-        yield job
-
-
-def no_sign_langpacks(config, jobs):
-    """
-    Remove langpacks from signing jobs after they are automatically added.
-    """
-    for job in jobs:
-        task = job['task']
-        payload = task['payload']
-
-        if 'upstreamArtifacts' in payload:
-            for artifact in payload['upstreamArtifacts']:
-                if 'autograph_langpack' in artifact.get('formats', []):
-                    artifact['formats'].remove('autograph_langpack')
-
-                if not artifact['formats']:  # length zero list is False
-                    for remove_path in artifact['paths']:
-                        job['release-artifacts'].remove(remove_path)
-
-                    payload['upstreamArtifacts'].remove(artifact)
-
-        yield job
-
-
-def tests_drop_1proc(config, jobs):
-    """
-    Remove the -1proc suffix from Treeherder group symbols.
-    Restore the -e10s suffix (because some day we will have them!)
-
-    Reverses the effects of bug 1541527. Thunderbird builds are all single
-    process.
-    """
-    for job in jobs:
-        test = job['run']['test']
-        e10s = test['e10s']
-
-        if not e10s:  # test-name & friends end with '-1proc'
-            test['test-name'] = _remove_suffix(test['test-name'], '-1proc')
-            test['try-name'] = _remove_suffix(test['try-name'], '-1proc')
-            group, symbol = split_symbol(test['treeherder-symbol'])
-            if group != '?':
-                group = _remove_suffix(group, '-1proc')
-            test['treeherder-symbol'] = join_symbol(group, symbol)
-
-            job['label'] = job['label'].replace('-1proc', '')
-            job['name'] = _remove_suffix(job['name'], '-1proc')
-            job['treeherder']['symbol'] = test['treeherder-symbol']
-        else:  # e10s in the future
-            test['test-name'] = add_suffix(test['test-name'], '-e10s')
-            test['try-name'] = add_suffix(test['try-name'], '-e10s')
-            group, symbol = split_symbol(test['treeherder-symbol'])
-            if group != '?':
-                group = add_suffix(group, '-e10s')
-            test['treeherder-symbol'] = join_symbol(group, symbol)
-
-            job['label'] += '-e10s'
-            job['name'] = add_suffix(job['name'], '-e10s')
-            job['treeherder']['symbol'] = test['treeherder-symbol']
-
-        yield job
+    parameters.setdefault('release_history', dict())
+    if 'nightly' in parameters.get('target_tasks_method', ''):
+        parameters['release_history'] = populate_release_history(BALROG_PRODUCT, project)

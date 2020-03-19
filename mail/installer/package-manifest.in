@@ -63,6 +63,19 @@
 @RESPATH@/updater.ini
 #endif
 
+#ifdef MOZ_DMD
+; DMD
+@RESPATH@/dmd.py
+@RESPATH@/fix_stacks.py
+@RESPATH@/fix_stack_using_bpsyms.py
+#ifdef XP_MACOSX
+@RESPATH@/fix_macosx_stack.py
+#endif
+#ifdef XP_LINUX
+@RESPATH@/fix_linux_stack.py
+#endif
+#endif
+
 #ifdef PKG_LOCALE_MANIFEST
 #include @PKG_LOCALE_MANIFEST@
 #endif
@@ -128,8 +141,6 @@
 [newsblog]
 @RESPATH@/chrome/newsblog@JAREXT@
 @RESPATH@/chrome/newsblog.manifest
-@RESPATH@/components/newsblog.js
-@RESPATH@/components/newsblog.manifest
 
 [mail]
 #ifndef XP_UNIX
@@ -146,12 +157,9 @@
 @RESPATH@/update-settings.ini
 #endif
 @BINPATH@/@DLL_PREFIX@lgpllibs@DLL_SUFFIX@
-@RESPATH@/blocklist.xml
 @RESPATH@/platform.ini
-#ifndef MOZ_SYSTEM_SQLITE
 #ifndef MOZ_FOLD_LIBS
 @RESPATH@/@DLL_PREFIX@mozsqlite3@DLL_SUFFIX@
-#endif
 #endif
 #ifdef UNIX_BUT_NOT_MAC
 #ifdef MOZ_UPDATER
@@ -170,30 +178,16 @@
 ; Mail Specific Files
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 @RESPATH@/defaults/messenger/mailViews.dat
-@RESPATH@/defaults/profile/prefs.js
 
 @RESPATH@/isp/*
 
-@RESPATH@/components/aboutRedirector.js
-@RESPATH@/components/activityComponents.manifest
 @RESPATH@/components/EnterprisePolicies.js
 @RESPATH@/components/EnterprisePolicies.manifest
 @RESPATH@/components/EnterprisePoliciesContent.js
-@RESPATH@/components/folderLookupService.js
 ; interfaces.manifest doesn't get packaged because it is dynamically
 ; re-created at packaging time when linking the xpts that will actually
 ; go into the package, so the test related interfaces aren't included.
-@RESPATH@/components/mimeJSComponents.js
 @RESPATH@/components/msgMime.manifest
-@RESPATH@/components/msgAsyncPrompter.js
-@RESPATH@/components/msgBase.manifest
-@RESPATH@/components/nsActivity.js
-@RESPATH@/components/nsActivityManager.js
-@RESPATH@/components/nsActivityManagerUI.js
-@RESPATH@/components/nsAddrbook.manifest
-@RESPATH@/components/nsMailNewsCommandLineHandler.js
-@RESPATH@/components/nsNewsAutoCompleteSearch.js
-@RESPATH@/components/nsNewsAutoCompleteSearch.manifest
 @RESPATH@/chrome/toolkit@JAREXT@
 @RESPATH@/chrome/toolkit.manifest
 @RESPATH@/chrome/comm@JAREXT@
@@ -220,15 +214,6 @@
 ; Gloda
 @RESPATH@/chrome/gloda@JAREXT@
 @RESPATH@/chrome/gloda.manifest
-@RESPATH@/components/glautocomp.js
-@RESPATH@/components/gloda.manifest
-@RESPATH@/components/jsmimeemitter.js
-
-; OAuth2 for mail
-@RESPATH@/components/msgOAuth2Module.js
-
-; New message notification
-@RESPATH@/components/newMailNotificationService.js
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Mail Extensions (smime, etc.)
@@ -237,20 +222,6 @@
 @BINPATH@/MapiProxy.dll
 @BINPATH@/mozMapi32.dll
 #endif
-@RESPATH@/components/mailComponents.manifest
-@RESPATH@/components/mailContentHandler.js
-@RESPATH@/components/mailGlue.js
-@RESPATH@/components/nsMailDefaultHandler.js
-@RESPATH@/components/nsSetDefaultMail.js
-@RESPATH@/components/shell.manifest
-@RESPATH@/components/offlineStartup.js
-@RESPATH@/components/offlineStartup.manifest
-
-
-@RESPATH@/components/mdn-service.js
-@RESPATH@/components/mdn-service.manifest
-@RESPATH@/components/smime-service.js
-@RESPATH@/components/smime-service.manifest
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; instant messaging
@@ -258,44 +229,27 @@
 @RESPATH@/@PREF_DIR@/chat-prefs.js
 @RESPATH@/chrome/chat@JAREXT@
 @RESPATH@/chrome/chat.manifest
-@RESPATH@/components/imAccounts.js
-@RESPATH@/components/imAccounts.manifest
-@RESPATH@/components/imCommands.js
-@RESPATH@/components/imCommands.manifest
-@RESPATH@/components/imContacts.js
-@RESPATH@/components/imContacts.manifest
-@RESPATH@/components/imConversations.js
-@RESPATH@/components/imConversations.manifest
-@RESPATH@/components/imCore.js
-@RESPATH@/components/imCore.manifest
-@RESPATH@/components/facebook.js
-@RESPATH@/components/facebook.manifest
-@RESPATH@/components/gtalk.js
-@RESPATH@/components/gtalk.manifest
-@RESPATH@/components/irc.js
-@RESPATH@/components/irc.manifest
-@RESPATH@/components/matrix.js
-@RESPATH@/components/matrix.manifest
-@RESPATH@/components/odnoklassniki.js
-@RESPATH@/components/odnoklassniki.manifest
-@RESPATH@/components/skype.js
-@RESPATH@/components/skype.manifest
-@RESPATH@/components/twitter.js
-@RESPATH@/components/twitter.manifest
-@RESPATH@/components/xmpp.js
-@RESPATH@/components/xmpp.manifest
-@RESPATH@/components/yahoo.js
-@RESPATH@/components/yahoo.manifest
-@RESPATH@/components/smileProtocolHandler.js
-@RESPATH@/components/smileProtocolHandler.manifest
-@RESPATH@/components/logger.js
-@RESPATH@/components/logger.manifest
 
 ; Thunderbird specific
 @RESPATH@/@PREF_DIR@/all-im.js
-@RESPATH@/components/im.manifest
-@RESPATH@/components/imIncomingServer.js
-@RESPATH@/components/imProtocolInfo.js
+
+; OTR libraries
+#ifdef TB_LIBOTR_PREBUILT
+#ifdef XP_WIN
+@BINPATH@/libotr-5.dll
+@BINPATH@/libgcrypt-20.dll
+@BINPATH@/libssp-0.dll
+#ifdef _AMD64_
+@BINPATH@/libgpg-error6-0.dll
+#else
+@BINPATH@/libgpg-error-0.dll
+#endif
+#elif defined(XP_MACOSX)
+@BINPATH@/libotr.5.dylib
+#elif defined(XP_LINUX)
+@BINPATH@/libotr.so.5
+#endif
+#endif
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Chrome Files
@@ -313,9 +267,6 @@
 @RESPATH@/chrome/devtools.manifest
 @RESPATH@/@PREF_DIR@/debugger.js
 
-@RESPATH@/components/devtools-loader.js
-@RESPATH@/components/devtools-loader.manifest
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Default Profile Settings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -326,7 +277,7 @@
 @RESPATH@/defaults/pref/composer.js
 @RESPATH@/defaults/pref/mailnews.js
 @RESPATH@/defaults/pref/mdn.js
-@RESPATH@/defaults/pref/smime.js
+@RESPATH@/defaults/pref/e2e-prefs.js
 @RESPATH@/defaults/pref/thunderbird-branding.js
 @RESPATH@/defaults/permissions
 @RESPATH@/defaults/settings/blocklists
@@ -334,43 +285,36 @@
 @RESPATH@/defaults/settings/main
 @RESPATH@/greprefs.js
 
+#ifdef MOZ_OPENPGP
+@RESPATH@/defaults/pref/openpgp-prefs.js
+#endif
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; App extensions to Mail
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+#ifdef MOZ_OPENPGP
+@RESPATH@/chrome/openpgp@JAREXT@
+@RESPATH@/chrome/openpgp.manifest
+#endif
+
 ; LDAP components
-@RESPATH@/components/nsAbLDAPAttributeMap.js
 #ifdef MOZ_LDAP_XPCOM
-@RESPATH@/components/nsAbLDAPAutoCompleteSearch.js
-@RESPATH@/components/nsLDAPProtocolHandler.js
-@RESPATH@/components/ldapComponents.manifest
 @BINPATH@/@DLL_PREFIX@ldap60@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@ldif60@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@prldap60@DLL_SUFFIX@
 #endif
-
-; Protocol/Content handling
-@RESPATH@/components/nsSMTPProtocolHandler.js
-@RESPATH@/components/nsSMTPProtocolHandler.manifest
 
 ; misson control, autoconfig
 #ifdef MOZ_PREF_EXTENSIONS
 @RESPATH@/defaults/autoconfig/prefcalls.js
 #endif
 
-; Address Book autocomplete
-@RESPATH@/components/nsAbAutoCompleteMyDomain.js
-@RESPATH@/components/nsAbAutoCompleteSearch.js
-
 ; Windows Search integration
 ; the module is included as part of the "Modules" rule
 #ifdef XP_WIN
 @BINPATH@/WSEnable.exe
 #endif
-
-; Bayesian trait analysis
-@RESPATH@/components/nsMsgTraitService.js
-@RESPATH@/components/nsMsgTraitService.manifest
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Base Package Files
@@ -396,14 +340,33 @@
 @RESPATH@/components/HandlerService.manifest
 @RESPATH@/components/HandlerService.js
 
-#ifdef MOZ_CALENDAR
 [calendar]
-#ifdef NIGHTLY_BUILD
-@RESPATH@/extensions/{e2fda1a4-762b-4020-b5ad-a41df1933103}/
-#else
-@RESPATH@/distribution/extensions/{e2fda1a4-762b-4020-b5ad-a41df1933103}/
-#endif
-#endif
+@RESPATH@/chrome/calendar@JAREXT@
+@RESPATH@/chrome/calendar.manifest
+@RESPATH@/chrome/lightning@JAREXT@
+@RESPATH@/chrome/lightning.manifest
+
+@RESPATH@/res/zones.json
+@RESPATH@/@PREF_DIR@/lightning.js
+
+# Files added to components directory via `EXTRA_COMPONENTS`.
+@RESPATH@/components/calBackendLoader.js
+@RESPATH@/components/calBackendLoader.manifest
+@RESPATH@/components/calICALJSComponents.js
+
+# Files added to components directory via `FINAL_TARGET_FILES.components`.
+@RESPATH@/components/calCachedCalendar.js
+@RESPATH@/components/calDateTime.js
+@RESPATH@/components/calDavRequestHandlers.js
+@RESPATH@/components/calDuration.js
+@RESPATH@/components/calFilter.js
+@RESPATH@/components/calICSService.js
+@RESPATH@/components/calICSService-worker.js
+@RESPATH@/components/calItemBase.js
+@RESPATH@/components/calPeriod.js
+@RESPATH@/components/calRecurrenceRule.js
+@RESPATH@/components/calTimezone.js
+
 @RESPATH@/features/wetransfer@extensions.thunderbird.net/
 
 @RESPATH@/components/servicesComponents.manifest
@@ -472,6 +435,9 @@
 @RESPATH@/res/dtd/*
 @RESPATH@/res/language.properties
 @RESPATH@/res/locale/layout/HtmlForm.properties
+@RESPATH@/res/locale/layout/MediaDocument.properties
+@RESPATH@/res/locale/layout/xmlparser.properties
+@RESPATH@/res/locale/dom/dom.properties
 #ifdef XP_MACOSX
 @RESPATH@/res/MainMenu.nib/
 #endif
@@ -502,9 +468,6 @@
 #endif
 @BINPATH@/@DLL_PREFIX@nss3@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@nssckbi@DLL_SUFFIX@
-#ifndef NSS_DISABLE_DBM
-@BINPATH@/@DLL_PREFIX@nssdbm3@DLL_SUFFIX@
-#endif
 #ifndef MOZ_FOLD_LIBS
 @BINPATH@/@DLL_PREFIX@nssutil3@DLL_SUFFIX@
 @BINPATH@/@DLL_PREFIX@smime3@DLL_SUFFIX@
@@ -514,6 +477,14 @@
 #endif
 @RESPATH@/chrome/pippki@JAREXT@
 @RESPATH@/chrome/pippki.manifest
+
+; preprocessor.py doesn't handle parentheses, so while the following could be
+; expressed in a single line, it's more clear to break them up.
+#if defined(XP_WIN) || defined(XP_MACOSX)
+#if !defined(_ARM64_)
+@BINPATH@/@DLL_PREFIX@osclientcerts@DLL_SUFFIX@
+#endif
+#endif
 
 ; For process sandboxing
 #if defined(MOZ_SANDBOX)
@@ -546,7 +517,6 @@
 @BINPATH@/crashreporter.app/
 #else
 @BINPATH@/crashreporter@BIN_SUFFIX@
-@BINPATH@/minidump-analyzer@BIN_SUFFIX@
 @RESPATH@/crashreporter.ini
 #ifdef XP_UNIX
 @RESPATH@/Throbber-small.gif
@@ -555,6 +525,12 @@
 #ifdef MOZ_CRASHREPORTER_INJECTOR
 @BINPATH@/breakpadinjector.dll
 #endif
+#endif
+
+; [ minidump-analyzer ]
+;
+#ifdef MOZ_CRASHREPORTER
+@BINPATH@/minidump-analyzer@BIN_SUFFIX@
 #endif
 
 ; [ Ping Sender ]

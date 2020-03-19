@@ -28,21 +28,26 @@ var { eid, lookupEventBox } = helpersForController(controller);
 
 const HOUR = 8;
 
-add_task(function testDailyRecurrence() {
+add_task(async function testDailyRecurrence() {
   createCalendar(controller, CALENDARNAME);
   switchToView(controller, "day");
   goToDate(controller, 2009, 1, 1);
 
   // Rotate view.
   controller.mainMenu.click("#ltnViewRotated");
-  controller.waitFor(() => eid("day-view").getNode().orient == "horizontal");
+  controller.waitFor(
+    () =>
+      eid("day-view")
+        .getNode()
+        .getAttribute("orient") == "horizontal"
+  );
 
   // Create daily event.
   let eventBox = lookupEventBox("day", CANVAS_BOX, null, 1, HOUR);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
-    setData(event, iframe, { repeat: "daily", repeatuntil: new Date(2009, 2, 20) });
+    await setData(event, iframe, { repeat: "daily", repeatuntil: new Date(2009, 2, 20) });
     event.click(eventid("button-saveandclose"));
   });
 
@@ -120,7 +125,7 @@ add_task(function testDailyRecurrence() {
 
   eventBox = lookupEventBox("day", EVENT_BOX, null, 1, null, EVENTPATH);
   handleOccurrencePrompt(controller, eventBox, "modify", true);
-  invokeEventDialog(controller, null, (event, iframe) => {
+  await invokeEventDialog(controller, null, (event, iframe) => {
     let { eid: eventid, sleep: eventsleep } = helpersForController(event);
 
     menulistSelect(eventid("item-repeat"), "every.weekday", event);
@@ -130,7 +135,10 @@ add_task(function testDailyRecurrence() {
 
   // Check day view for 7 days.
   let day = lookupEventBox("day", EVENT_BOX, null, 1, null, EVENTPATH);
-  let dates = [[2009, 1, 3], [2009, 1, 4]];
+  let dates = [
+    [2009, 1, 3],
+    [2009, 1, 4],
+  ];
   for (let [y, m, d] of dates) {
     goToDate(controller, y, m, d);
     controller.assertNodeNotExist(day);
@@ -181,9 +189,18 @@ registerCleanupFunction(function teardownModule(module) {
   deleteCalendars(controller, CALENDARNAME);
   // Reset view.
   switchToView(controller, "day");
-  if (eid("day-view").getNode().orient == "horizontal") {
+  if (
+    eid("day-view")
+      .getNode()
+      .getAttribute("orient") == "horizontal"
+  ) {
     controller.mainMenu.click("#ltnViewRotated");
   }
-  controller.waitFor(() => eid("day-view").getNode().orient == "vertical");
+  controller.waitFor(
+    () =>
+      eid("day-view")
+        .getNode()
+        .getAttribute("orient") == "vertical"
+  );
   closeAllEventDialogs();
 });

@@ -34,7 +34,7 @@ var { plan_for_modal_dialog, wait_for_modal_dialog } = ChromeUtils.import(
   "resource://testing-common/mozmill/WindowHelpers.jsm"
 );
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 var controller = mozmill.getMail3PaneController();
 var { eid, lookup, lookupEventBox } = helpersForController(controller);
@@ -42,18 +42,23 @@ var { eid, lookup, lookupEventBox } = helpersForController(controller);
 const HOUR = 8;
 const STARTDATE = new Date(2009, 0, 6);
 
-add_task(function testWeeklyWithExceptionRecurrence() {
+add_task(async function testWeeklyWithExceptionRecurrence() {
   createCalendar(controller, CALENDARNAME);
   switchToView(controller, "day");
   goToDate(controller, 2009, 1, 5);
 
   // Rotate view.
   controller.mainMenu.click("#ltnViewRotated");
-  controller.waitFor(() => eid("day-view").getNode().orient == "horizontal");
+  controller.waitFor(
+    () =>
+      eid("day-view")
+        .getNode()
+        .getAttribute("orient") == "horizontal"
+  );
 
   // Create weekly recurring event.
   let eventBox = lookupEventBox("day", CANVAS_BOX, null, 1, HOUR);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
     event.waitForElement(eventid("item-repeat"));
@@ -67,10 +72,10 @@ add_task(function testWeeklyWithExceptionRecurrence() {
   // Move 5th January occurrence to 6th January.
   eventBox = lookupEventBox("day", EVENT_BOX, null, 1, null, EVENTPATH);
   handleOccurrencePrompt(controller, eventBox, "modify", false);
-  invokeEventDialog(controller, null, (event, iframe) => {
+  await invokeEventDialog(controller, null, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
-    setData(event, iframe, { startdate: STARTDATE, enddate: STARTDATE });
+    await setData(event, iframe, { startdate: STARTDATE, enddate: STARTDATE });
     event.click(eventid("button-saveandclose"));
   });
 
@@ -78,7 +83,7 @@ add_task(function testWeeklyWithExceptionRecurrence() {
   goToDate(controller, 2009, 1, 7);
   eventBox = lookupEventBox("day", EVENT_BOX, null, 1, null, EVENTPATH);
   handleOccurrencePrompt(controller, eventBox, "modify", true);
-  invokeEventDialog(controller, null, (event, iframe) => {
+  await invokeEventDialog(controller, null, (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
     let { iframeLookup } = helpersForEditUI(iframe);
 
@@ -101,8 +106,8 @@ add_task(function testWeeklyWithExceptionRecurrence() {
   viewForward(controller, 1);
   let tuesPath = `
         ${DAY_VIEW}/{"class":"mainbox"}/{"class":"scrollbox"}/
-        {"class":"daybox"}/[0]/anon({"class":"multiday-column-box-stack"})/
-        anon({"class":"multiday-column-top-box"})/{"flex":"1"}/{"flex":"1"}/[eventIndex]
+        {"class":"daybox"}/[0]/{"class":"multiday-column-box-stack"}/
+        {"class":"multiday-column-top-box"}/{"flex":"1"}/{"flex":"1"}/[eventIndex]
     `;
 
   // Assert exactly two.
@@ -141,8 +146,8 @@ add_task(function testWeeklyWithExceptionRecurrence() {
 
   tuesPath = `
         ${WEEK_VIEW}/{"class":"mainbox"}/{"class":"scrollbox"}/
-        {"class":"daybox"}/[2]/anon({"class":"multiday-column-box-stack"})/
-        anon({"class":"multiday-column-top-box"})/{"flex":"1"}/{"flex":"1"}/[eventIndex]
+        {"class":"daybox"}/[2]/{"class":"multiday-column-box-stack"}/
+        {"class":"multiday-column-top-box"}/{"flex":"1"}/{"flex":"1"}/[eventIndex]
     `;
 
   // Assert exactly two.
@@ -276,9 +281,18 @@ registerCleanupFunction(function teardownModule(module) {
 
   // Reset view.
   switchToView(controller, "day");
-  if (eid("day-view").getNode().orient == "horizontal") {
+  if (
+    eid("day-view")
+      .getNode()
+      .getAttribute("orient") == "horizontal"
+  ) {
     controller.mainMenu.click("#ltnViewRotated");
   }
-  controller.waitFor(() => eid("day-view").getNode().orient == "vertical");
+  controller.waitFor(
+    () =>
+      eid("day-view")
+        .getNode()
+        .getAttribute("orient") == "vertical"
+  );
   closeAllEventDialogs();
 });

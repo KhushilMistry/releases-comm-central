@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -96,12 +96,12 @@ nsresult nsMailboxService::CopyMessage(const char *aSrcMailboxURI,
 }
 
 nsresult nsMailboxService::CopyMessages(
-    uint32_t aNumKeys, nsMsgKey *aMsgKeys, nsIMsgFolder *srcFolder,
+    const nsTArray<nsMsgKey> &aMsgKeys, nsIMsgFolder *srcFolder,
     nsIStreamListener *aMailboxCopyHandler, bool moveMessage,
     nsIUrlListener *aUrlListener, nsIMsgWindow *aMsgWindow, nsIURI **aURL) {
   nsresult rv = NS_OK;
   NS_ENSURE_ARG(srcFolder);
-  NS_ENSURE_ARG(aMsgKeys);
+  NS_ENSURE_TRUE(!aMsgKeys.IsEmpty(), NS_ERROR_INVALID_ARG);
   nsCOMPtr<nsIMailboxUrl> mailboxurl;
 
   nsMailboxAction actionToUse = nsIMailboxUrl::ActionMoveMessage;
@@ -124,7 +124,7 @@ nsresult nsMailboxService::CopyMessages(
         nsCOMPtr<nsIMailboxUrl> mailboxUrl(do_QueryInterface(url));
         msgUrl->SetMsgWindow(aMsgWindow);
 
-        mailboxUrl->SetMoveCopyMsgKeys(aMsgKeys, aNumKeys);
+        mailboxUrl->SetMoveCopyMsgKeys(aMsgKeys);
         rv = RunMailboxUrl(url, aMailboxCopyHandler);
       }
     }
@@ -219,7 +219,7 @@ nsresult nsMailboxService::FetchMessage(
       loadState->SetLoadType(LOAD_LINK);
     loadState->SetFirstParty(false);
     loadState->SetTriggeringPrincipal(nsContentUtils::GetSystemPrincipal());
-    rv = docShell->LoadURI(loadState);
+    rv = docShell->LoadURI(loadState, false);
   } else
     rv = RunMailboxUrl(url, aDisplayConsumer);
 
@@ -335,7 +335,7 @@ NS_IMETHODIMP nsMailboxService::OpenAttachment(
     loadState->SetLoadType(LOAD_LINK);
     loadState->SetFirstParty(false);
     loadState->SetTriggeringPrincipal(nsContentUtils::GetSystemPrincipal());
-    return docShell->LoadURI(loadState);
+    return docShell->LoadURI(loadState, false);
   }
   return RunMailboxUrl(URL, aDisplayConsumer);
 }

@@ -24,7 +24,6 @@ vbox > #link-image-bottom {
   margin-bottom: 1.2em;
 }
 
-.event-input-td {
-  padding-right: 8px !important;
-  padding-left: 3px !important;
+#percent-complete-textbox {
+  padding: 2px;
 }

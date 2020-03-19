@@ -4,9 +4,9 @@
 
 /* exported onLoad, onUnload */
 
-/* globals invitationsText, MozXULElement, MozElements */ // From calendar-invitations-dialog.xul.
+/* globals invitationsText, MozXULElement, MozElements */ // From calendar-invitations-dialog.xhtml.
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 // Wrap in a block to prevent leaking to window scope.
 {
@@ -36,6 +36,7 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
       }
 
       this.setAttribute("is", "calendar-invitations-richlistitem");
+      this.classList.add("calendar-invitations-richlistitem");
 
       this.appendChild(
         MozXULElement.parseXULToFragment(
@@ -209,7 +210,7 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
 function onLoad() {
   let operationListener = {
     QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-    onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+    onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
       let updatingBox = document.getElementById("updating-box");
       updatingBox.setAttribute("hidden", "true");
       let richListBox = document.getElementById("invitations-listbox");
@@ -220,11 +221,11 @@ function onLoad() {
         noInvitationsBox.removeAttribute("hidden");
       }
     },
-    onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
+    onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
       if (!Components.isSuccessCode(aStatus)) {
         return;
       }
-      document.title = invitationsText + " (" + aCount + ")";
+      document.title = invitationsText + " (" + aItems.length + ")";
       let updatingBox = document.getElementById("updating-box");
       updatingBox.setAttribute("hidden", "true");
       let richListBox = document.getElementById("invitations-listbox");
@@ -232,7 +233,6 @@ function onLoad() {
         let newNode = document.createXULElement("richlistitem", {
           is: "calendar-invitations-richlistitem",
         });
-        newNode.classList.add("calendar-invitations-richlistitem");
         richListBox.appendChild(newNode);
         newNode.calendarItem = item;
       }
@@ -295,7 +295,7 @@ function fillJobQueue(queue) {
 
       // set default alarm on unresponded items that have not been declined:
       if (
-        !newCalendarItem.getAlarms({}).length &&
+        !newCalendarItem.getAlarms().length &&
         oldStatus == "NEEDS-ACTION" &&
         newStatus != "DECLINED"
       ) {

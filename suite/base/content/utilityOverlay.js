@@ -8,10 +8,16 @@
  * for shared application glue for the Communicator suite of applications
  **/
 
-// Services = object with smart getters for common XPCOM services
-var {Services} = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var {XPCOMUtils} = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
-var {BrowserUtils} = ChromeUtils.import("resource://gre/modules/BrowserUtils.jsm");
+var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+var { XPCOMUtils } =
+  ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
+
+
+XPCOMUtils.defineLazyModuleGetters(this, {
+  BrowserUtils: "resource://gre/modules/BrowserUtils.jsm",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.jsm",
+  RecentWindow: "resource:///modules/RecentWindow.jsm",
+});
 
 // XPCOMUtils.defineLazyGetter(this, "Weave", function() {
 //   let tmp = {};
@@ -566,9 +572,17 @@ function goClickThrobber(urlPref, aEvent)
     openUILinkIn(url, whereToOpenLink(aEvent, false, true, true));
 }
 
-function getTopWin()
-{
-  return top.gPrivate || Services.wm.getMostRecentWindow("navigator:browser");
+function getTopWin(skipPopups) {
+  // If this is called in a browser window, use that window regardless of
+  // whether it's the frontmost window, since commands can be executed in
+  // background windows (bug 626148).
+  if (top.document.documentElement.getAttribute("windowtype") == "navigator:browser" &&
+      (!skipPopups || top.toolbar.visible))
+    return top;
+
+  let isPrivate = PrivateBrowsingUtils.isWindowPrivate(window);
+  return RecentWindow.getMostRecentBrowserWindow({private: isPrivate,
+                                                  allowPopups: !skipPopups});
 }
 
 function isRestricted( url )
@@ -586,38 +600,6 @@ function isRestricted( url )
   } catch (e) {
     return false;
   }
-}
-
-function openTopWin( url, opener )
-{
-    /* note that this chrome url should probably change to not have
-       all of the navigator controls, but if we do this we need to have
-       the option for chrome controls because goClickThrobber() needs to
-       use this function with chrome controls */
-    /* also, do we want to
-       limit the number of help windows that can be spawned? */
-    if ((url == null) || (url == "")) return null;
-
-    // avoid loading "", since this loads a directory listing
-    if (url == "") {
-        url = "about:blank";
-    }
-
-    var topWindowOfType = getTopWin();
-    if ( topWindowOfType )
-    {
-        if (!opener || !isRestricted(url))
-            topWindowOfType.loadURI(url);
-        else if (topWindowOfType.content == opener.top)
-            opener.open(url, "_top");
-        else
-            topWindowOfType.getBrowser().loadURIWithFlags(url,
-                Ci.nsIWebNavigation.LOAD_FLAGS_FROM_EXTERNAL);
-
-        topWindowOfType.content.focus();
-        return topWindowOfType;
-    }
-    return window.openDialog( getBrowserURL(), "_blank", "chrome,all,dialog=no", url );
 }
 
 function goAbout(aProtocol)
@@ -954,11 +936,21 @@ function makeURLAbsolute(aBase, aUrl, aCharset)
                             Services.io.newURI(aBase, aCharset)).spec;
 }
 
-function openAsExternal(aURL)
-{
-  var loadType = Services.prefs.getIntPref("browser.link.open_external");
+function openAsExternal(aURL) {
+  var where;
+  switch (Services.prefs.getIntPref("browser.link.open_external")) {
+    case kNewWindow :
+      where = "window";
+      break;
+    case kNewTab :
+      where = "tab";
+      break;
+    case kExistingWindow :
+    default :
+      where = "current";
+  }
   var loadInBackground = Services.prefs.getBoolPref("browser.tabs.loadDivertedInBackground");
-  openNewTabWindowOrExistingWith(loadType, aURL, null, loadInBackground);
+  openNewTabWindowOrExistingWith(aURL, where, null, loadInBackground);
 }
 
 /**
@@ -968,130 +960,80 @@ function openAsExternal(aURL)
  *
  * @param aURL
  *        The URL to open (as a string).
- * @param aNode
- *        The node from which the URL came, or null. This is used to set
+ * @param aDocument
+ *        The document from which the URL came, or null. This is used to set
  *        the referrer header and to do a security check of whether the
- *        node is allowed to reference the URL. If null, there will be no
+ *        document is allowed to reference the URL. If null, there will be no
  *        referrer header and no security check.
  * @param aPostData
  *        Form POST data, or null.
  * @param aEvent
  *        The triggering event (for the purpose of determining whether to open
  *        in the background), or null.
- *        Legacy callers may use a boolean (aReverseBackgroundPref) here to
- *        reverse the background behaviour.
  * @param aAllowThirdPartyFixup
  *        If true, then we allow the URL text to be sent to third party
  *        services (e.g., Google's I Feel Lucky) for interpretation. This
  *        parameter may be undefined in which case it is treated as false.
  * @param [optional] aReferrer
- *        If aNode is null, then this will be used as the referrer.
+ *        If aDocument is null, then this will be used as the referrer.
  *        There will be no security check.
+ * @param [optional] aReferrerPolicy
+ *        Referrer policy - Ci.nsIHttpChannel.REFERRER_POLICY_*.
  */
-function openNewPrivateWith(aURL, aNode, aPostData, aAllowThirdPartyFixup,
-                            aReferrer)
-{
-  return openNewTabWindowOrExistingWith(kNewPrivate, aURL, aNode, false,
+function openNewPrivateWith(aURL, aDocument, aPostData, aAllowThirdPartyFixup,
+                            aReferrer, aReferrerPolicy) {
+  return openNewTabWindowOrExistingWith(aURL, "private", aDocument, null,
                                         aPostData, aAllowThirdPartyFixup,
-                                        aReferrer);
+                                        aReferrer, aReferrerPolicy);
 }
 
-function openNewWindowWith(aURL, aNode, aPostData, aAllowThirdPartyFixup,
-                           aReferrer)
-{
-  return openNewTabWindowOrExistingWith(kNewWindow, aURL, aNode, false,
+function openNewWindowWith(aURL, aDocument, aPostData, aAllowThirdPartyFixup,
+                           aReferrer, aReferrerPolicy) {
+  return openNewTabWindowOrExistingWith(aURL, "window", aDocument, null,
                                         aPostData, aAllowThirdPartyFixup,
-                                        aReferrer);
+                                        aReferrer, aReferrerPolicy);
 }
 
-function openNewTabWith(aURL, aNode, aPostData, aEvent,
-                        aAllowThirdPartyFixup, aReferrer)
-{
-  var loadInBackground = Services.prefs.getBoolPref("browser.tabs.loadInBackground");
-  if (arguments.length == 3 && typeof aPostData == "boolean")
-  {
-    // Handle legacy boolean parameter.
-    if (aPostData)
-    {
-      loadInBackground = !loadInBackground;
-    }
-    aPostData = null;
-  }
-  else if (aEvent && aEvent.shiftKey)
-  {
-    loadInBackground = !loadInBackground;
-  }
-  return openNewTabWindowOrExistingWith(kNewTab, aURL, aNode, loadInBackground,
+function openNewTabWith(aURL, aDocument, aPostData, aEvent,
+                        aAllowThirdPartyFixup, aReferrer, aReferrerPolicy) {
+  let where = aEvent && aEvent.shiftKey ? "tabshifted" : "tab";
+  return openNewTabWindowOrExistingWith(aURL, where, aDocument, null,
                                         aPostData, aAllowThirdPartyFixup,
-                                        aReferrer);
+                                        aReferrer, aReferrerPolicy);
 }
 
-function openNewTabWindowOrExistingWith(aType, aURL, aNode, aLoadInBackground,
-                                        aPostData, aAllowThirdPartyFixup,
-                                        aReferrer)
-{
+function openNewTabWindowOrExistingWith(aURL, aWhere, aDocument,
+                                        aLoadInBackground, aPostData,
+                                        aAllowThirdPartyFixup, aReferrer,
+                                        aReferrerPolicy) {
   // Make sure we are allowed to open this url
-  if (aNode)
-    urlSecurityCheck(aURL, aNode.nodePrincipal,
-                     Ci.nsIScriptSecurityManager.STANDARD);
-
-  // get referrer, if as external should be null
-  var referrerURI = aReferrer;
-  if (aNode instanceof Document)
-    referrerURI = aNode.documentURIObject;
-  else if (aNode instanceof Element &&
-           !/(?:^|\s)noreferrer(?:\s|$)/i.test(aNode.getAttribute("rel")))
-    referrerURI = aNode.ownerDocument.documentURIObject;
-
-  var browserWin;
-  // if we're not opening a new window, try and find existing window
-  if (aType != kNewWindow && aType != kNewPrivate)
-    browserWin = getTopWin();
+  if (aDocument)
+    urlSecurityCheck(aURL, aDocument.nodePrincipal);
 
   // Where appropriate we want to pass the charset of the
   // current document over to a new tab / window.
   var originCharset = null;
-  if (aType != kExistingWindow) {
-    var wintype = document.documentElement.getAttribute('windowtype');
-    if (wintype == "navigator:browser")
+  if (aWhere != "current") {
+    originCharset = aDocument && aDocument.characterSet;
+    if (!originCharset &&
+        document.documentElement.getAttribute("windowtype") == "navigator:browser")
       originCharset = window.content.document.characterSet;
   }
 
-  // We want to open in a new window or no existing window can be found.
-  if (!browserWin) {
-    var features = "private,chrome,all,dialog=no";
-    if (aType != kNewPrivate)
-      features = "non-" + features;
-    var charsetArg = null;
-    if (originCharset)
-      charsetArg = "charset=" + originCharset;
-    return window.openDialog(getBrowserURL(), "_blank", features,
-                             aURL, charsetArg, referrerURI, aPostData,
-                             aAllowThirdPartyFixup);
+  var isPrivate = false;
+  if (aWhere == "private") {
+    aWhere = "window";
+    isPrivate = true;
   }
-
-  // Get the existing browser object
-  var browser = browserWin.getBrowser();
-
-  // Open link in an existing window.
-  if (aType == kExistingWindow) {
-    browserWin.loadURI(aURL, referrerURI, aPostData, aAllowThirdPartyFixup);
-    browserWin.content.focus();
-    return browserWin;
-  }
-
-  // open link in new tab
-  var tab = browser.loadOneTab(aURL, {
-              referrerURI: referrerURI,
-              charset: originCharset,
-              postData: aPostData,
-              inBackground: aLoadInBackground,
-              allowThirdPartyFixup: aAllowThirdPartyFixup,
-              relatedToCurrent: !!aNode
-            });
-  if (!aLoadInBackground)
-    browserWin.content.focus();
-  return tab;
+  var referrerURI = aDocument ? aDocument.documentURIObject : aReferrer;
+  return openLinkIn(aURL, aWhere,
+                    { charset: originCharset,
+                      postData: aPostData,
+                      inBackground: aLoadInBackground,
+                      allowThirdPartyFixup: aAllowThirdPartyFixup,
+                      referrerURI: referrerURI,
+                      referrerPolicy: aReferrerPolicy,
+                      private: isPrivate, });
 }
 
 /**
@@ -1369,8 +1311,8 @@ function togglePaneSplitter(aSplitterId)
  * For API compatibility with Firefox the object version uses params.ignoreAlt
  * although for SeaMonkey it is effectively ignoreSave.
  */
-function openUILink(url, aEvent, aIgnoreButton, aIgnoreSave, aAllowThirdPartyFixup, aPostData, aReferrerURI)
-{
+function openUILink(url, aEvent, aIgnoreButton, aIgnoreSave,
+                    aAllowThirdPartyFixup, aPostData, aReferrerURI) {
   var params;
   if (aIgnoreButton && typeof aIgnoreButton == "object") {
     params = aIgnoreButton;
@@ -1385,7 +1327,8 @@ function openUILink(url, aEvent, aIgnoreButton, aIgnoreSave, aAllowThirdPartyFix
     params = {allowThirdPartyFixup: aAllowThirdPartyFixup,
               postData: aPostData,
               referrerURI: aReferrerURI,
-              initiatingDoc: aEvent ? aEvent.target.ownerDocument : document}
+              referrerPolicy: Ci.nsIHttpChannel.REFERRER_POLICY_UNSET,
+              initiatingDoc: aEvent ? aEvent.target.ownerDocument : document,}
   }
 
   var where = whereToOpenLink(aEvent, aIgnoreButton, aIgnoreSave);
@@ -1490,6 +1433,11 @@ function openUILinkIn(url, where, aAllowThirdPartyFixup, aPostData, aReferrerURI
     };
   }
 
+  if (where == "private") {
+    where = "window";
+    params.private = true;
+  }
+
   params.fromChrome = true;
 
   return openLinkIn(url, where, params);
@@ -1500,32 +1448,40 @@ function openLinkIn(url, where, params)
   if (!where || !url)
     return null;
 
+  var aFromChrome           = params.fromChrome;
   var aAllowThirdPartyFixup = params.allowThirdPartyFixup;
   var aPostData             = params.postData;
+  var aCharset              = params.charset;
   var aReferrerURI          = params.referrerURI;
-  var aRelatedToCurrent     = params.relatedToCurrent;
-  var aInitiatingDoc = params.initiatingDoc ? params.initiatingDoc : document;
-  var aIsPrivate            = params.private;
-
   var aReferrerPolicy       = ("referrerPolicy" in params ?
         params.referrerPolicy : Ci.nsIHttpChannel.REFERRER_POLICY_UNSET);
+  var aRelatedToCurrent     = params.relatedToCurrent;
+  var aAllowMixedContent    = params.allowMixedContent;
+  var aInBackground         = params.inBackground;
+  var aDisallowInheritPrincipal = params.disallowInheritPrincipal;
+  var aInitiatingDoc = params.initiatingDoc ? params.initiatingDoc : document;
+  var aIsPrivate            = params.private;
+  var aNoReferrer           = params.noReferrer;
   var aUserContextId        = params.userContextId;
   var aPrincipal            = params.originPrincipal;
   var aTriggeringPrincipal  = params.triggeringPrincipal;
+  var aForceAboutBlankViewerInCurrent =
+        params.forceAboutBlankViewerInCurrent;
 
   if (where == "save") {
-    saveURL(url, null, null, true, true, aReferrerURI, aInitiatingDoc);
+    saveURL(url, null, null, true, true, aNoReferrer ? null : aReferrerURI,
+            aInitiatingDoc);
     return null;
   }
 
-  // TODO fix this properly with pricipals and referrers intact
-  if (where == "private") {
-    window.openDialog(getBrowserURL(), "_blank", "private,chrome,all,dialog=no",
-                      url, null, null, aPostData, aAllowThirdPartyFixup);
-    return null;
-  }
-
+  // Establish which window we'll load the link in.
   var w = getTopWin();
+  // We don't want to open tabs in popups, so try to find a non-popup window in
+  // that case.
+  if ((where == "tab" || where == "tabshifted") && w && !w.toolbar.visible) {
+    w = getTopWin(true);
+    aRelatedToCurrent = false;
+  }
 
   // Teach the principal about the right OA to use, e.g. in case when
   // opening a link in a new private window, or in a new container tab.
@@ -1546,9 +1502,11 @@ function openLinkIn(url, where, params)
 
   if (!w || where == "window") {
     let features = "chrome,dialog=no,all";
-
     if (aIsPrivate) {
       features += ",private";
+      // To prevent regular browsing data from leaking to private browsing
+      // sites, strip the referrer when opening a new private window.
+      aNoReferrer = true;
     }
 
     // This propagates to window.arguments.
@@ -1559,12 +1517,19 @@ function openLinkIn(url, where, params)
                createInstance(Ci.nsISupportsString);
     wuri.data = url;
 
+    let charset = null;
+    if (aCharset) {
+      charset = Cc["@mozilla.org/supports-string;1"]
+                  .createInstance(Ci.nsISupportsString);
+      charset.data = "charset=" + aCharset;
+    }
+
     var allowThirdPartyFixupSupports = Cc["@mozilla.org/supports-PRBool;1"].
                                        createInstance(Ci.nsISupportsPRBool);
     allowThirdPartyFixupSupports.data = aAllowThirdPartyFixup;
 
     var referrerURISupports = null;
-    if (aReferrerURI) {
+    if (aReferrerURI && !aNoReferrer) {
       referrerURISupports = Cc["@mozilla.org/supports-string;1"].
                             createInstance(Ci.nsISupportsString);
       referrerURISupports.data = aReferrerURI.spec;
@@ -1579,6 +1544,7 @@ function openLinkIn(url, where, params)
     userContextIdSupports.data = aUserContextId;
 
     sa.appendElement(wuri);
+    sa.appendElement(charset);
     sa.appendElement(referrerURISupports);
     sa.appendElement(aPostData);
     sa.appendElement(allowThirdPartyFixupSupports);
@@ -1592,8 +1558,12 @@ function openLinkIn(url, where, params)
     return;
   }
 
-  var loadInBackground =
-    Services.prefs.getBoolPref("browser.tabs.loadInBackground");
+  let loadInBackground = aInBackground;
+  if (loadInBackground == null) {
+    loadInBackground =
+      aFromChrome ? false :
+                    Services.prefs.getBoolPref("browser.tabs.loadInBackground");
+  }
 
   // reuse the browser if its current tab is empty
   if (isBrowserEmpty(w.getBrowser()))
@@ -1607,11 +1577,18 @@ function openLinkIn(url, where, params)
       flags |= Ci.nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP;
       flags |= Ci.nsIWebNavigation.LOAD_FLAGS_FIXUP_SCHEME_TYPOS;
     }
+    if (aDisallowInheritPrincipal) {
+      flags |= Ci.nsIWebNavigation.LOAD_FLAGS_DISALLOW_INHERIT_OWNER;
+    }
+
+    if (aForceAboutBlankViewerInCurrent) {
+      w.gBrowser.selectedBrowser.createAboutBlankContentViewer(aPrincipal);
+    }
 
     w.getBrowser().loadURIWithFlags(url, {
       triggeringPrincipal: aTriggeringPrincipal,
       flags,
-      referrerURI: aReferrerURI,
+      referrerURI: aNoReferrer ? null : aReferrerURI,
       referrerPolicy: aReferrerPolicy,
       postData: aPostData,
       userContextId: aUserContextId
@@ -1631,9 +1608,12 @@ function openLinkIn(url, where, params)
     var tab = browser.addTab(url, {
                 referrerURI: aReferrerURI,
                 referrerPolicy: aReferrerPolicy,
+                charset: aCharset,
                 postData: aPostData,
                 allowThirdPartyFixup: aAllowThirdPartyFixup,
                 relatedToCurrent: aRelatedToCurrent,
+                allowMixedContent: aAllowMixedContent,
+                noReferrer: aNoReferrer,
                 userContextId: aUserContextId,
                 originPrincipal: aPrincipal,
                 triggeringPrincipal: aTriggeringPrincipal,

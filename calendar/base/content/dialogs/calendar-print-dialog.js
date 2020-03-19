@@ -8,7 +8,7 @@
 /* import-globals-from ../calendar-ui-utils.js */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 var printContent = "";
 
@@ -35,7 +35,7 @@ function loadCalendarPrintDialog() {
   } else {
     document.getElementById("printCurrentViewRadio").setAttribute("disabled", true);
   }
-  if (!theView || !theView.getSelectedItems({}).length) {
+  if (!theView || !theView.getSelectedItems().length) {
     document.getElementById("selected").setAttribute("disabled", true);
   }
   document
@@ -101,7 +101,7 @@ function getPrintSettings(receiverFunc) {
       break;
     }
     case "selected": {
-      let selectedItems = theView.getSelectedItems({});
+      let selectedItems = theView.getSelectedItems();
       settings.eventList = selectedItems.filter(item => {
         if (cal.item.isEvent(item) && !settings.printEvents) {
           return false;
@@ -149,10 +149,10 @@ function getPrintSettings(receiverFunc) {
   if (requiresFetch) {
     let listener = {
       QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-      onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDateTime) {
+      onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDateTime) {
         receiverFunc(settings);
       },
-      onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
+      onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
         settings.eventList = settings.eventList.concat(aItems);
         if (!settings.printTasksWithNoDueDate) {
           let eventWithDueDate = [];
@@ -222,7 +222,6 @@ function refreshHtml(finishFunc) {
         pipe.outputStream,
         settings.start,
         settings.end,
-        settings.eventList.length,
         settings.eventList,
         settings.title
       );
@@ -272,7 +271,7 @@ document.addEventListener("dialogaccept", event => {
     statusFeedback = statusFeedback.QueryInterface(Ci.nsIMsgStatusFeedback);
 
     let printWindow = window.openDialog(
-      "chrome://messenger/content/msgPrintEngine.xul",
+      "chrome://messenger/content/msgPrintEngine.xhtml",
       "",
       "chrome,dialog=no,all",
       1,
@@ -294,7 +293,7 @@ document.addEventListener("dialogaccept", event => {
     };
     printWindow.addEventListener("unload", closer);
 
-    if (gPrintSettingsAreGlobal && gSavePrintSettings) {
+    if (gSavePrintSettings) {
       let PSSVC = Cc["@mozilla.org/gfx/printsettings-service;1"].getService(
         Ci.nsIPrintSettingsService
       );

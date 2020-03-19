@@ -11,11 +11,11 @@ Services.prefs.setCharPref(
 
 /* import-globals-from ../../../test/resources/logHelper.js */
 /* import-globals-from ../../../test/resources/asyncTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 /* import-globals-from ../../../test/resources/alertTestUtils.js */
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 load("../../../resources/alertTestUtils.js");
 
 // Globals
@@ -63,8 +63,7 @@ function checkOfflineStore(prevOfflineStoreSize) {
   let size = {};
   let enumerator = IMAPPump.inbox.msgDatabase.EnumerateMessages();
   if (enumerator) {
-    while (enumerator.hasMoreElements()) {
-      let header = enumerator.getNext();
+    for (let header of enumerator) {
       // this will verify that the message in the offline store
       // starts with "From " - otherwise, it returns an error.
       if (
@@ -101,7 +100,6 @@ var tests = [
       0x0008,
       true,
       [msgHdr.messageKey],
-      1,
       asyncUrlListener
     );
     yield false;

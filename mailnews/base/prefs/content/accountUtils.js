@@ -21,11 +21,9 @@ var gAnyValidIdentity = false; // If there are no valid identities for any accou
 var gNewAccountToLoad = null; // used to load new messages if we come from the mail3pane
 
 function getInvalidAccounts(accounts) {
-  let numAccounts = accounts.length;
   let invalidAccounts = [];
   let numIdentities = 0;
-  for (let i = 0; i < numAccounts; i++) {
-    let account = accounts.queryElementAt(i, Ci.nsIMsgAccount);
+  for (let account of accounts) {
     try {
       if (!account.incomingServer.valid) {
         invalidAccounts[invalidAccounts.length] = account;
@@ -71,8 +69,8 @@ function showMailIntegrationDialog() {
       shellService.shouldCheckDefaultClient &&
       !shellService.isDefaultClient(true, appTypesCheck)
     ) {
-      window.openDialog(
-        "chrome://communicator/content/defaultClientDialog.xul",
+      window.docShell.rootTreeItem.domWindow.openDialog(
+        "chrome://communicator/content/defaultClientDialog.xhtml",
         "DefaultClient",
         "modal,centerscreen,chrome,resizable=no"
       );
@@ -199,8 +197,8 @@ function MsgAccountWizard(wizardCallback) {
 function msgOpenAccountWizard(wizardCallback, type) {
   gNewAccountToLoad = null;
 
-  window.openDialog(
-    "chrome://messenger/content/AccountWizard.xul",
+  window.docShell.rootTreeItem.domWindow.openDialog(
+    "chrome://messenger/content/AccountWizard.xhtml",
     "AccountWizard",
     "chrome,modal,titlebar,centerscreen",
     { okCallback: wizardCallback, acctType: type }
@@ -227,7 +225,7 @@ function initAccountWizardTB(args) {
   } else if (type == "movemail") {
     selType = "movemail";
   }
-  let accountwizard = document.getElementById("AccountWizard");
+  let accountwizard = document.querySelector("wizard");
   let acctyperadio = document.getElementById("acctyperadio");
   let feedRadio = acctyperadio.querySelector("radio[value='Feeds']");
   if (feedRadio) {
@@ -244,22 +242,30 @@ function initAccountWizardTB(args) {
 }
 
 function AddMailAccount() {
-  NewMailAccount(MailServices.mailSession.topmostMsgWindow);
+  NewMailAccount(MailServices.mailSession.topmostMsgWindow, updateMailPaneUI);
 }
 
 function AddIMAccount() {
-  window.openDialog(
-    "chrome://messenger/content/chat/imAccountWizard.xul",
+  window.docShell.rootTreeItem.domWindow.openDialog(
+    "chrome://messenger/content/chat/imAccountWizard.xhtml",
     "",
     "chrome,modal,titlebar,centerscreen"
   );
 }
 
 function AddFeedAccount() {
-  window.openDialog(
-    "chrome://messenger-newsblog/content/feedAccountWizard.xul",
+  window.docShell.rootTreeItem.domWindow.openDialog(
+    "chrome://messenger-newsblog/content/feedAccountWizard.xhtml",
     "",
     "chrome,modal,titlebar,centerscreen"
+  );
+}
+
+function AddAddressBook() {
+  window.docShell.rootTreeItem.domWindow.openDialog(
+    "chrome://messenger/content/addressbook/abAddressBookNameDialog.xhtml",
+    "",
+    "chrome,modal,resizable=no,centerscreen"
   );
 }
 
@@ -269,42 +275,66 @@ function AddFeedAccount() {
  *
  * @param selectPage  The xul file name for the viewing page or
  *                    null for the account main page. Other pages are
- *                    'am-server.xul', 'am-copies.xul', 'am-offline.xul',
- *                    'am-addressing.xul', 'am-smtp.xul'
+ *                    'am-server.xhtml', 'am-copies.xhtml', 'am-offline.xhtml',
+ *                    'am-addressing.xhtml', 'am-smtp.xhtml'
  * @param  aServer    The server of the account to select. Optional.
  */
 function MsgAccountManager(selectPage, aServer) {
-  var existingAccountManager = Services.wm.getMostRecentWindow(
-    "mailnews:accountmanager"
-  );
-
-  if (existingAccountManager) {
-    existingAccountManager.focus();
-  } else {
-    if (!aServer) {
-      if (typeof window.GetSelectedMsgFolders === "function") {
-        let folders = window.GetSelectedMsgFolders();
-        if (folders.length > 0) {
-          aServer = folders[0].server;
-        }
-      }
-      if (
-        !aServer &&
-        typeof window.GetDefaultAccountRootFolder === "function"
-      ) {
-        let folder = window.GetDefaultAccountRootFolder();
-        if (folder instanceof Ci.nsIMsgFolder) {
-          aServer = folder.server;
-        }
+  if (!aServer) {
+    if (typeof window.GetSelectedMsgFolders === "function") {
+      let folders = window.GetSelectedMsgFolders();
+      if (folders.length > 0) {
+        aServer = folders[0].server;
       }
     }
+    if (!aServer && typeof window.GetDefaultAccountRootFolder === "function") {
+      let folder = window.GetDefaultAccountRootFolder();
+      if (folder instanceof Ci.nsIMsgFolder) {
+        aServer = folder.server;
+      }
+    }
+  }
+  let mailWindow = Services.wm.getMostRecentWindow("mail:3pane");
+  let tabmail = mailWindow.document.getElementById("tabmail");
 
-    window.openDialog(
-      "chrome://messenger/content/AccountManager.xul",
-      "AccountManager",
-      "chrome,centerscreen,modal,titlebar,resizable",
-      { server: aServer, selectPage }
-    );
+  mailWindow.focus();
+  // If Account settings tab is already open, change the server
+  // and the selected page, reload the tab and switch to the tab.
+  for (let tabInfo of tabmail.tabInfo) {
+    let tab = tabmail.getTabForBrowser(tabInfo.browser);
+    if (
+      tab &&
+      tab.urlbar &&
+      tab.urlbar.textContent == "about:accountsettings"
+    ) {
+      tab.browser.contentDocument.documentElement.server = aServer;
+      tab.browser.contentDocument.documentElement.selectPage = selectPage;
+      tab.browser.contentWindow.onLoad();
+      tabmail.switchToTab(tabInfo);
+      return;
+    }
+  }
+
+  let onLoad = function(event, browser) {
+    browser.contentDocument.documentElement.server = aServer;
+    browser.contentDocument.documentElement.selectPage = selectPage;
+  };
+  tabmail.openTab("contentTab", {
+    contentPage: "about:accountsettings",
+    clickHandler: "specialTabs.aboutClickHandler(event);",
+    onLoad,
+  });
+
+  for (let tabInfo of tabmail.tabInfo) {
+    let tab = tabmail.getTabForBrowser(tabInfo.browser);
+    if (
+      tab &&
+      tab.urlbar &&
+      tab.urlbar.textContent == "about:accountsettings"
+    ) {
+      tab.tabNode.setAttribute("type", "accountManager");
+      break;
+    }
   }
 }
 
@@ -474,7 +504,7 @@ function NewMailAccountProvisioner(aMsgWindow, args) {
   // accountProvisioner.xhtml isn't throwing errors or warnings, that's due
   // to bug 688273.  Just make the window non-modal to get those errors and
   // warnings back, and then clear this comment when bug 688273 is closed.
-  window.openDialog(
+  window.docShell.rootTreeItem.domWindow.openDialog(
     "chrome://messenger/content/newmailaccount/accountProvisioner.xhtml",
     "AccountCreation",
     windowParams,
@@ -502,11 +532,27 @@ function msgNewMailAccount(msgWindow, okCallback, extraData) {
     existingWindow.focus();
   } else if (AppConstants.MOZ_APP_NAME == "thunderbird") {
     // disabling modal for the time being, see 688273 REMOVEME
-    window.openDialog(
-      "chrome://messenger/content/accountcreation/emailWizard.xul",
+    window.docShell.rootTreeItem.domWindow.openDialog(
+      "chrome://messenger/content/accountcreation/emailWizard.xhtml",
       "AccountSetup",
       "chrome,titlebar,centerscreen,resizable",
       { msgWindow, okCallback, extraData }
     );
   }
+}
+
+/**
+ * Reveal the Folder Pane and Today Pane after a successful account creation
+ * callback.
+ */
+function updateMailPaneUI() {
+  // Nothing to update since no account has been created.
+  if (MailServices.accounts.accounts.length == 0) {
+    return;
+  }
+
+  let mail3Pane = Services.wm.getMostRecentWindow("mail:3pane");
+  // Show the folder pane.
+  mail3Pane.document.getElementById("folderPaneBox").collapsed = false;
+  mail3Pane.document.getElementById("folderpane_splitter").collapsed = false;
 }

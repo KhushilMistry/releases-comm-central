@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -183,8 +183,7 @@ bool nsNewsDatabase::SetHdrReadFlag(nsIMsgDBHdr *msgHdr, bool bRead) {
   return true;
 }
 
-NS_IMETHODIMP nsNewsDatabase::MarkAllRead(uint32_t *aNumMarked,
-                                          nsMsgKey **aThoseMarked) {
+NS_IMETHODIMP nsNewsDatabase::MarkAllRead(nsTArray<nsMsgKey> &aThoseMarked) {
   nsMsgKey lowWater = nsMsgKey_None, highWater;
   nsCString knownArts;
   if (m_dbFolderInfo) {
@@ -197,7 +196,7 @@ NS_IMETHODIMP nsNewsDatabase::MarkAllRead(uint32_t *aNumMarked,
   if (lowWater == nsMsgKey_None) GetLowWaterArticleNum(&lowWater);
   GetHighWaterArticleNum(&highWater);
   if (lowWater > 2) m_readSet->AddRange(1, lowWater - 1);
-  nsresult err = nsMsgDatabase::MarkAllRead(aNumMarked, aThoseMarked);
+  nsresult err = nsMsgDatabase::MarkAllRead(aThoseMarked);
   if (NS_SUCCEEDED(err) && 1 <= highWater)
     m_readSet->AddRange(1, highWater);  // mark everything read in newsrc.
 

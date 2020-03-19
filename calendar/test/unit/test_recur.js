@@ -20,16 +20,21 @@ function really_run_test() {
   test_idchange();
   test_rrule_icalstring();
   test_immutable();
+  test_icalComponent();
 }
 
 function test_rules() {
-  function check_recur(event, expected, ignoreNextOccCheck) {
+  function check_recur(event, expected, endDate, ignoreNextOccCheck) {
     dump("Checking '" + event.getProperty("DESCRIPTION") + "'\n");
+
+    // Immutability is required for testing the recurrenceEndDate property.
+    event.makeImmutable();
+
     // Get recurrence dates
     let start = createDate(1990, 0, 1);
     let end = createDate(2020, 0, 1);
-    let recdates = event.recurrenceInfo.getOccurrenceDates(start, end, 0, {});
-    let occurrences = event.recurrenceInfo.getOccurrences(start, end, 0, {});
+    let recdates = event.recurrenceInfo.getOccurrenceDates(start, end, 0);
+    let occurrences = event.recurrenceInfo.getOccurrences(start, end, 0);
 
     // Check number of items
     dump("Expected " + expected.length + " occurrences\n");
@@ -90,6 +95,11 @@ function test_rules() {
       }
     }
 
+    if (typeof endDate == "string") {
+      endDate = cal.createDateTime(endDate).nativeTime;
+    }
+    equal(event.recurrenceInfo.recurrenceEndDate, endDate);
+
     //  Make sure recurrenceInfo.clone works correctly
     test_clone(event);
   }
@@ -110,7 +120,8 @@ function test_rules() {
       "20020410T114500",
       "20020416T114500",
       "20020417T114500",
-    ]
+    ],
+    "20020417T124500"
   );
 
   check_recur(
@@ -128,7 +139,8 @@ function test_rules() {
       "20020425T114500",
       "20020502T114500",
       "20020509T114500",
-    ]
+    ],
+    "20020509T124500"
   );
 
   // Bug 469840 -  Recurring Sundays incorrect
@@ -146,7 +158,8 @@ function test_rules() {
       "20081231T133000",
       "20090103T133000",
       "20090104T133000",
-    ]
+    ],
+    "20090104T143000"
   );
 
   check_recur(
@@ -163,7 +176,8 @@ function test_rules() {
       "20081231T133000",
       "20090103T133000",
       "20090111T133000",
-    ]
+    ],
+    "20090111T143000"
   );
 
   // bug 353797: occurrences for repeating all day events should stay "all-day"
@@ -174,7 +188,8 @@ function test_rules() {
         "DTSTART;VALUE=DATE:20020404\n" +
         "DTEND;VALUE=DATE:20020405\n"
     ),
-    ["20020404", "20020411", "20020418"]
+    ["20020404", "20020411", "20020418"],
+    "20020419"
   );
 
   /* Test disabled, because BYWEEKNO is known to be broken
@@ -191,7 +206,7 @@ function test_rules() {
       "DESCRIPTION:Every 11th & 31st of every Month\n" +
         "RRULE:FREQ=MONTHLY;COUNT=6;BYMONTHDAY=11,31\n" +
         "DTSTART:20130731T160000\n" +
-        "DTEND:20130731T170000)\n"
+        "DTEND:20130731T170000\n"
     ),
     [
       "20130731T160000",
@@ -200,7 +215,8 @@ function test_rules() {
       "20130911T160000",
       "20131011T160000",
       "20131031T160000",
-    ]
+    ],
+    "20131031T170000"
   );
 
   // bug 899770: Monthly Recurrences with BYDAY and BYMONTHDAY with more than 2 dates are not working
@@ -209,7 +225,7 @@ function test_rules() {
       "DESCRIPTION:Every WE & SA the 6th, 20th & 31st\n" +
         "RRULE:FREQ=MONTHLY;COUNT=6;BYDAY=WE,SA;BYMONTHDAY=6,20,31\n" +
         "DTSTART:20130706T160000\n" +
-        "DTEND:20130706T170000)\n"
+        "DTEND:20130706T170000\n"
     ),
     [
       "20130706T160000",
@@ -218,7 +234,8 @@ function test_rules() {
       "20130831T160000",
       "20131106T160000",
       "20131120T160000",
-    ]
+    ],
+    "20131120T170000"
   );
 
   check_recur(
@@ -228,7 +245,8 @@ function test_rules() {
         "DTSTART:20020402T114500Z\n" +
         "EXDATE:20020403T114500Z\n"
     ),
-    ["20020402T114500Z", "20020404T114500Z"]
+    ["20020402T114500Z", "20020404T114500Z"],
+    "20020404T114500"
   );
 
   // test for issue 734245
@@ -239,7 +257,8 @@ function test_rules() {
         "DTSTART:20020402T114500Z\n" +
         "EXDATE;VALUE=DATE:20020403\n"
     ),
-    ["20020402T114500Z", "20020404T114500Z"]
+    ["20020402T114500Z", "20020404T114500Z"],
+    "20020404T114500"
   );
 
   check_recur(
@@ -249,7 +268,8 @@ function test_rules() {
         "DTSTART:20020402T114500Z\n" +
         "EXDATE:20020402T114500Z\n"
     ),
-    []
+    [],
+    -0x7ffffffffffffdff
   );
 
   check_recur(
@@ -268,6 +288,7 @@ function test_rules() {
         "END:VEVENT\nEND:VCALENDAR\n"
     ),
     ["20020402T114500Z", "20020403T114500Z"],
+    "20020403T114500",
     true
   ); // ignore next occ check, bug 455490
 
@@ -287,6 +308,7 @@ function test_rules() {
         "END:VEVENT\nEND:VCALENDAR\n"
     ),
     ["20020402T114500Z", "20020403T114500Z"],
+    "20020403T114500",
     true /* ignore next occ check, bug 455490 */
   );
 
@@ -306,6 +328,7 @@ function test_rules() {
       "20111215T220000Z",
       "20111216T220000Z",
     ],
+    "20111216T230000",
     false
   );
 
@@ -320,6 +343,7 @@ function test_rules() {
         "END:VEVENT\nEND:VCALENDAR\n"
     ),
     ["20111212T220000Z", "20111213T220000Z", "20111215T220000Z", "20111216T220000Z"],
+    "20111216T230000",
     false
   );
 
@@ -341,6 +365,7 @@ function test_rules() {
       "20180228T220000Z",
       "20190228T220000Z",
     ],
+    "20190228T230000",
     false
   );
 
@@ -362,6 +387,7 @@ function test_rules() {
       "20180430T220000Z",
       "20190430T220000Z",
     ],
+    "20190430T230000",
     false
   );
 
@@ -397,6 +423,7 @@ function test_rules() {
       "20140326T150000Z",
       "20140328T150000Z",
     ],
+    "20140328T160000",
     false
   );
 
@@ -416,6 +443,7 @@ function test_rules() {
         "END:VEVENT\nEND:VCALENDAR\n"
     ),
     expectedDates,
+    "20140131T160000",
     false
   );
 
@@ -440,6 +468,7 @@ function test_rules() {
       "20150121T080000Z",
       "20150123T080000Z",
     ],
+    "20150123T090000",
     false
   );
 
@@ -464,6 +493,7 @@ function test_rules() {
       "20160430T080000Z",
       "20160730T080000Z",
     ],
+    "20160730T090000",
     false
   );
 
@@ -488,6 +518,7 @@ function test_rules() {
       "20171229T080000Z",
       "20180629T080000Z",
     ],
+    "20180629T090000",
     false
   );
 
@@ -512,6 +543,7 @@ function test_rules() {
       "20150701T080000Z",
       "20150713T080000Z",
     ],
+    "20150713T090000",
     false
   );
 
@@ -533,6 +565,7 @@ function test_rules() {
       "20150323T080000Z",
       "20150327T080000Z",
     ],
+    "20150327T090000",
     false
   );
 
@@ -554,6 +587,7 @@ function test_rules() {
       "20150417T080000Z",
       "20150427T080000Z",
     ],
+    "20150427T090000",
     false
   );
 
@@ -575,6 +609,7 @@ function test_rules() {
       "20150425T080000Z",
       "20150427T080000Z",
     ],
+    "20150427T090000",
     false
   );
 
@@ -601,6 +636,7 @@ function test_rules() {
       "20150417T080000Z",
       "20150419T080000Z",
     ],
+    "20150419T090000",
     false
   );
 
@@ -616,6 +652,7 @@ function test_rules() {
         "END:VEVENT\nEND:VCALENDAR\n"
     ),
     ["20160404T080000Z", "20160504T080000Z", "20160604T080000Z", "20160704T080000Z"],
+    "20160704T090000",
     false
   );
 
@@ -638,6 +675,7 @@ function test_rules() {
       "20160831T150000Z",
       "20161031T150000Z",
     ],
+    "20161031T160000",
     false
   );
 
@@ -660,6 +698,7 @@ function test_rules() {
       "20170831T150000Z",
       "20171031T150000Z",
     ],
+    "20171031T160000",
     false
   );
 
@@ -674,7 +713,11 @@ function test_rules() {
   occ1.QueryInterface(Ci.calIEvent);
   occ1.startDate = createDate(2002, 3, 3, true, 12, 0, 0);
   item.recurrenceInfo.modifyException(occ1, true);
-  check_recur(item, ["20020403T114500Z", "20020403T120000Z", "20020404T114500Z"]);
+  check_recur(
+    item,
+    ["20020403T114500Z", "20020403T120000Z", "20020404T114500Z"],
+    "20020404T114500"
+  );
 
   item = makeEvent(
     "DESCRIPTION:occurrence on day 1 moved between the occurrences " +
@@ -687,7 +730,7 @@ function test_rules() {
   occ1.QueryInterface(Ci.calIEvent);
   occ1.startDate = createDate(2002, 3, 3, true, 12, 0, 0);
   item.recurrenceInfo.modifyException(occ1, true);
-  check_recur(item, ["20020403T120000Z", "20020404T114500Z"]);
+  check_recur(item, ["20020403T120000Z", "20020404T114500Z"], "20020404T114500");
 
   item = makeEvent(
     "DESCRIPTION:all occurrences have exceptions\n" +
@@ -702,7 +745,7 @@ function test_rules() {
   occ2.QueryInterface(Ci.calIEvent);
   occ2.startDate = createDate(2002, 3, 3, true, 12, 0, 0);
   item.recurrenceInfo.modifyException(occ2, true);
-  check_recur(item, ["20020402T120000Z", "20020403T120000Z"]);
+  check_recur(item, ["20020402T120000Z", "20020403T120000Z"], "20020403T114500");
 
   item = makeEvent(
     "DESCRIPTION:rdate and exception before the recurrence start date\n" +
@@ -714,7 +757,11 @@ function test_rules() {
   occ1.QueryInterface(Ci.calIEvent);
   occ1.startDate = createDate(2002, 2, 30, true, 11, 45, 0);
   item.recurrenceInfo.modifyException(occ1, true);
-  check_recur(item, ["20020330T114500Z", "20020401T114500Z", "20020403T114500Z"]);
+  check_recur(
+    item,
+    ["20020330T114500Z", "20020401T114500Z", "20020403T114500Z"],
+    "20020403T114500"
+  );
 
   item = makeEvent(
     "DESCRIPTION:bug 734245, an EXDATE of type DATE shall also match a DTSTART of type DATE-TIME\n" +
@@ -722,8 +769,7 @@ function test_rules() {
       "DTSTART:20020401T114500Z\n" +
       "EXDATE;VALUE=DATE:20020402\n"
   );
-
-  check_recur(item, ["20020401T114500Z", "20020403T114500Z"]);
+  check_recur(item, ["20020401T114500Z", "20020403T114500Z"], "20020403T114500");
 
   item = makeEvent(
     "DESCRIPTION:EXDATE with a timezone\n" +
@@ -731,8 +777,7 @@ function test_rules() {
       "DTSTART;TZID=Europe/Berlin:20020401T114500\n" +
       "EXDATE;TZID=Europe/Berlin:20020402T114500\n"
   );
-
-  check_recur(item, ["20020401T114500", "20020403T114500"]);
+  check_recur(item, ["20020401T114500", "20020403T114500"], "20020403T094500");
 }
 
 function test_limit() {
@@ -746,29 +791,29 @@ function test_limit() {
 
   let start = createDate(1990, 0, 1);
   let end = createDate(2020, 0, 1);
-  let recdates = item.recurrenceInfo.getOccurrenceDates(start, end, 0, {});
-  let occurrences = item.recurrenceInfo.getOccurrences(start, end, 0, {});
+  let recdates = item.recurrenceInfo.getOccurrenceDates(start, end, 0);
+  let occurrences = item.recurrenceInfo.getOccurrences(start, end, 0);
 
   equal(recdates.length, 3);
   equal(occurrences.length, 3);
 
-  recdates = item.recurrenceInfo.getOccurrenceDates(start, end, 2, {});
-  occurrences = item.recurrenceInfo.getOccurrences(start, end, 2, {});
+  recdates = item.recurrenceInfo.getOccurrenceDates(start, end, 2);
+  occurrences = item.recurrenceInfo.getOccurrences(start, end, 2);
 
   equal(recdates.length, 2);
   equal(occurrences.length, 2);
 
-  recdates = item.recurrenceInfo.getOccurrenceDates(start, end, 9, {});
-  occurrences = item.recurrenceInfo.getOccurrences(start, end, 9, {});
+  recdates = item.recurrenceInfo.getOccurrenceDates(start, end, 9);
+  occurrences = item.recurrenceInfo.getOccurrences(start, end, 9);
 
   equal(recdates.length, 3);
   equal(occurrences.length, 3);
 }
 
 function test_clone(event) {
-  let oldRecurItems = event.recurrenceInfo.getRecurrenceItems({});
+  let oldRecurItems = event.recurrenceInfo.getRecurrenceItems();
   let cloned = event.recurrenceInfo.clone();
-  let newRecurItems = cloned.getRecurrenceItems({});
+  let newRecurItems = cloned.getRecurrenceItems();
 
   // Check number of recurrence items
   equal(oldRecurItems.length, newRecurItems.length);
@@ -792,7 +837,7 @@ function test_interface() {
   ok(cal.data.compareObjects(rinfo.item, item, Ci.calIEvent));
 
   // getRecurrenceItems
-  let ritems = rinfo.getRecurrenceItems({});
+  let ritems = rinfo.getRecurrenceItems();
   equal(ritems.length, 3);
 
   let checkritems = new Map(
@@ -820,7 +865,7 @@ function test_interface() {
   newRItems[1].isNegative = true;
   newRItems[1].date = cal.createDateTime("20020404T114500Z");
 
-  rinfo.setRecurrenceItems(2, newRItems);
+  rinfo.setRecurrenceItems(newRItems);
   let itemString = item.icalString;
 
   equal(itemString.match(/RRULE:[A-Z=,]*FREQ=WEEKLY/), null);
@@ -905,7 +950,7 @@ function test_interface() {
   ok(rinfo.getExceptionFor(occDate2) != null);
 
   // getExceptionIds
-  let ids = rinfo.getExceptionIds({});
+  let ids = rinfo.getExceptionIds();
   equal(ids.length, 2);
   ok(ids[0].compare(occDate1) == 0);
   ok(ids[1].compare(occDate2) == 0);
@@ -913,7 +958,7 @@ function test_interface() {
   // removeExceptionFor
   rinfo.removeExceptionFor(occDate1);
   ok(rinfo.getExceptionFor(occDate1) == null);
-  equal(rinfo.getExceptionIds({}).length, 1);
+  equal(rinfo.getExceptionIds().length, 1);
 }
 
 function test_rrule_interface() {
@@ -931,10 +976,10 @@ function test_rrule_interface() {
   ok(rrule.isByCount);
   ok(!rrule.isNegative);
   ok(rrule.isFinite);
-  equal(rrule.getComponent("BYDAY", {}).toString(), [3, 4].toString());
+  equal(rrule.getComponent("BYDAY").toString(), [3, 4].toString());
 
   // Now start changing things
-  rrule.setComponent("BYDAY", 2, [4, 5]);
+  rrule.setComponent("BYDAY", [4, 5]);
   equal(rrule.icalString.match(/BYDAY=WE,TH/), "BYDAY=WE,TH");
 
   rrule.count = -1;
@@ -1097,15 +1142,14 @@ function test_failures() {
     rinfo.getOccurrenceDates(
       cal.createDateTime("20120101T010101"),
       cal.createDateTime("20120203T010101"),
-      0,
-      {}
+      0
     ).length,
     0
   );
 }
 
 function test_immutable() {
-  item = createTodoFromIcalString(
+  let item = createTodoFromIcalString(
     "BEGIN:VCALENDAR\r\n" +
       "BEGIN:VTODO\r\n" +
       "RRULE:FREQ=DAILY\r\n" +
@@ -1131,102 +1175,169 @@ function test_rrule_icalstring() {
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "DAILY";
-  recRule.setComponent("BYDAY", 5, [2, 3, 4, 5, 6]);
+  recRule.setComponent("BYDAY", [2, 3, 4, 5, 6]);
   equal(recRule.icalString, "RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR\r\n");
-  deepEqual(recRule.getComponent("BYDAY", {}), [2, 3, 4, 5, 6]);
+  deepEqual(recRule.getComponent("BYDAY"), [2, 3, 4, 5, 6]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "WEEKLY";
   recRule.interval = 3;
-  recRule.setComponent("BYDAY", 3, [2, 4, 6]);
+  recRule.setComponent("BYDAY", [2, 4, 6]);
   equal(recRule.icalString, "RRULE:FREQ=WEEKLY;INTERVAL=3;BYDAY=MO,WE,FR\r\n");
-  deepEqual(recRule.getComponent("BYDAY", {}), [2, 4, 6]);
+  deepEqual(recRule.getComponent("BYDAY"), [2, 4, 6]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "MONTHLY";
-  recRule.setComponent("BYDAY", 7, [2, 3, 4, 5, 6, 7, 1]);
+  recRule.setComponent("BYDAY", [2, 3, 4, 5, 6, 7, 1]);
   equal(recRule.icalString, "RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR,SA,SU\r\n");
-  deepEqual(recRule.getComponent("BYDAY", {}), [2, 3, 4, 5, 6, 7, 1]);
+  deepEqual(recRule.getComponent("BYDAY"), [2, 3, 4, 5, 6, 7, 1]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "MONTHLY";
-  recRule.setComponent("BYDAY", 1, [10]);
+  recRule.setComponent("BYDAY", [10]);
   equal(recRule.icalString, "RRULE:FREQ=MONTHLY;BYDAY=1MO\r\n");
-  deepEqual(recRule.getComponent("BYDAY", {}), [10]);
+  deepEqual(recRule.getComponent("BYDAY"), [10]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "MONTHLY";
-  recRule.setComponent("BYDAY", 1, [20]);
+  recRule.setComponent("BYDAY", [20]);
   equal(recRule.icalString, "RRULE:FREQ=MONTHLY;BYDAY=2WE\r\n");
-  deepEqual(recRule.getComponent("BYDAY", {}), [20]);
+  deepEqual(recRule.getComponent("BYDAY"), [20]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "MONTHLY";
-  recRule.setComponent("BYDAY", 1, [-22]);
+  recRule.setComponent("BYDAY", [-22]);
   equal(recRule.icalString, "RRULE:FREQ=MONTHLY;BYDAY=-2FR\r\n");
-  deepEqual(recRule.getComponent("BYDAY", {}), [-22]);
+  deepEqual(recRule.getComponent("BYDAY"), [-22]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "MONTHLY";
-  recRule.setComponent("BYMONTHDAY", 1, [5]);
+  recRule.setComponent("BYMONTHDAY", [5]);
   equal(recRule.icalString, "RRULE:FREQ=MONTHLY;BYMONTHDAY=5\r\n");
-  deepEqual(recRule.getComponent("BYMONTHDAY", {}), [5]);
+  deepEqual(recRule.getComponent("BYMONTHDAY"), [5]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "MONTHLY";
-  recRule.setComponent("BYMONTHDAY", 3, [1, 9, 17]);
+  recRule.setComponent("BYMONTHDAY", [1, 9, 17]);
   equal(recRule.icalString, "RRULE:FREQ=MONTHLY;BYMONTHDAY=1,9,17\r\n");
-  deepEqual(recRule.getComponent("BYMONTHDAY", {}), [1, 9, 17]);
+  deepEqual(recRule.getComponent("BYMONTHDAY"), [1, 9, 17]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "YEARLY";
-  recRule.setComponent("BYMONTH", 1, [1]);
-  recRule.setComponent("BYMONTHDAY", 1, [3]);
+  recRule.setComponent("BYMONTH", [1]);
+  recRule.setComponent("BYMONTHDAY", [3]);
   ok(
     [
       "RRULE:FREQ=YEARLY;BYMONTHDAY=3;BYMONTH=1\r\n",
       "RRULE:FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=3\r\n",
     ].includes(recRule.icalString)
   );
-  deepEqual(recRule.getComponent("BYMONTH", {}), [1]);
-  deepEqual(recRule.getComponent("BYMONTHDAY", {}), [3]);
+  deepEqual(recRule.getComponent("BYMONTH"), [1]);
+  deepEqual(recRule.getComponent("BYMONTHDAY"), [3]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "YEARLY";
-  recRule.setComponent("BYMONTH", 1, [4]);
-  recRule.setComponent("BYDAY", 1, [3]);
+  recRule.setComponent("BYMONTH", [4]);
+  recRule.setComponent("BYDAY", [3]);
   ok(
     [
       "RRULE:FREQ=YEARLY;BYDAY=TU;BYMONTH=4\r\n",
       "RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=TU\r\n",
     ].includes(recRule.icalString)
   );
-  deepEqual(recRule.getComponent("BYMONTH", {}), [4]);
-  deepEqual(recRule.getComponent("BYDAY", {}), [3]);
+  deepEqual(recRule.getComponent("BYMONTH"), [4]);
+  deepEqual(recRule.getComponent("BYDAY"), [3]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "YEARLY";
-  recRule.setComponent("BYMONTH", 1, [4]);
-  recRule.setComponent("BYDAY", 1, [10]);
+  recRule.setComponent("BYMONTH", [4]);
+  recRule.setComponent("BYDAY", [10]);
   ok(
     [
       "RRULE:FREQ=YEARLY;BYDAY=1MO;BYMONTH=4\r\n",
       "RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1MO\r\n",
     ].includes(recRule.icalString)
   );
-  deepEqual(recRule.getComponent("BYMONTH", {}), [4]);
-  deepEqual(recRule.getComponent("BYDAY", {}), [10]);
+  deepEqual(recRule.getComponent("BYMONTH"), [4]);
+  deepEqual(recRule.getComponent("BYDAY"), [10]);
 
   recRule = cal.createRecurrenceRule();
   recRule.type = "YEARLY";
-  recRule.setComponent("BYMONTH", 1, [4]);
-  recRule.setComponent("BYDAY", 1, [-22]);
+  recRule.setComponent("BYMONTH", [4]);
+  recRule.setComponent("BYDAY", [-22]);
   ok(
     [
       "RRULE:FREQ=YEARLY;BYDAY=-2FR;BYMONTH=4\r\n",
       "RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=-2FR\r\n",
     ].includes(recRule.icalString)
   );
-  deepEqual(recRule.getComponent("BYMONTH", {}), [4]);
-  deepEqual(recRule.getComponent("BYDAY", {}), [-22]);
+  deepEqual(recRule.getComponent("BYMONTH"), [4]);
+  deepEqual(recRule.getComponent("BYDAY"), [-22]);
+}
+
+function test_icalComponent() {
+  let duration = "PT3600S";
+  let eventString =
+    "DESCRIPTION:Repeat every Thursday starting Tue 2nd April 2002\n" +
+    "RRULE:FREQ=WEEKLY;INTERVAL=1;COUNT=6;BYDAY=TH\n" +
+    "DTSTART:20020402T114500\n" +
+    `DURATION:${duration}\n`;
+
+  let firstOccurrenceDate = createDate(2002, 4, 4, true, 11, 45, 0);
+
+  // Test each of these cases from the conditional in the icalComponent getter.
+  // * mIsProxy = true, value === null
+  // * mIsProxy = true, value !== null
+  // * mIsProxy = false, value === null
+  // * mIsProxy = false, value !== null
+  //
+  // Create a proxy for a given occurrence, modify properties on the proxy
+  // (checking before and after), then call the icalComponent getter to see
+  // whether both parent item and proxy item have the correct properties.
+
+  let parent = makeEvent(eventString);
+  let proxy = parent.recurrenceInfo.getOccurrenceFor(firstOccurrenceDate);
+
+  equal(parent.getProperty("DURATION"), duration);
+  equal(proxy.getProperty("DURATION"), duration);
+
+  equal(parent.getProperty("LOCATION"), null);
+  equal(proxy.getProperty("LOCATION"), null);
+
+  let newDuration = "PT2200S";
+  let location = "Sherwood Forest";
+
+  proxy.setProperty("DURATION", newDuration);
+  proxy.setProperty("LOCATION", location);
+
+  equal(parent.getProperty("DURATION"), duration);
+  equal(proxy.getProperty("DURATION"), newDuration);
+
+  equal(parent.getProperty("LOCATION"), null);
+  equal(proxy.getProperty("LOCATION"), location);
+
+  equal(parent.icalComponent.duration.toString(), duration);
+  equal(proxy.icalComponent.duration.toString(), newDuration);
+
+  equal(parent.icalComponent.location, null);
+  equal(proxy.icalComponent.location, location);
+
+  // Test for bug 580896.
+
+  let event = makeEvent(eventString);
+  equal(event.getProperty("DURATION"), duration, "event has correct DURATION");
+
+  let occurrence = event.recurrenceInfo.getOccurrenceFor(firstOccurrenceDate);
+
+  equal(occurrence.getProperty("DURATION"), duration, "occurrence has correct DURATION");
+  equal(Boolean(occurrence.getProperty("DTEND")), true, "occurrence has DTEND");
+
+  ok(!occurrence.icalComponent.duration, "occurrence icalComponent does not have DURATION");
+
+  // Changing the end date causes the duration to be set to null.
+  occurrence.endDate = createDate(2002, 4, 3);
+
+  equal(occurrence.getProperty("DURATION"), null, "occurrence DURATION has been set to null");
+
+  ok(!occurrence.icalComponent.duration, "occurrence icalComponent still does not have DURATION");
 }

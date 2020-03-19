@@ -78,11 +78,19 @@ static void GetCachedName(const nsCString &unparsedString,
 static void UpdateCachedName(nsIMsgDBHdr *aHdr, const char *header_field,
                              const nsAString &newName);
 
-// This is passed into NS_QuickSort as custom data.
+// viewSortInfo is context data passed into the sort comparison functions -
+// FnSortIdUint32 for comparing numeric fields, FnSortIdKey for everything
+// else. If a comparison function finds two elements with equal primary
+// ordering, it'll call SecondaryCompare() to break the deadlock.
+// SecondaryCompare() uses the same comparison functions again, but using the
+// secondary key and potentially with different criteria (eg secondary sort
+// order might be different to primary). The viewSortInfo::isSecondarySort
+// flag lets the comparison function know not to call SecondaryCompare()
+// again (and again and again)...
 class viewSortInfo {
  public:
   nsMsgDBView *view;
-  nsIMsgDatabase *db;
+  nsIMsgDatabase *db;  // Which db to use for collation compares.
   bool isSecondarySort;
   bool ascendingSort;
 };
@@ -233,7 +241,9 @@ nsresult nsMsgDBView::GetPrefLocalizedString(const char *aPrefName,
 }
 
 nsresult nsMsgDBView::AppendKeywordProperties(const nsACString &keywords,
-                                              nsAString &properties) {
+                                              nsAString &properties,
+                                              bool *tagAdded) {
+  *tagAdded = false;
   // Get the top most keyword's CSS selector and append that as a property.
   nsresult rv;
   if (!mTagService) {
@@ -249,6 +259,7 @@ nsresult nsMsgDBView::AppendKeywordProperties(const nsACString &keywords,
   nsString selector;
   rv = mTagService->GetSelectorForKey(topKey, selector);
   if (NS_SUCCEEDED(rv)) {
+    *tagAdded = true;
     properties.Append(' ');
     properties.Append(selector);
   }
@@ -832,6 +843,9 @@ bool nsMsgDBView::IsOutgoingMsg(nsIMsgDBHdr *aHdr) {
 // selection msg problems.
 nsresult nsMsgDBView::SaveAndClearSelection(nsMsgKey *aCurrentMsgKey,
                                             nsTArray<nsMsgKey> &aMsgKeyArray) {
+  // Always return a value in the first parameter.
+  if (aCurrentMsgKey) *aCurrentMsgKey = nsMsgKey_None;
+
   // We don't do anything on nested Save / Restore calls.
   m_saveRestoreSelectionDepth++;
   if (m_saveRestoreSelectionDepth != 1) return NS_OK;
@@ -1215,11 +1229,14 @@ nsMsgDBView::GetRowProperties(int32_t index, nsAString &properties) {
 
   nsCString keywordProperty;
   FetchRowKeywords(index, msgHdr, keywordProperty);
-  if (keywordProperty.IsEmpty()) {
-    properties.AppendLiteral(" untagged");
-  } else {
-    AppendKeywordProperties(keywordProperty, properties);
+  bool tagAdded = false;
+  if (!keywordProperty.IsEmpty()) {
+    AppendKeywordProperties(keywordProperty, properties, &tagAdded);
+  }
+  if (tagAdded) {
     properties.AppendLiteral(" tagged");
+  } else {
+    properties.AppendLiteral(" untagged");
   }
 
   // Give the custom column handlers a chance to style the row.
@@ -1333,11 +1350,14 @@ nsMsgDBView::GetCellProperties(int32_t aRow, nsTreeColumn *col,
 
   nsCString keywords;
   FetchRowKeywords(aRow, msgHdr, keywords);
-  if (keywords.IsEmpty()) {
-    properties.AppendLiteral(" untagged");
-  } else {
-    AppendKeywordProperties(keywords, properties);
+  bool tagAdded = false;
+  if (!keywords.IsEmpty()) {
+    AppendKeywordProperties(keywords, properties, &tagAdded);
+  }
+  if (tagAdded) {
     properties.AppendLiteral(" tagged");
+  } else {
+    properties.AppendLiteral(" untagged");
   }
 
   // This is a double fetch of the keywords property since we also fetch
@@ -2134,7 +2154,7 @@ nsMsgDBView::Open(nsIMsgFolder *folder, nsMsgViewSortTypeValue sortType,
 
     // I'm not sure this is correct, because XF virtual folders with mixed news
     // and mail can have this set.
-    mIsNews = MsgLowerCaseEqualsLiteral(type, "nntp");
+    mIsNews = type.LowerCaseEqualsLiteral("nntp");
 
     // Default to a virtual folder if folder not set, since synthetic search
     // views may not have a folder.
@@ -2142,7 +2162,7 @@ nsMsgDBView::Open(nsIMsgFolder *folder, nsMsgViewSortTypeValue sortType,
     if (folder) folder->GetFlags(&folderFlags);
 
     mIsXFVirtual = folderFlags & nsMsgFolderFlags::Virtual;
-    if (!mIsXFVirtual && MsgLowerCaseEqualsLiteral(type, "rss")) mIsRss = true;
+    if (!mIsXFVirtual && type.LowerCaseEqualsLiteral("rss")) mIsRss = true;
 
     // Special case nntp --> news since we'll break themes if we try to be
     // consistent.
@@ -2946,8 +2966,7 @@ nsresult nsMsgDBView::ApplyCommandToIndices(nsMsgViewCommandTypeValue command,
       case nsMsgViewCommandType::junk:
         return imapFolder->StoreCustomKeywords(
             msgWindow, NS_LITERAL_CSTRING("Junk"),
-            NS_LITERAL_CSTRING("NonJunk"), imapUids.Elements(),
-            imapUids.Length(), nullptr);
+            NS_LITERAL_CSTRING("NonJunk"), imapUids, nullptr);
       case nsMsgViewCommandType::unjunk: {
         nsCOMPtr<nsIMsgDBHdr> msgHdr;
         GetHdrForFirstSelectedMessage(getter_AddRefs(msgHdr));
@@ -2955,14 +2974,12 @@ nsresult nsMsgDBView::ApplyCommandToIndices(nsMsgViewCommandTypeValue command,
         if (msgHdr) msgHdr->GetFlags(&msgFlags);
 
         if (msgFlags & nsMsgMessageFlags::IMAPDeleted)
-          imapFolder->StoreImapFlags(kImapMsgDeletedFlag, false,
-                                     imapUids.Elements(), imapUids.Length(),
+          imapFolder->StoreImapFlags(kImapMsgDeletedFlag, false, imapUids,
                                      nullptr);
 
         return imapFolder->StoreCustomKeywords(
             msgWindow, NS_LITERAL_CSTRING("NonJunk"),
-            NS_LITERAL_CSTRING("Junk"), imapUids.Elements(), imapUids.Length(),
-            nullptr);
+            NS_LITERAL_CSTRING("Junk"), imapUids, nullptr);
       }
       default:
         break;
@@ -2970,8 +2987,7 @@ nsresult nsMsgDBView::ApplyCommandToIndices(nsMsgViewCommandTypeValue command,
 
     // Can't get here without thisIsImapThreadPane == TRUE.
     if (flags != kNoImapMsgFlag) {
-      imapFolder->StoreImapFlags(flags, addFlags, imapUids.Elements(),
-                                 imapUids.Length(), nullptr);
+      imapFolder->StoreImapFlags(flags, addFlags, imapUids, nullptr);
     }
   }
 
@@ -3449,9 +3465,7 @@ nsresult nsMsgDBView::PerformActionsOnJunkMsgs(bool msgsAreJunk) {
         msgHdr->GetMessageKey(&imapUids[i]);
       }
 
-      imapFolder->StoreImapFlags(kImapMsgDeletedFlag, false,
-                                 imapUids.Elements(), imapUids.Length(),
-                                 nullptr);
+      imapFolder->StoreImapFlags(kImapMsgDeletedFlag, false, imapUids, nullptr);
     }
 
     NoteEndChange(nsMsgViewNotificationCode::none, 0, 0);
@@ -3641,14 +3655,14 @@ int nsMsgDBView::FnSortIdKey(const void *pItem1, const void *pItem2,
                              void *privateData) {
   int32_t retVal = 0;
 
-  IdKey **p1 = (IdKey **)pItem1;
-  IdKey **p2 = (IdKey **)pItem2;
+  const IdKey *p1 = *((const IdKey **)pItem1);
+  const IdKey *p2 = *((const IdKey **)pItem2);
   viewSortInfo *sortInfo = (viewSortInfo *)privateData;
 
   nsIMsgDatabase *db = sortInfo->db;
 
-  mozilla::DebugOnly<nsresult> rv = db->CompareCollationKeys(
-      (*p1)->dword, (*p1)->key, (*p2)->dword, (*p2)->key, &retVal);
+  mozilla::DebugOnly<nsresult> rv =
+      db->CompareCollationKeys(p1->key, p2->key, &retVal);
   NS_ASSERTION(NS_SUCCEEDED(rv), "compare failed");
 
   if (retVal) return sortInfo->ascendingSort ? retVal : -retVal;
@@ -3656,59 +3670,32 @@ int nsMsgDBView::FnSortIdKey(const void *pItem1, const void *pItem2,
   // clang-format off
   if (sortInfo->view->m_secondarySort == nsMsgViewSortType::byId)
     return (sortInfo->view->m_secondarySortOrder == nsMsgViewSortOrder::ascending &&
-            (*p1)->id >= (*p2)->id) ? 1 : -1;
+            p1->id >= p2->id) ? 1 : -1;
   // clang-format on
   else
-    return sortInfo->view->SecondarySort((*p1)->id, (*p1)->folder, (*p2)->id,
-                                         (*p2)->folder, sortInfo);
-  // Here we'd use the secondary sort.
-}
-
-int nsMsgDBView::FnSortIdKeyPtr(const void *pItem1, const void *pItem2,
-                                void *privateData) {
-  int32_t retVal = 0;
-
-  IdKeyPtr **p1 = (IdKeyPtr **)pItem1;
-  IdKeyPtr **p2 = (IdKeyPtr **)pItem2;
-  viewSortInfo *sortInfo = (viewSortInfo *)privateData;
-
-  nsIMsgDatabase *db = sortInfo->db;
-
-  mozilla::DebugOnly<nsresult> rv = db->CompareCollationKeys(
-      (*p1)->dword, (*p1)->key, (*p2)->dword, (*p2)->key, &retVal);
-  NS_ASSERTION(NS_SUCCEEDED(rv), "compare failed");
-
-  if (retVal) return sortInfo->ascendingSort ? retVal : -retVal;
-
-  // clang-format off
-  if (sortInfo->view->m_secondarySort == nsMsgViewSortType::byId)
-    return (sortInfo->view->m_secondarySortOrder == nsMsgViewSortOrder::ascending &&
-            (*p1)->id >= (*p2)->id) ? 1 : -1;
-  // clang-format on
-  else
-    return sortInfo->view->SecondarySort((*p1)->id, (*p1)->folder, (*p2)->id,
-                                         (*p2)->folder, sortInfo);
+    return sortInfo->view->SecondaryCompare(p1->id, p1->folder, p2->id,
+                                            p2->folder, sortInfo);
 }
 
 int nsMsgDBView::FnSortIdUint32(const void *pItem1, const void *pItem2,
                                 void *privateData) {
-  IdUint32 **p1 = (IdUint32 **)pItem1;
-  IdUint32 **p2 = (IdUint32 **)pItem2;
+  const IdUint32 *p1 = *((const IdUint32 **)pItem1);
+  const IdUint32 *p2 = *((const IdUint32 **)pItem2);
   viewSortInfo *sortInfo = (viewSortInfo *)privateData;
 
-  if ((*p1)->dword > (*p2)->dword)
+  if (p1->dword > p2->dword)
     return (sortInfo->ascendingSort) ? 1 : -1;
-  else if ((*p1)->dword < (*p2)->dword)
+  else if (p1->dword < p2->dword)
     return (sortInfo->ascendingSort) ? -1 : 1;
 
   // clang-format off
   if (sortInfo->view->m_secondarySort == nsMsgViewSortType::byId)
     return (sortInfo->view->m_secondarySortOrder == nsMsgViewSortOrder::ascending &&
-            (*p1)->id >= (*p2)->id) ? 1 : -1;
+            p1->id >= p2->id) ? 1 : -1;
   // clang-format on
   else
-    return sortInfo->view->SecondarySort((*p1)->id, (*p1)->folder, (*p2)->id,
-                                         (*p2)->folder, sortInfo);
+    return sortInfo->view->SecondaryCompare(p1->id, p1->folder, p2->id,
+                                            p2->folder, sortInfo);
 }
 
 // XXX are these still correct?
@@ -4018,8 +4005,7 @@ void nsMsgDBView::PushSort(const MsgViewSortColumnInfo &newSort) {
 
   // byId is a unique key (misnamed as Order Received). If we are sorting byId,
   // we don't need to keep any secondary sort keys.
-  if (newSort.mSortType == nsMsgViewSortType::byId)
-    m_sortColumns.Clear();
+  if (newSort.mSortType == nsMsgViewSortType::byId) m_sortColumns.Clear();
 
   m_sortColumns.RemoveElement(newSort);
   m_sortColumns.InsertElementAt(0, newSort);
@@ -4029,18 +4015,17 @@ void nsMsgDBView::PushSort(const MsgViewSortColumnInfo &newSort) {
 
 nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
                                       nsMsgViewSortTypeValue sortType,
-                                      uint8_t **result, uint32_t *len,
+                                      nsTArray<uint8_t> &result,
                                       nsIMsgCustomColumnHandler *colHandler) {
   nsresult rv = NS_ERROR_UNEXPECTED;
   NS_ENSURE_ARG_POINTER(msgHdr);
-  NS_ENSURE_ARG_POINTER(result);
 
   switch (sortType) {
     case nsMsgViewSortType::bySubject:
-      rv = msgHdr->GetSubjectCollationKey(len, result);
+      rv = msgHdr->GetSubjectCollationKey(result);
       break;
     case nsMsgViewSortType::byLocation:
-      rv = GetLocationCollationKey(msgHdr, result, len);
+      rv = GetLocationCollationKey(msgHdr, result);
       break;
     case nsMsgViewSortType::byRecipient: {
       nsString recipients;
@@ -4052,13 +4037,12 @@ nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
           rv = GetDBForHeader(msgHdr, getter_AddRefs(dbToUse));
           NS_ENSURE_SUCCESS(rv, rv);
         }
-
-        rv = dbToUse->CreateCollationKey(recipients, len, result);
+        rv = dbToUse->CreateCollationKey(recipients, result);
       }
       break;
     }
     case nsMsgViewSortType::byAuthor: {
-      rv = msgHdr->GetAuthorCollationKey(len, result);
+      rv = msgHdr->GetAuthorCollationKey(result);
       nsString author;
       rv = FetchAuthor(msgHdr, author);
       if (NS_SUCCEEDED(rv)) {
@@ -4069,7 +4053,7 @@ nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
           NS_ENSURE_SUCCESS(rv, rv);
         }
 
-        rv = dbToUse->CreateCollationKey(author, len, result);
+        rv = dbToUse->CreateCollationKey(author, result);
       }
       break;
     }
@@ -4086,7 +4070,7 @@ nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
                ? FetchAccount(msgHdr, str)
                : FetchTags(msgHdr, str);
       if (NS_SUCCEEDED(rv) && dbToUse)
-        rv = dbToUse->CreateCollationKey(str, len, result);
+        rv = dbToUse->CreateCollationKey(str, result);
 
       break;
     }
@@ -4104,7 +4088,7 @@ nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
           rv = GetDBForHeader(msgHdr, getter_AddRefs(dbToUse));
           NS_ENSURE_SUCCESS(rv, rv);
         }
-        rv = dbToUse->CreateCollationKey(strKey, len, result);
+        rv = dbToUse->CreateCollationKey(strKey, result);
       } else {
         NS_ERROR(
             "should not be here (Sort Type: byCustom (String), but no custom "
@@ -4127,7 +4111,7 @@ nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
           NS_ENSURE_SUCCESS(rv, rv);
         }
 
-        rv = dbToUse->CreateCollationKey(value, len, result);
+        rv = dbToUse->CreateCollationKey(value, result);
       }
       break;
     }
@@ -4140,8 +4124,7 @@ nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
   // a bad state. Try to continue on, instead.
   NS_ASSERTION(NS_SUCCEEDED(rv), "failed to get the collation key");
   if (NS_FAILED(rv)) {
-    *result = nullptr;
-    *len = 0;
+    result.Clear();
   }
 
   return NS_OK;
@@ -4150,7 +4133,7 @@ nsresult nsMsgDBView::GetCollationKey(nsIMsgDBHdr *msgHdr,
 // As the location collation key is created getting folder from the msgHdr,
 // it is defined in this file and not from the db.
 nsresult nsMsgDBView::GetLocationCollationKey(nsIMsgDBHdr *msgHdr,
-                                              uint8_t **result, uint32_t *len) {
+                                              nsTArray<uint8_t> &result) {
   nsCOMPtr<nsIMsgFolder> folder;
 
   nsresult rv = msgHdr->GetFolder(getter_AddRefs(folder));
@@ -4163,7 +4146,7 @@ nsresult nsMsgDBView::GetLocationCollationKey(nsIMsgDBHdr *msgHdr,
   rv = folder->GetPrettyName(locationString);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  return dbToUse->CreateCollationKey(locationString, len, result);
+  return dbToUse->CreateCollationKey(locationString, result);
 }
 
 nsresult nsMsgDBView::SaveSortInfo(nsMsgViewSortTypeValue sortType,
@@ -4232,24 +4215,19 @@ void nsMsgDBView::EnsureCustomColumnsValid() {
   }
 }
 
-int32_t nsMsgDBView::SecondarySort(nsMsgKey key1, nsISupports *supports1,
-                                   nsMsgKey key2, nsISupports *supports2,
-                                   viewSortInfo *comparisonContext) {
+int32_t nsMsgDBView::SecondaryCompare(nsMsgKey key1, nsIMsgFolder *folder1,
+                                      nsMsgKey key2, nsIMsgFolder *folder2,
+                                      viewSortInfo *comparisonContext) {
   // We need to make sure that in the case of the secondary sort field also
   // matching, we don't recurse.
   if (comparisonContext->isSecondarySort) return key1 > key2;
 
-  nsCOMPtr<nsIMsgFolder> folder1, folder2;
   nsCOMPtr<nsIMsgDBHdr> hdr1, hdr2;
-  folder1 = do_QueryInterface(supports1);
-  folder2 = do_QueryInterface(supports2);
   nsresult rv = folder1->GetMessageHeader(key1, getter_AddRefs(hdr1));
   NS_ENSURE_SUCCESS(rv, 0);
   rv = folder2->GetMessageHeader(key2, getter_AddRefs(hdr2));
   NS_ENSURE_SUCCESS(rv, 0);
-  IdKeyPtr EntryInfo1, EntryInfo2;
-  EntryInfo1.key = nullptr;
-  EntryInfo2.key = nullptr;
+  IdKey EntryInfo1, EntryInfo2;
 
   uint16_t maxLen;
   eFieldType fieldType;
@@ -4272,55 +4250,36 @@ int32_t nsMsgDBView::SecondarySort(nsMsgKey key1, nsISupports *supports1,
   rv = GetFieldTypeAndLenForSort(sortType, &maxLen, &fieldType, colHandler);
   NS_ENSURE_SUCCESS(rv, 0);
 
-  const void *pValue1 = &EntryInfo1, *pValue2 = &EntryInfo2;
-
-  int (*comparisonFun)(const void *pItem1, const void *pItem2,
-                       void *privateData) = nullptr;
-  int retStatus = 0;
   hdr1->GetMessageKey(&EntryInfo1.id);
   hdr2->GetMessageKey(&EntryInfo2.id);
 
+  // Set up new viewSortInfo data for our secondary comparison.
+  viewSortInfo ctx = *comparisonContext;
+  ctx.isSecondarySort = true;  // To avoid recursing back here!
+  ctx.ascendingSort = (sortOrder == nsMsgViewSortOrder::ascending);
+
+  // The comparison functions expect to be sorting pointers to entries.
+  const void *pValue1 = &EntryInfo1, *pValue2 = &EntryInfo2;
+
   switch (fieldType) {
     case kCollationKey:
-      rv = GetCollationKey(hdr1, sortType, &EntryInfo1.key, &EntryInfo1.dword,
-                           colHandler);
+      rv = GetCollationKey(hdr1, sortType, EntryInfo1.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
-      comparisonFun = FnSortIdKeyPtr;
-      break;
+      rv = GetCollationKey(hdr2, sortType, EntryInfo2.key, colHandler);
+      NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
+      return FnSortIdKey(&pValue1, &pValue2, &ctx);
     case kU32:
-      if (sortType == nsMsgViewSortType::byId)
+      if (sortType == nsMsgViewSortType::byId) {
         EntryInfo1.dword = EntryInfo1.id;
-      else
+        EntryInfo2.dword = EntryInfo2.id;
+      } else {
         GetLongField(hdr1, sortType, &EntryInfo1.dword, colHandler);
-
-      comparisonFun = FnSortIdUint32;
-      break;
+        GetLongField(hdr2, sortType, &EntryInfo2.dword, colHandler);
+      }
+      return FnSortIdUint32(&pValue1, &pValue2, &ctx);
     default:
       return 0;
   }
-
-  bool saveAscendingSort = comparisonContext->ascendingSort;
-  comparisonContext->isSecondarySort = true;
-  comparisonContext->ascendingSort =
-      (sortOrder == nsMsgViewSortOrder::ascending);
-  if (fieldType == kCollationKey) {
-    PR_FREEIF(EntryInfo2.key);
-    rv = GetCollationKey(hdr2, sortType, &EntryInfo2.key, &EntryInfo2.dword,
-                         colHandler);
-    NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
-  } else if (fieldType == kU32) {
-    if (sortType == nsMsgViewSortType::byId)
-      EntryInfo2.dword = EntryInfo2.id;
-    else
-      GetLongField(hdr2, sortType, &EntryInfo2.dword, colHandler);
-  }
-
-  retStatus = (*comparisonFun)(&pValue1, &pValue2, comparisonContext);
-
-  comparisonContext->isSecondarySort = false;
-  comparisonContext->ascendingSort = saveAscendingSort;
-
-  return retStatus;
 }
 
 NS_IMETHODIMP nsMsgDBView::Sort(nsMsgViewSortTypeValue sortType,
@@ -4412,166 +4371,96 @@ NS_IMETHODIMP nsMsgDBView::Sort(nsMsgViewSortTypeValue sortType,
   if (!arraySize) return NS_OK;
 
   nsCOMArray<nsIMsgFolder> *folders = GetFolders();
-
-  IdKey **pPtrBase = (IdKey **)PR_Malloc(arraySize * sizeof(IdKey *));
-  NS_ASSERTION(pPtrBase, "out of memory, can't sort");
-  if (!pPtrBase) return NS_ERROR_OUT_OF_MEMORY;
-
-  // Remember this pointer so we can free it later.
-  ptrs.AppendElement((void *)pPtrBase);
-
-  // Build up the beast, so we can sort it.
-  uint32_t numSoFar = 0;
-  const uint32_t keyOffset = offsetof(IdKey, key);
-  // Calc max possible size needed for all the rest.
-  uint32_t maxSize = (keyOffset + maxLen) * (arraySize - numSoFar);
-
-  const uint32_t maxBlockSize = (uint32_t)0xf000L;
-  uint32_t allocSize = std::min(maxBlockSize, maxSize);
-  char *pTemp = (char *)PR_Malloc(allocSize);
-  NS_ASSERTION(pTemp, "out of memory, can't sort");
-  if (!pTemp) {
-    FreeAll(&ptrs);
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
-
-  // Remember this pointer so we can free it later.
-  ptrs.AppendElement(pTemp);
-
-  char *pBase = pTemp;
-  bool more = true;
-
-  nsCOMPtr<nsIMsgDBHdr> msgHdr;
-  uint8_t *keyValue = nullptr;
-  uint32_t longValue;
-  while (more && numSoFar < arraySize) {
-    nsMsgKey thisKey = m_keys[numSoFar];
-    if (sortType != nsMsgViewSortType::byId) {
-      rv = GetMsgHdrForViewIndex(numSoFar, getter_AddRefs(msgHdr));
-      NS_ASSERTION(NS_SUCCEEDED(rv) && msgHdr, "header not found");
-      if (NS_FAILED(rv) || !msgHdr) {
-        FreeAll(&ptrs);
-        return NS_ERROR_UNEXPECTED;
-      }
-    } else {
-      msgHdr = nullptr;
-    }
-
-    // Could be a problem here if the ones that appear here are different than
-    // the ones already in the array.
-    uint32_t actualFieldLen = 0;
-
-    if (fieldType == kCollationKey) {
-      rv = GetCollationKey(msgHdr, sortType, &keyValue, &actualFieldLen,
-                           colHandler);
-      NS_ENSURE_SUCCESS(rv, rv);
-
-      longValue = actualFieldLen;
-    } else {
-      if (sortType == nsMsgViewSortType::byId) {
-        longValue = thisKey;
-      } else {
-        rv = GetLongField(msgHdr, sortType, &longValue, colHandler);
-        NS_ENSURE_SUCCESS(rv, rv);
-      }
-    }
-
-    // Check to see if this entry fits into the block we have allocated so far.
-    // pTemp - pBase = the space we have used so far.
-    // sizeof(EntryInfo) + fieldLen = space we need for this entry.
-    // allocSize = size of the current block.
-    if ((uint32_t)(pTemp - pBase) + (keyOffset + actualFieldLen) >= allocSize) {
-      maxSize = (keyOffset + maxLen) * (arraySize - numSoFar);
-      allocSize = std::min(maxBlockSize, maxSize);
-      // Make sure allocSize is big enough for the current value.
-      allocSize = std::max(allocSize, keyOffset + actualFieldLen);
-      pTemp = (char *)PR_Malloc(allocSize);
-      NS_ASSERTION(pTemp, "out of memory, can't sort");
-      if (!pTemp) {
-        FreeAll(&ptrs);
-        return NS_ERROR_OUT_OF_MEMORY;
-      }
-      pBase = pTemp;
-      // Remember this pointer so we can free it later.
-      ptrs.AppendElement(pTemp);
-    }
-
-    // Now store this entry away in the allocated memory.
-    IdKey *info = (IdKey *)pTemp;
-    pPtrBase[numSoFar] = info;
-    info->id = thisKey;
-    info->bits = m_flags[numSoFar];
-    info->dword = longValue;
-    // info->pad = 0;
-    info->folder = folders ? folders->ObjectAt(numSoFar) : m_folder.get();
-
-    memcpy(info->key, keyValue, actualFieldLen);
-    // In order to align memory for systems that require it, such as HP-UX,
-    // calculate the correct value to pad the actualFieldLen value.
-    const uint32_t align = sizeof(IdKey) - sizeof(IdUint32) - 1;
-    actualFieldLen = (actualFieldLen + align) & ~align;
-
-    pTemp += keyOffset + actualFieldLen;
-    ++numSoFar;
-    PR_Free(keyValue);
+  nsCOMPtr<nsIMsgDatabase> dbToUse = m_db;
+  // Probably a search view.
+  if (!dbToUse) {
+    GetDBForViewIndex(0, getter_AddRefs(dbToUse));
+    if (!dbToUse) return NS_ERROR_FAILURE;
   }
 
   viewSortInfo qsPrivateData;
   qsPrivateData.view = this;
   qsPrivateData.isSecondarySort = false;
   qsPrivateData.ascendingSort = (sortOrder == nsMsgViewSortOrder::ascending);
-
-  nsCOMPtr<nsIMsgDatabase> dbToUse = m_db;
-
-  // Probably a search view.
-  if (!dbToUse) GetDBForViewIndex(0, getter_AddRefs(dbToUse));
-
   qsPrivateData.db = dbToUse;
-  if (dbToUse) {
-    // Do the sort.
-    switch (fieldType) {
-      case kCollationKey:
-        NS_QuickSort(pPtrBase, numSoFar, sizeof(IdKey *), FnSortIdKey,
-                     &qsPrivateData);
-        break;
-      case kU32:
-        NS_QuickSort(pPtrBase, numSoFar, sizeof(IdKey *), FnSortIdUint32,
-                     &qsPrivateData);
-        break;
-      default:
-        NS_ERROR("not supposed to get here");
-        break;
+
+  switch (fieldType) {
+    case kCollationKey: {
+      // Sort on a non-numeric field. We'll be calculating a collation key for
+      // each message.
+      nsTArray<IdKey> entries;
+      entries.SetLength(arraySize);
+      nsTArray<IdKey *> pPtrBase;
+      pPtrBase.SetLength(arraySize);
+      for (uint32_t i = 0; i < arraySize; ++i) {
+        IdKey *info = &entries[i];
+        pPtrBase[i] = info;
+        info->id = m_keys[i];
+        info->bits = m_flags[i];
+        info->dword = 0;
+        info->folder = folders ? folders->ObjectAt(i) : m_folder.get();
+        nsCOMPtr<nsIMsgDBHdr> msgHdr;
+        rv = GetMsgHdrForViewIndex(i, getter_AddRefs(msgHdr));
+        NS_ASSERTION(NS_SUCCEEDED(rv) && msgHdr, "header not found");
+        NS_ENSURE_SUCCESS(rv, rv);
+        rv = GetCollationKey(msgHdr, sortType, info->key, colHandler);
+        NS_ENSURE_SUCCESS(rv, rv);
+      }
+      // Perform the sort.
+      NS_QuickSort(pPtrBase.Elements(), pPtrBase.Length(), sizeof(IdKey *),
+                   FnSortIdKey, &qsPrivateData);
+      // Now update the view state to reflect the new order.
+      for (uint32_t i = 0; i < arraySize; ++i) {
+        m_keys[i] = pPtrBase[i]->id;
+        m_flags[i] = pPtrBase[i]->bits;
+        if (folders) folders->ReplaceObjectAt(pPtrBase[i]->folder, i);
+      }
+      m_sortType = sortType;
+      m_sortOrder = sortOrder;
+      m_sortValid = true;
+      return NS_OK;
     }
+    case kU32: {
+      // Sort on a numeric field.
+      nsTArray<IdUint32> entries;
+      entries.SetLength(arraySize);
+      nsTArray<IdUint32 *> pPtrBase;
+      pPtrBase.SetLength(arraySize);
+      for (uint32_t i = 0; i < arraySize; ++i) {
+        IdUint32 *info = &entries[i];
+        pPtrBase[i] = info;
+        info->id = m_keys[i];
+        info->bits = m_flags[i];
+        info->folder = folders ? folders->ObjectAt(i) : m_folder.get();
+        if (sortType == nsMsgViewSortType::byId) {
+          info->dword = info->id;  // No msgHdr required.
+        } else {
+          nsCOMPtr<nsIMsgDBHdr> msgHdr;
+          rv = GetMsgHdrForViewIndex(i, getter_AddRefs(msgHdr));
+          NS_ASSERTION(NS_SUCCEEDED(rv) && msgHdr, "header not found");
+          NS_ENSURE_SUCCESS(rv, rv);
+          rv = GetLongField(msgHdr, sortType, &info->dword, colHandler);
+          NS_ENSURE_SUCCESS(rv, rv);
+        }
+      }
+      // Perform the sort.
+      NS_QuickSort(pPtrBase.Elements(), pPtrBase.Length(), sizeof(IdUint32 *),
+                   FnSortIdUint32, &qsPrivateData);
+      // Now update the view state to reflect the new order.
+      for (uint32_t i = 0; i < arraySize; ++i) {
+        m_keys[i] = pPtrBase[i]->id;
+        m_flags[i] = pPtrBase[i]->bits;
+        if (folders) folders->ReplaceObjectAt(pPtrBase[i]->folder, i);
+      }
+      m_sortType = sortType;
+      m_sortOrder = sortOrder;
+      m_sortValid = true;
+      return NS_OK;
+    }
+    default:
+      // If we get this far, we've got a bad fieldType.
+      return NS_ERROR_UNEXPECTED;
   }
-
-  // Now put the IDs into the array in proper order.
-  for (uint32_t i = 0; i < numSoFar; i++) {
-    m_keys[i] = pPtrBase[i]->id;
-    m_flags[i] = pPtrBase[i]->bits;
-
-    if (folders) folders->ReplaceObjectAt(pPtrBase[i]->folder, i);
-  }
-
-  m_sortType = sortType;
-  m_sortOrder = sortOrder;
-
-  // Free all the memory we allocated.
-  FreeAll(&ptrs);
-
-  m_sortValid = true;
-  // m_db->SetSortInfo(sortType, sortOrder);
-
-  return NS_OK;
-}
-
-void nsMsgDBView::FreeAll(nsTArray<void *> *ptrs) {
-  int32_t i;
-  int32_t count = (int32_t)ptrs->Length();
-  if (count == 0) return;
-
-  for (i = (count - 1); i >= 0; i--) PR_Free((void *)ptrs->ElementAt(i));
-
-  ptrs->Clear();
 }
 
 nsMsgViewIndex nsMsgDBView::GetIndexOfFirstDisplayedKeyInThread(
@@ -5071,9 +4960,7 @@ nsMsgViewIndex nsMsgDBView::GetIndexForThread(nsIMsgDBHdr *msgHdr) {
 
   nsMsgViewIndex highIndex = m_keys.Length();
   nsMsgViewIndex lowIndex = 0;
-  IdKeyPtr EntryInfo1, EntryInfo2;
-  EntryInfo1.key = nullptr;
-  EntryInfo2.key = nullptr;
+  IdKey EntryInfo1, EntryInfo2;
 
   nsresult rv;
   uint16_t maxLen;
@@ -5091,8 +4978,6 @@ nsMsgViewIndex nsMsgDBView::GetIndexForThread(nsIMsgDBHdr *msgHdr) {
   rv = GetFieldTypeAndLenForSort(m_sortType, &maxLen, &fieldType, colHandler);
   NS_ENSURE_SUCCESS(rv, highIndex);
 
-  const void *pValue1 = &EntryInfo1, *pValue2 = &EntryInfo2;
-
   int retStatus = 0;
   msgHdr->GetMessageKey(&EntryInfo1.id);
   msgHdr->GetFolder(&EntryInfo1.folder);
@@ -5108,8 +4993,7 @@ nsMsgViewIndex nsMsgDBView::GetIndexForThread(nsIMsgDBHdr *msgHdr) {
   comparisonContext.db = hdrDB.get();
   switch (fieldType) {
     case kCollationKey:
-      rv = GetCollationKey(msgHdr, m_sortType, &EntryInfo1.key,
-                           &EntryInfo1.dword, colHandler);
+      rv = GetCollationKey(msgHdr, m_sortType, EntryInfo1.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
       break;
     case kU32:
@@ -5151,12 +5035,11 @@ nsMsgViewIndex nsMsgDBView::GetIndexForThread(nsIMsgDBHdr *msgHdr) {
       break;
     }
 
+    const void *pValue1 = &EntryInfo1, *pValue2 = &EntryInfo2;
     if (fieldType == kCollationKey) {
-      PR_FREEIF(EntryInfo2.key);
-      rv = GetCollationKey(tryHdr, m_sortType, &EntryInfo2.key,
-                           &EntryInfo2.dword, colHandler);
+      rv = GetCollationKey(tryHdr, m_sortType, EntryInfo2.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
-      retStatus = FnSortIdKeyPtr(&pValue1, &pValue2, &comparisonContext);
+      retStatus = FnSortIdKey(&pValue1, &pValue2, &comparisonContext);
     } else if (fieldType == kU32) {
       if (m_sortType == nsMsgViewSortType::byId)
         EntryInfo2.dword = EntryInfo2.id;
@@ -5180,8 +5063,6 @@ nsMsgViewIndex nsMsgDBView::GetIndexForThread(nsIMsgDBHdr *msgHdr) {
     }
   }
 
-  PR_Free(EntryInfo1.key);
-  PR_Free(EntryInfo2.key);
   return highIndex;
 }
 
@@ -5191,9 +5072,7 @@ nsMsgViewIndex nsMsgDBView::GetInsertIndexHelper(
     nsMsgViewSortTypeValue sortType) {
   nsMsgViewIndex highIndex = keys.Length();
   nsMsgViewIndex lowIndex = 0;
-  IdKeyPtr EntryInfo1, EntryInfo2;
-  EntryInfo1.key = nullptr;
-  EntryInfo2.key = nullptr;
+  IdKey EntryInfo1, EntryInfo2;
 
   nsresult rv;
   uint16_t maxLen;
@@ -5231,10 +5110,9 @@ nsMsgViewIndex nsMsgDBView::GetInsertIndexHelper(
 
   switch (fieldType) {
     case kCollationKey:
-      rv = GetCollationKey(msgHdr, sortType, &EntryInfo1.key, &EntryInfo1.dword,
-                           colHandler);
+      rv = GetCollationKey(msgHdr, sortType, EntryInfo1.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
-      comparisonFun = FnSortIdKeyPtr;
+      comparisonFun = FnSortIdKey;
       break;
     case kU32:
       if (sortType == nsMsgViewSortType::byId)
@@ -5258,9 +5136,7 @@ nsMsgViewIndex nsMsgDBView::GetInsertIndexHelper(
     if (!tryHdr) break;
 
     if (fieldType == kCollationKey) {
-      PR_FREEIF(EntryInfo2.key);
-      rv = GetCollationKey(tryHdr, sortType, &EntryInfo2.key, &EntryInfo2.dword,
-                           colHandler);
+      rv = GetCollationKey(tryHdr, sortType, EntryInfo2.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
     } else if (fieldType == kU32) {
       if (sortType == nsMsgViewSortType::byId) {
@@ -5283,8 +5159,6 @@ nsMsgViewIndex nsMsgDBView::GetInsertIndexHelper(
     }
   }
 
-  PR_Free(EntryInfo1.key);
-  PR_Free(EntryInfo2.key);
   return highIndex;
 }
 
@@ -5654,9 +5528,7 @@ nsMsgViewIndex nsMsgDBView::GetThreadRootIndex(nsIMsgDBHdr *msgHdr) {
 
   nsMsgViewIndex highIndex = m_keys.Length();
   nsMsgViewIndex lowIndex = 0;
-  IdKeyPtr EntryInfo1, EntryInfo2;
-  EntryInfo1.key = nullptr;
-  EntryInfo2.key = nullptr;
+  IdKey EntryInfo1, EntryInfo2;
 
   nsresult rv;
   uint16_t maxLen;
@@ -5692,8 +5564,7 @@ nsMsgViewIndex nsMsgDBView::GetThreadRootIndex(nsIMsgDBHdr *msgHdr) {
 
   switch (fieldType) {
     case kCollationKey:
-      rv = GetCollationKey(msgHdr, m_sortType, &EntryInfo1.key,
-                           &EntryInfo1.dword, colHandler);
+      rv = GetCollationKey(msgHdr, m_sortType, EntryInfo1.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
       break;
     case kU32:
@@ -5735,11 +5606,9 @@ nsMsgViewIndex nsMsgDBView::GetThreadRootIndex(nsIMsgDBHdr *msgHdr) {
     }
 
     if (fieldType == kCollationKey) {
-      PR_FREEIF(EntryInfo2.key);
-      rv = GetCollationKey(tryHdr, m_sortType, &EntryInfo2.key,
-                           &EntryInfo2.dword, colHandler);
+      rv = GetCollationKey(tryHdr, m_sortType, EntryInfo2.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
-      retStatus = FnSortIdKeyPtr(&pValue1, &pValue2, &comparisonContext);
+      retStatus = FnSortIdKey(&pValue1, &pValue2, &comparisonContext);
     } else if (fieldType == kU32) {
       if (m_sortType == nsMsgViewSortType::byId)
         EntryInfo2.dword = EntryInfo2.id;
@@ -5779,16 +5648,12 @@ nsMsgViewIndex nsMsgDBView::GetThreadRootIndex(nsIMsgDBHdr *msgHdr) {
     return highIndex;
   }
 
-  PR_Free(EntryInfo1.key);
-  PR_Free(EntryInfo2.key);
   return msgHdr == resultHdr ? highIndex : nsMsgViewIndex_None;
 }
 
 #ifdef DEBUG_David_Bienvenu
 
-void nsMsgDBView::InitEntryInfoForIndex(nsMsgViewIndex i, IdKeyPtr &EntryInfo) {
-  EntryInfo.key = nullptr;
-
+void nsMsgDBView::InitEntryInfoForIndex(nsMsgViewIndex i, IdKey &EntryInfo) {
   nsresult rv;
   uint16_t maxLen;
   eFieldType fieldType;
@@ -5813,9 +5678,7 @@ void nsMsgDBView::InitEntryInfoForIndex(nsMsgViewIndex i, IdKeyPtr &EntryInfo) {
   EntryInfo.folder->GetMsgDatabase(getter_AddRefs(hdrDB));
   switch (fieldType) {
     case kCollationKey:
-      PR_FREEIF(EntryInfo.key);
-      rv = GetCollationKey(msgHdr, m_sortType, &EntryInfo.key, &EntryInfo.dword,
-                           colHandler);
+      rv = GetCollationKey(msgHdr, m_sortType, EntryInfo.key, colHandler);
       NS_ASSERTION(NS_SUCCEEDED(rv), "failed to create collation key");
       break;
     case kU32:
@@ -5831,7 +5694,7 @@ void nsMsgDBView::InitEntryInfoForIndex(nsMsgViewIndex i, IdKeyPtr &EntryInfo) {
 }
 
 void nsMsgDBView::ValidateSort() {
-  IdKeyPtr EntryInfo1, EntryInfo2;
+  IdKey EntryInfo1, EntryInfo2;
   nsCOMPtr<nsIMsgDBHdr> hdr1, hdr2;
 
   uint16_t maxLen;
@@ -5847,7 +5710,8 @@ void nsMsgDBView::ValidateSort() {
   // how to compare the field to check for sorting.
   // So we bomb out here. It is OK since this is debug code
   // inside  #ifdef DEBUG_David_Bienvenu
-  rv = GetFieldTypeAndLenForSort(m_sortType, &maxLen, &fieldType, colHandler);
+  nsresult rv =
+      GetFieldTypeAndLenForSort(m_sortType, &maxLen, &fieldType, colHandler);
   NS_ASSERTION(NS_SUCCEEDED(rv), "failed to obtain fieldType");
 
   viewSortInfo comparisonContext;
@@ -5878,7 +5742,7 @@ void nsMsgDBView::ValidateSort() {
     const void *pValue1 = &EntryInfo1, *pValue2 = &EntryInfo2;
     int retStatus = 0;
     if (fieldType == kCollationKey)
-      retStatus = FnSortIdKeyPtr(&pValue1, &pValue2, &comparisonContext);
+      retStatus = FnSortIdKey(&pValue1, &pValue2, &comparisonContext);
     else if (fieldType == kU32)
       retStatus = FnSortIdUint32(&pValue1, &pValue2, &comparisonContext);
 
@@ -6099,7 +5963,7 @@ nsMsgDBView::NoteChange(nsMsgViewIndex firstLineChanged, int32_t numChanged,
         // RowCountChanged() will call our GetRowCount().
         mTree->RowCountChanged(firstLineChanged, numChanged);
         mRemovingRow = false;
-        MOZ_FALLTHROUGH;
+        [[fallthrough]];
       case nsMsgViewNotificationCode::all:
         ClearHdrCache();
         break;
@@ -6388,7 +6252,7 @@ nsresult nsMsgDBView::NavigateFromPos(nsMsgNavigationTypeValue motion,
     case nsMsgNavigationType::firstUnreadMessage:
       startIndex = nsMsgViewIndex_None;
       // Note fall through - is this motion ever used?
-      MOZ_FALLTHROUGH;
+      [[fallthrough]];
     case nsMsgNavigationType::nextUnreadMessage:
       for (curIndex = (startIndex == nsMsgViewIndex_None) ? 0 : startIndex;
            curIndex <= lastIndex && lastIndex != nsMsgViewIndex_None;
@@ -6635,18 +6499,18 @@ nsMsgDBView::NavigateStatus(nsMsgNavigationTypeValue motion, bool *_retval) {
       break;
     case nsMsgNavigationType::forward:
     case nsMsgNavigationType::back:
-      uint32_t curPos;
-      uint32_t historyCount;
       if (messenger) {
-        messenger->GetNavigateHistory(&curPos, &historyCount, nullptr);
+        int32_t curPos;
+        messenger->GetNavigatePos(&curPos);
+        nsTArray<nsCString> history;
+        messenger->GetNavigateHistory(history);
         int32_t desiredPos = (int32_t)curPos;
         if (motion == nsMsgNavigationType::forward)
           desiredPos++;
         else
-          //? operator code didn't work for me.
           desiredPos--;
 
-        enable = (desiredPos >= 0 && desiredPos < (int32_t)historyCount / 2);
+        enable = (desiredPos >= 0 && desiredPos < (int32_t)history.Length() / 2);
       }
       break;
     default:
@@ -7660,8 +7524,8 @@ bool nsMsgDBView::JunkControlsEnabled(nsMsgViewIndex aViewIndex) {
       nsAutoCString type;
       if (server) server->GetType(type);
 
-      if (!(MsgLowerCaseEqualsLiteral(type, "nntp") ||
-            MsgLowerCaseEqualsLiteral(type, "rss")))
+      if (!(type.LowerCaseEqualsLiteral("nntp") ||
+            type.LowerCaseEqualsLiteral("rss")))
         return true;
     }
 

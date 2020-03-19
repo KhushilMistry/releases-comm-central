@@ -3,11 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
-
 var { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
+var { calendarDeactivator } = ChromeUtils.import(
+  "resource:///modules/calendar/calCalendarDeactivator.jsm"
+);
 
-XPCOMUtils.defineLazyModuleGetter(this, "cal", "resource://calendar/modules/calUtils.jsm", "cal");
+ChromeUtils.defineModuleGetter(this, "cal", "resource:///modules/calendar/calUtils.jsm");
 
 /*
  * Scheduling and iTIP helper code
@@ -27,7 +28,7 @@ var calitip = {
    *                                                from.
    * @return {Number}                             The sequence number
    */
-  getSequence: function(aItem) {
+  getSequence(aItem) {
     let seq = null;
 
     let wrappedItem = cal.wrapInstance(aItem, Ci.calIAttendee);
@@ -51,10 +52,9 @@ var calitip = {
 
     if (seq === null) {
       return 0;
-    } else {
-      seq = parseInt(seq, 10);
-      return isNaN(seq) ? 0 : seq;
     }
+    seq = parseInt(seq, 10);
+    return isNaN(seq) ? 0 : seq;
   },
 
   /**
@@ -64,7 +64,7 @@ var calitip = {
    * @param {calIAttendee|calIItemBase} aItem     The item or attendee to retrieve the stamp from
    * @return {calIDateTime}                       The timestamp for the item
    */
-  getStamp: function(aItem) {
+  getStamp(aItem) {
     let dtstamp = null;
 
     let wrappedItem = cal.wrapInstance(aItem, Ci.calIAttendee);
@@ -97,7 +97,7 @@ var calitip = {
    * @return {Number}                                 +1 if item2 is newer, -1 if item1 is newer
    *                                                    or 0 if both are equal
    */
-  compare: function(aItem1, aItem2) {
+  compare(aItem1, aItem2) {
     let comp = calitip.compareSequence(aItem1, aItem2);
     if (comp == 0) {
       comp = calitip.compareStamp(aItem1, aItem2);
@@ -113,16 +113,15 @@ var calitip = {
    * @return {Number}                                 +1 if item2 is newer, -1 if item1 is newer
    *                                                    or 0 if both are equal
    */
-  compareSequence: function(aItem1, aItem2) {
+  compareSequence(aItem1, aItem2) {
     let seq1 = calitip.getSequence(aItem1);
     let seq2 = calitip.getSequence(aItem2);
     if (seq1 > seq2) {
       return 1;
     } else if (seq1 < seq2) {
       return -1;
-    } else {
-      return 0;
     }
+    return 0;
   },
 
   /**
@@ -133,7 +132,7 @@ var calitip = {
    * @return {Number}                                 +1 if item2 is newer, -1 if item1 is newer
    *                                                    or 0 if both are equal
    */
-  compareStamp: function(aItem1, aItem2) {
+  compareStamp(aItem1, aItem2) {
     let st1 = calitip.getStamp(aItem1);
     let st2 = calitip.getStamp(aItem2);
     if (st1 && st2) {
@@ -142,9 +141,8 @@ var calitip = {
       return -1;
     } else if (st1 && !st2) {
       return 1;
-    } else {
-      return 0;
     }
+    return 0;
   },
 
   /**
@@ -154,7 +152,7 @@ var calitip = {
    * @param {calICalendar} aCalendar      The calendar to check
    * @return {Boolean}                    True, if its a scheduling calendar.
    */
-  isSchedulingCalendar: function(aCalendar) {
+  isSchedulingCalendar(aCalendar) {
     return (
       cal.acl.isCalendarWritable(aCalendar) &&
       aCalendar.getProperty("organizerId") &&
@@ -171,7 +169,7 @@ var calitip = {
    * @param {String} imipMethod       The received imip method
    * @param {nsIMsgDBHdr} aMsgHdr     Information about the received email
    */
-  initItemFromMsgData: function(itipItem, imipMethod, aMsgHdr) {
+  initItemFromMsgData(itipItem, imipMethod, aMsgHdr) {
     // set the sender of the itip message
     itipItem.sender = calitip.getMessageSender(aMsgHdr);
 
@@ -203,7 +201,7 @@ var calitip = {
 
     let writableCalendars = cal
       .getCalendarManager()
-      .getCalendars({})
+      .getCalendars()
       .filter(isWritableCalendar);
     if (writableCalendars.length > 0) {
       let compCal = Cc["@mozilla.org/calendar/calendar;1?type=composite"].createInstance(
@@ -224,7 +222,7 @@ var calitip = {
    * @param {Number} aOperationType  An operation type from calIOperationListener
    * @return {String}                The suggested text.
    */
-  getCompleteText: function(aStatus, aOperationType) {
+  getCompleteText(aStatus, aOperationType) {
     let text = "";
     const cIOL = Ci.calIOperationListener;
     if (Components.isSuccessCode(aStatus)) {
@@ -254,7 +252,7 @@ var calitip = {
    * @param {String} method      The method to describe.
    * @return {String}            The localized text about the method.
    */
-  getMethodText: function(method) {
+  getMethodText(method) {
     switch (method) {
       case "REFRESH":
         return cal.l10n.getLtnString("imipBarRefreshText");
@@ -284,8 +282,8 @@ var calitip = {
    *
    * {
    *    label: "This is a desciptive text about the itip item",
-   *    buttons: ["imipXXXButton", ...],
-   *    hideMenuItem: ["imipXXXButton_Option", ...]
+   *    showItems: ["imipXXXButton", ...],
+   *    hideItems: ["imipXXXButton_Option", ...]
    * }
    *
    * @see processItipItem   This takes the same parameters as its optionFunc.
@@ -296,7 +294,7 @@ var calitip = {
    *                                        in subscribed calendars
    * @return {Object}                     Return information about the options
    */
-  getOptionsText: function(itipItem, rc, actionFunc, foundItems) {
+  getOptionsText(itipItem, rc, actionFunc, foundItems) {
     let imipLabel = null;
     if (itipItem.receivedMethod) {
       imipLabel = calitip.getMethodText(itipItem.receivedMethod);
@@ -312,9 +310,16 @@ var calitip = {
       let disallow = foundItems[0].getProperty("X-MICROSOFT-DISALLOW-COUNTER");
       disallowedCounter = disallow && disallow == "TRUE";
     }
-    if (rc == Ci.calIErrors.CAL_IS_READONLY) {
+    if (!calendarDeactivator.isCalendarActivated) {
+      // Calendar is deactivated (no calendars are enabled).
+      data.label = cal.l10n.getLtnString("imipBarCalendarDeactivated");
+      data.showItems.push("imipGoToCalendarButton", "imipMoreButton");
+      data.hideItems.push("imipMoreButton_SaveCopy");
+    } else if (rc == Ci.calIErrors.CAL_IS_READONLY) {
       // No writable calendars, tell the user about it
       data.label = cal.l10n.getLtnString("imipBarNotWritable");
+      data.showItems.push("imipGoToCalendarButton", "imipMoreButton");
+      data.hideItems.push("imipMoreButton_SaveCopy");
     } else if (Components.isSuccessCode(rc) && !actionFunc) {
       // This case, they clicked on an old message that has already been
       // added/updated, we want to tell them that.
@@ -326,8 +331,8 @@ var calitip = {
             data.label = cal.l10n.getLtnString("imipBarDisallowedCounterText");
           } else {
             let comparison;
-            for (let item of itipItem.getItemList({})) {
-              let attendees = cal.itip.getAttendeesBySender(item.getAttendees({}), itipItem.sender);
+            for (let item of itipItem.getItemList()) {
+              let attendees = cal.itip.getAttendeesBySender(item.getAttendees(), itipItem.sender);
               if (attendees.length == 1) {
                 comparison = calitip.compareSequence(item, foundItems[0]);
                 if (comparison == 1) {
@@ -347,7 +352,7 @@ var calitip = {
           Ci.calIDeletedItems
         );
         let delTime = null;
-        let items = itipItem.getItemList({});
+        let items = itipItem.getItemList();
         if (items && items.length) {
           delTime = delmgr.getDeletedDate(items[0].id);
         }
@@ -378,7 +383,7 @@ var calitip = {
         case "REQUEST:NEEDS-ACTION":
         case "REQUEST": {
           let isRecurringMaster = false;
-          for (let item of itipItem.getItemList({})) {
+          for (let item of itipItem.getItemList()) {
             if (item.recurrenceInfo) {
               isRecurringMaster = true;
             }
@@ -387,7 +392,7 @@ var calitip = {
           if (actionFunc.method == "REQUEST:UPDATE") {
             if (isRecurringMaster) {
               data.label = cal.l10n.getLtnString("imipBarUpdateSeriesText");
-            } else if (itipItem.getItemList({}).length > 1) {
+            } else if (itipItem.getItemList().length > 1) {
               data.label = cal.l10n.getLtnString("imipBarUpdateMultipleText");
             } else {
               data.label = cal.l10n.getLtnString("imipBarUpdateText");
@@ -395,14 +400,14 @@ var calitip = {
           } else if (actionFunc.method == "REQUEST:NEEDS-ACTION") {
             if (isRecurringMaster) {
               data.label = cal.l10n.getLtnString("imipBarProcessedSeriesNeedsAction");
-            } else if (itipItem.getItemList({}).length > 1) {
+            } else if (itipItem.getItemList().length > 1) {
               data.label = cal.l10n.getLtnString("imipBarProcessedMultipleNeedsAction");
             } else {
               data.label = cal.l10n.getLtnString("imipBarProcessedNeedsAction");
             }
           }
 
-          if (itipItem.getItemList({}).length > 1 || isRecurringMaster) {
+          if (itipItem.getItemList().length > 1 || isRecurringMaster) {
             data.showItems.push("imipAcceptRecurrencesButton");
             if (separateButtons) {
               data.showItems.push("imipTentativeRecurrencesButton");
@@ -437,7 +442,7 @@ var calitip = {
           }
           data.showItems.push("imipMoreButton");
           // Use data.hideItems.push("idOfMenuItem") to hide specific menuitems
-          // from the dropdown menu of a button.  This might be useful to to remove
+          // from the dropdown menu of a button.  This might be useful to remove
           // a generally available option for a specific invitation, because the
           // respective feature is not available for the calendar, the invitation
           // is in or the feature is prohibited by the organizer
@@ -477,12 +482,12 @@ var calitip = {
    * @param {nsIMsgDBHdr} aMsgHdr     The message header to check.
    * @return {String}                 The email address of the intended recipient.
    */
-  getMessageSender: function(aMsgHdr) {
+  getMessageSender(aMsgHdr) {
     let author = (aMsgHdr && aMsgHdr.author) || "";
     let compFields = Cc["@mozilla.org/messengercompose/composefields;1"].createInstance(
       Ci.nsIMsgCompFields
     );
-    let addresses = compFields.splitRecipients(author, true, {});
+    let addresses = compFields.splitRecipients(author, true);
     if (addresses.length != 1) {
       cal.LOG("No unique email address for lookup in message.\r\n" + cal.STACK(20));
     }
@@ -497,7 +502,7 @@ var calitip = {
    * @param {nsIMsgDBHdr} aMsgHdr     The message to check.
    * @return {String}                 The email of the intended recipient.
    */
-  getMessageRecipient: function(aMsgHdr) {
+  getMessageRecipient(aMsgHdr) {
     if (!aMsgHdr) {
       return null;
     }
@@ -576,7 +581,7 @@ var calitip = {
    * @param {DOMWindpw} aWindow       The window to open the dialog on.
    * @return {Boolean}                True, if a calendar was selected or no selection is needed.
    */
-  promptCalendar: function(aMethod, aItipItem, aWindow) {
+  promptCalendar(aMethod, aItipItem, aWindow) {
     let needsCalendar = false;
     let targetCalendar = null;
     switch (aMethod) {
@@ -599,13 +604,13 @@ var calitip = {
     if (needsCalendar) {
       let calendars = cal
         .getCalendarManager()
-        .getCalendars({})
+        .getCalendars()
         .filter(calitip.isSchedulingCalendar);
 
       if (aItipItem.receivedMethod == "REQUEST") {
         // try to further limit down the list to those calendars that
         // are configured to a matching attendee;
-        let item = aItipItem.getItemList({})[0];
+        let item = aItipItem.getItemList()[0];
         let matchingCals = calendars.filter(
           calendar => calitip.getInvitedAttendee(item, calendar) != null
         );
@@ -631,7 +636,7 @@ var calitip = {
         };
         args.promptText = cal.l10n.getCalString("importPrompt");
         aWindow.openDialog(
-          "chrome://calendar/content/chooseCalendarDialog.xul",
+          "chrome://calendar/content/chooseCalendarDialog.xhtml",
           "_blank",
           "chrome,titlebar,modal,resizable",
           args
@@ -653,9 +658,9 @@ var calitip = {
    *
    * @param {calIItipItem} itipItem      The iTIP item to clean up for.
    */
-  cleanupItipItem: function(itipItem) {
+  cleanupItipItem(itipItem) {
     if (itipItem) {
-      let itemList = itipItem.getItemList({});
+      let itemList = itipItem.getItemList();
       if (itemList.length > 0) {
         // Again, we can assume the id is the same over all items per spec
         ItipItemFinderFactory.cleanup(itemList[0].id);
@@ -685,7 +690,7 @@ var calitip = {
    * @param {Function} optionsFunc        The function being called with parameters: itipItem,
    *                                          resultCode, actionFunc
    */
-  processItipItem: function(itipItem, optionsFunc) {
+  processItipItem(itipItem, optionsFunc) {
     switch (itipItem.receivedMethod.toUpperCase()) {
       case "REFRESH":
       case "PUBLISH":
@@ -696,7 +701,7 @@ var calitip = {
       case "REPLY": {
         // Per iTIP spec (new Draft 4), multiple items in an iTIP message MUST have
         // same ID, this simplifies our searching, we can just look for Item[0].id
-        let itemList = itipItem.getItemList({});
+        let itemList = itipItem.getItemList();
         if (!itipItem.targetCalendar) {
           optionsFunc(itipItem, Ci.calIErrors.CAL_IS_READONLY);
         } else if (itemList.length > 0) {
@@ -733,7 +738,7 @@ var calitip = {
    *                                            will trigger displaying the previously known popup
    *                                            to ask the user whether to send)
    */
-  checkAndSend: function(aOpType, aItem, aOriginalItem, aExtResponse = null) {
+  checkAndSend(aOpType, aItem, aOriginalItem, aExtResponse = null) {
     // balance out parts of the modification vs delete confusion, deletion of occurrences
     // are notified as parent modifications and modifications of occurrences are notified
     // as mixed new-occurrence, old-parent (IIRC).
@@ -751,12 +756,12 @@ var calitip = {
         // check whether the two differ only in EXDATEs
         let clonedItem = aItem.clone();
         let exdates = [];
-        for (let ritem of clonedItem.recurrenceInfo.getRecurrenceItems({})) {
+        for (let ritem of clonedItem.recurrenceInfo.getRecurrenceItems()) {
           let wrappedRItem = cal.wrapInstance(ritem, Ci.calIRecurrenceDate);
           if (
             ritem.isNegative &&
             wrappedRItem &&
-            !aOriginalItem.recurrenceInfo.getRecurrenceItems({}).some(recitem => {
+            !aOriginalItem.recurrenceInfo.getRecurrenceItems().some(recitem => {
               let wrappedR = cal.wrapInstance(recitem, Ci.calIRecurrenceDate);
               return (
                 recitem.isNegative && wrappedR && wrappedR.date.compare(wrappedRItem.date) == 0
@@ -799,8 +804,8 @@ var calitip = {
           );
       }
     } else if (
-      (aOriginalItem && aOriginalItem.getAttendees({}).length) ||
-      aItem.getAttendees({}).length
+      (aOriginalItem && aOriginalItem.getAttendees().length) ||
+      aItem.getAttendees().length
     ) {
       // let's log something useful to notify addon developers or find any
       // missing pieces in the conversions if the current or original item
@@ -824,7 +829,7 @@ var calitip = {
        * userAddresses. If they aren't equal, it means that
        * someone is accepting invitations on behalf of an other user. */
       if (aItem.calendar.aclEntry) {
-        let userAddresses = aItem.calendar.aclEntry.getUserAddresses({});
+        let userAddresses = aItem.calendar.aclEntry.getUserAddresses();
         if (
           userAddresses.length > 0 &&
           !cal.email.attendeeMatchesAddresses(invitedAttendee, userAddresses)
@@ -903,7 +908,7 @@ var calitip = {
     }
 
     // special handling for invitation with event status cancelled
-    if (aItem.getAttendees({}).length > 0 && aItem.getProperty("STATUS") == "CANCELLED") {
+    if (aItem.getAttendees().length > 0 && aItem.getProperty("STATUS") == "CANCELLED") {
       if (calitip.getSequence(aItem) > 0) {
         // make sure we send a cancellation and not an request
         aOpType = Ci.calIOperationListener.DELETE;
@@ -914,12 +919,12 @@ var calitip = {
     }
 
     if (aOpType == Ci.calIOperationListener.DELETE) {
-      sendMessage(aItem, "CANCEL", aItem.getAttendees({}), autoResponse);
+      sendMessage(aItem, "CANCEL", aItem.getAttendees(), autoResponse);
       return;
     } // else ADD, MODIFY:
 
-    let originalAtt = aOriginalItem ? aOriginalItem.getAttendees({}) : [];
-    let itemAtt = aItem.getAttendees({});
+    let originalAtt = aOriginalItem ? aOriginalItem.getAttendees() : [];
+    let itemAtt = aItem.getAttendees();
     let canceledAttendees = [];
     let addedAttendees = [];
 
@@ -967,7 +972,7 @@ var calitip = {
 
         // Fix up our attendees for invitations using some good defaults
         let recipients = [];
-        let reqItemAtt = requestItem.getAttendees({});
+        let reqItemAtt = requestItem.getAttendees();
         if (!isMinorUpdate) {
           requestItem.removeAllAttendees();
         }
@@ -1023,7 +1028,7 @@ var calitip = {
    * @param {calIItemBase} oldItem        The old item to get the previous version from.
    * @return {calIItemBase}               The newly changed item
    */
-  prepareSequence: function(newItem, oldItem) {
+  prepareSequence(newItem, oldItem) {
     if (calitip.isInvitation(newItem)) {
       return newItem; // invitation copies don't bump the SEQUENCE
     }
@@ -1086,7 +1091,7 @@ var calitip = {
    * @param  {Object} aProps           Properties to be different in the new itipItem
    * @return {calIItipItem}            The copied and modified item
    */
-  getModifiedItipItem: function(aItipItem, aItems = [], aProps = {}) {
+  getModifiedItipItem(aItipItem, aItems = [], aProps = {}) {
     let itipItem = Cc["@mozilla.org/calendar/itip-item;1"].createInstance(Ci.calIItipItem);
     let serializedItems = "";
     for (let item of aItems) {
@@ -1117,7 +1122,7 @@ var calitip = {
    * @param {Object} aAutoResponse            JS object whether the transport should ask before sending
    * @return {Boolean}                        True
    */
-  sendDeclineCounterMessage: function(aItem, aMethod, aRecipientsList, aAutoResponse) {
+  sendDeclineCounterMessage(aItem, aMethod, aRecipientsList, aAutoResponse) {
     if (aMethod == "DECLINECOUNTER") {
       return sendMessage(aItem, aMethod, aRecipientsList, aAutoResponse);
     }
@@ -1136,7 +1141,7 @@ var calitip = {
    * @param {?String} aUid            UID to use for the new item
    * @return {calIItemBase}           The copied item for publishing
    */
-  getPublishLikeItemCopy: function(aItem, aUid) {
+  getPublishLikeItemCopy(aItem, aUid) {
     // avoid changing aItem
     let item = aItem.clone();
     // reset to a new UUID if applicable
@@ -1160,7 +1165,7 @@ var calitip = {
    * @param {calIItemBase} aItem      The item to check for an invitation.
    * @return {Boolean}                True, if the item is an invitation.
    */
-  isInvitation: function(aItem) {
+  isInvitation(aItem) {
     let isInvitation = false;
     let calendar = cal.wrapInstance(aItem.calendar, Ci.calISchedulingSupport);
     if (calendar) {
@@ -1177,7 +1182,7 @@ var calitip = {
    * @return {Boolean}                            True, if the attendee partstat is NEEDS-ACTION
    *                                                or TENTATIVE
    */
-  isOpenInvitation: function(aItem) {
+  isOpenInvitation(aItem) {
     let wrappedItem = cal.wrapInstance(aItem, Ci.calIAttendee);
     if (!wrappedItem) {
       aItem = calitip.getInvitedAttendee(aItem);
@@ -1200,7 +1205,7 @@ var calitip = {
    * @param {calIAttendee[]} aAttendees       An array of calIAttendee objects to look up
    * @return {Object}                         An object with string attributes for delegators and delegatees
    */
-  resolveDelegation: function(aAttendee, aAttendees) {
+  resolveDelegation(aAttendee, aAttendees) {
     let attendees = aAttendees || [aAttendee];
 
     // this will be replaced by a direct property getter in calIAttendee
@@ -1238,7 +1243,7 @@ var calitip = {
    *                                        calendar
    * @return {?calIAttendee}              The attendee that was invited
    */
-  getInvitedAttendee: function(aItem, aCalendar) {
+  getInvitedAttendee(aItem, aCalendar) {
     if (!aCalendar) {
       aCalendar = aItem.calendar;
     }
@@ -1258,13 +1263,13 @@ var calitip = {
    * @param {String} aEmailAddress            A string containing the email address for lookup
    * @return {calIAttendee[]}                 Returns an array of matching attendees
    */
-  getAttendeesBySender: function(aAttendees, aEmailAddress) {
+  getAttendeesBySender(aAttendees, aEmailAddress) {
     let attendees = [];
     // we extract the email address to make it work also for a raw header value
     let compFields = Cc["@mozilla.org/messengercompose/composefields;1"].createInstance(
       Ci.nsIMsgCompFields
     );
-    let addresses = compFields.splitRecipients(aEmailAddress, true, {});
+    let addresses = compFields.splitRecipients(aEmailAddress, true);
     if (addresses.length == 1) {
       let searchFor = cal.email.prependMailTo(addresses[0]);
       aAttendees.forEach(aAttendee => {
@@ -1312,7 +1317,7 @@ function stripUserData(item_) {
   let lastModified = item.lastModifiedTime;
   item.clearAlarms();
   item.alarmLastAck = null;
-  item.setCategories(0, []);
+  item.setCategories([]);
   item.deleteProperty("RECEIVED-SEQUENCE");
   item.deleteProperty("RECEIVED-DTSTAMP");
   for (let [name] of item.properties) {
@@ -1321,7 +1326,7 @@ function stripUserData(item_) {
       item.deleteProperty(name);
     }
   }
-  item.getAttendees({}).forEach(att => {
+  item.getAttendees().forEach(att => {
     att.deleteProperty("RECEIVED-SEQUENCE");
     att.deleteProperty("RECEIVED-DTSTAMP");
   });
@@ -1333,7 +1338,7 @@ function stripUserData(item_) {
     aCalUser.deleteProperty("SCHEDULE-FORCE-SEND");
     aCalUser.deleteProperty("SCHEDULE-STATUS");
   };
-  item.getAttendees({}).forEach(removeSchedulingParams);
+  item.getAttendees().forEach(removeSchedulingParams);
   if (item.organizer) {
     removeSchedulingParams(item.organizer);
   }
@@ -1361,12 +1366,12 @@ function updateItem(item, itipItemItem) {
     // preserve user settings:
     newItem.generation = oldItem.generation;
     newItem.clearAlarms();
-    for (let alarm of oldItem.getAlarms({})) {
+    for (let alarm of oldItem.getAlarms()) {
       newItem.addAlarm(alarm);
     }
     newItem.alarmLastAck = oldItem.alarmLastAck;
-    let cats = oldItem.getCategories({});
-    newItem.setCategories(cats.length, cats);
+    let cats = oldItem.getCategories();
+    newItem.setCategories(cats);
   }
 
   let newItem = item.clone();
@@ -1377,7 +1382,7 @@ function updateItem(item, itipItemItem) {
   let recInfo = itipItemItem.recurrenceInfo;
   if (recInfo) {
     // keep care of installing all overridden items, and mind existing alarms, categories:
-    for (let rid of recInfo.getExceptionIds({})) {
+    for (let rid of recInfo.getExceptionIds()) {
       let excItem = recInfo.getExceptionFor(rid).clone();
       cal.ASSERT(excItem, "unexpected!");
       let newExc = newItem.recurrenceInfo.getOccurrenceFor(rid).clone();
@@ -1478,7 +1483,7 @@ function sendMessage(aItem, aMethod, aRecipientsList, autoResponse) {
     // XXX I don't know whether the below is used at all, since we don't use the itip processor
     itipItem.isSend = true;
 
-    return transport.sendItems(aSendToList.length, aSendToList, itipItem);
+    return transport.sendItems(aSendToList, itipItem);
   };
 
   // split up transport, if attendee undisclosure is requested
@@ -1502,9 +1507,8 @@ function sendMessage(aItem, aMethod, aRecipientsList, autoResponse) {
       }
     }
     return true;
-  } else {
-    return _sendItem(aRecipientsList, aItem);
   }
+  return _sendItem(aRecipientsList, aItem);
 }
 
 /** local to this module file
@@ -1529,7 +1533,7 @@ ItipOpListener.prototype = {
   mOldItem: null,
   mExtResponse: null,
 
-  onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+  onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
     cal.ASSERT(Components.isSuccessCode(aStatus), "error on iTIP processing");
     if (Components.isSuccessCode(aStatus)) {
       calitip.checkAndSend(aOperationType, aDetail, this.mOldItem, this.mExtResponse);
@@ -1538,7 +1542,7 @@ ItipOpListener.prototype = {
       this.mOpListener.onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail);
     }
   },
-  onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {},
+  onGetResult(calendar, status, itemType, detail, items) {},
 };
 
 /** local to this module file
@@ -1569,7 +1573,7 @@ var ItipItemFinderFactory = {
    * @param {calIIipItem} aItipItem   The iTIP item used for processing
    * @param {Function} aOptionsFunc   The options function used for processing the found item
    */
-  findItem: function(aId, aItipItem, aOptionsFunc) {
+  findItem(aId, aItipItem, aOptionsFunc) {
     this.cleanup(aId);
     let finder = new ItipItemFinder(aId, aItipItem, aOptionsFunc);
     this._findMap[aId] = finder;
@@ -1582,7 +1586,7 @@ var ItipItemFinderFactory = {
    *
    * @param {String} aId           The item id to clean up for
    */
-  cleanup: function(aId) {
+  cleanup(aId) {
     if (aId in this._findMap) {
       let finder = this._findMap[aId];
       finder.destroy();
@@ -1612,13 +1616,13 @@ ItipItemFinder.prototype = {
   mOptionsFunc: null,
   mFoundItems: null,
 
-  findItem: function() {
+  findItem() {
     this.mFoundItems = [];
     this._unobserveChanges();
     this.mItipItem.targetCalendar.getItem(this.mSearchId, this);
   },
 
-  _observeChanges: function(aCalendar) {
+  _observeChanges(aCalendar) {
     this._unobserveChanges();
     this.mObservedCalendar = aCalendar;
 
@@ -1626,25 +1630,25 @@ ItipItemFinder.prototype = {
       this.mObservedCalendar.addObserver(this);
     }
   },
-  _unobserveChanges: function() {
+  _unobserveChanges() {
     if (this.mObservedCalendar) {
       this.mObservedCalendar.removeObserver(this);
       this.mObservedCalendar = null;
     }
   },
 
-  onStartBatch: function() {},
-  onEndBatch: function() {},
-  onError: function() {},
-  onPropertyChanged: function() {},
-  onPropertyDeleting: function() {},
-  onLoad: function(aCalendar) {
+  onStartBatch() {},
+  onEndBatch() {},
+  onError() {},
+  onPropertyChanged() {},
+  onPropertyDeleting() {},
+  onLoad(aCalendar) {
     // Its possible that the item was updated. We need to re-retrieve the
     // items now.
     this.findItem();
   },
 
-  onModifyItem: function(aNewItem, aOldItem) {
+  onModifyItem(aNewItem, aOldItem) {
     let refItem = aOldItem || aNewItem;
     if (refItem.id == this.mSearchId) {
       // Check existing found items to see if it already exists
@@ -1669,25 +1673,25 @@ ItipItemFinder.prototype = {
     }
   },
 
-  onAddItem: function(aItem) {
+  onAddItem(aItem) {
     // onModifyItem is set up to also handle additions
     this.onModifyItem(aItem, null);
   },
 
-  onDeleteItem: function(aItem) {
+  onDeleteItem(aItem) {
     // onModifyItem is set up to also handle deletions
     this.onModifyItem(null, aItem);
   },
 
-  onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+  onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
     this.processFoundItems();
   },
 
-  destroy: function() {
+  destroy() {
     this._unobserveChanges();
   },
 
-  processFoundItems: function() {
+  processFoundItems() {
     let rc = Cr.NS_OK;
     const method = this.mItipItem.receivedMethod.toUpperCase();
     let actionMethod = method;
@@ -1713,7 +1717,7 @@ ItipItemFinder.prototype = {
         case "REPLY":
         case "COUNTER":
         case "DECLINECOUNTER":
-          for (let itipItemItem of this.mItipItem.getItemList({})) {
+          for (let itipItemItem of this.mItipItem.getItemList()) {
             for (let item of this.mFoundItems) {
               let rid = itipItemItem.recurrenceId; //  XXX todo support multiple
               if (rid) {
@@ -1732,7 +1736,7 @@ ItipItemFinder.prototype = {
               switch (method) {
                 case "REFRESH": {
                   // xxx todo test
-                  let attendees = itipItemItem.getAttendees({});
+                  let attendees = itipItemItem.getAttendees();
                   cal.ASSERT(attendees.length == 1, "invalid number of attendees in REFRESH!");
                   if (attendees.length > 0) {
                     let action = function(opListener, partStat, extResponse) {
@@ -1756,7 +1760,7 @@ ItipItemFinder.prototype = {
                 }
                 case "PUBLISH":
                   cal.ASSERT(
-                    itipItemItem.getAttendees({}).length == 0,
+                    itipItemItem.getAttendees().length == 0,
                     "invalid number of attendees in PUBLISH!"
                   );
                   if (
@@ -1847,7 +1851,7 @@ ItipItemFinder.prototype = {
                   break;
                 case "COUNTER":
                 case "REPLY": {
-                  let attendees = itipItemItem.getAttendees({});
+                  let attendees = itipItemItem.getAttendees();
                   if (method == "REPLY") {
                     cal.ASSERT(attendees.length == 1, "invalid number of attendees in REPLY!");
                   } else {
@@ -1909,7 +1913,7 @@ ItipItemFinder.prototype = {
           break;
         case "CANCEL": {
           let modifiedItems = {};
-          for (let itipItemItem of this.mItipItem.getItemList({})) {
+          for (let itipItemItem of this.mItipItem.getItemList()) {
             for (let item of this.mFoundItems) {
               let rid = itipItemItem.recurrenceId; //  XXX todo support multiple
               if (rid) {
@@ -1957,7 +1961,7 @@ ItipItemFinder.prototype = {
       // if an item was added or removed
       this._observeChanges(this.mItipItem.targetCalendar);
 
-      for (let itipItemItem of this.mItipItem.getItemList({})) {
+      for (let itipItemItem of this.mItipItem.getItemList()) {
         switch (method) {
           case "REQUEST":
           case "PUBLISH": {
@@ -1987,7 +1991,7 @@ ItipItemFinder.prototype = {
                 }
               } else {
                 cal.ASSERT(
-                  itipItemItem.getAttendees({}).length == 0,
+                  itipItemItem.getAttendees().length == 0,
                   "invalid number of attendees in PUBLISH!"
                 );
                 cal.alarms.setDefaultValues(newItem);
@@ -2029,7 +2033,7 @@ ItipItemFinder.prototype = {
     this.mOptionsFunc(this.mItipItem, rc, actionFunc, this.mFoundItems);
   },
 
-  onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
+  onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
     if (Components.isSuccessCode(aStatus)) {
       this.mFoundItems = this.mFoundItems.concat(aItems);
     }

@@ -38,7 +38,7 @@ let tabListener = {
    * @param {Integer} flags                 The web progress flags for this change
    */
   onLocationChange(browser, webProgress, request, locationURI, flags) {
-    if (webProgress.isTopLevel) {
+    if (webProgress && webProgress.isTopLevel) {
       let tabmail = browser.ownerDocument.getElementById("tabmail");
       let nativeTabInfo = tabmail.getTabForBrowser(browser);
 
@@ -225,8 +225,8 @@ class TabsUpdateFilterEventManager extends EventManager {
     if (
       filter &&
       filter.urls &&
-      (!extension.hasPermission("tabs") &&
-        !extension.hasPermission("activeTab"))
+      !extension.hasPermission("tabs") &&
+      !extension.hasPermission("activeTab")
     ) {
       Cu.reportError(
         'Url filtering in tabs.onUpdated requires "tabs" or "activeTab" permission.'

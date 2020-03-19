@@ -16,10 +16,13 @@ var { AddonManager } = ChromeUtils.import(
   "resource://gre/modules/AddonManager.jsm"
 );
 var { StringBundle } = ChromeUtils.import(
-  "resource:///modules/StringBundle.js"
+  "resource:///modules/StringBundle.jsm"
 );
 var { ExtensionParent } = ChromeUtils.import(
   "resource://gre/modules/ExtensionParent.jsm"
+);
+var { Localization } = ChromeUtils.import(
+  "resource://gre/modules/Localization.jsm"
 );
 
 function tabProgressListener(aTab, aStartsBlank) {
@@ -108,6 +111,8 @@ tabProgressListener.prototype = {
 
       var location = aLocationURI ? aLocationURI.spec : "";
       if (aLocationURI && !aLocationURI.schemeIs("about")) {
+        this.mTab.backButton.disabled = !this.mBrowser.canGoBack;
+        this.mTab.forwardButton.disabled = !this.mBrowser.canGoForward;
         this.mTab.urlbar.textContent = location;
         this.mTab.root.removeAttribute("collapsed");
       } else {
@@ -353,7 +358,12 @@ var kTelemetryPromptRev = 2;
 var contentTabBaseType = {
   // List of URLs that will receive special treatment when opened in a tab.
   // Note that about:preferences is loaded via a different mechanism.
-  inContentWhitelist: ["about:addons", "about:blank", "about:*"],
+  inContentWhitelist: [
+    "about:addons",
+    "about:blank",
+    "about:profiles",
+    "about:*",
+  ],
 
   // Code to run if a particular document is loaded in a tab.
   // The array members (functions) are for the respective document URLs
@@ -361,8 +371,6 @@ var contentTabBaseType = {
   inContentOverlays: [
     // about:addons
     function(aDocument, aTab) {
-      // Switch off the context menu.
-      aTab.browser.removeAttribute("context");
       Services.scriptloader.loadSubScript(
         "chrome://messenger/content/aboutAddonsExtra.js",
         aDocument.defaultView
@@ -371,6 +379,21 @@ var contentTabBaseType = {
 
     // Let's not mess with about:blank.
     null,
+
+    // about:profiles
+    function(aDocument, aTab) {
+      // Need a timeout to let the script run to create the needed buttons.
+      setTimeout(() => {
+        let l10n = new Localization(["messenger/aboutProfilesExtra.ftl"], true);
+        for (let button of aDocument.querySelectorAll(
+          `[data-l10n-id="profiles-launch-profile"]`
+        )) {
+          button.textContent = l10n.formatValueSync(
+            "profiles-launch-profile-plain"
+          );
+        }
+      }, 500);
+    },
 
     // Other about:* pages.
     function(aDocument, aTab) {
@@ -574,7 +597,7 @@ var contentTabBaseType = {
         break;
       case "cmd_print":
         let browser = this.getBrowser(aTab);
-        PrintUtils.printWindow(browser.outerWindowID, browser);
+        PrintUtils.printWindow(browser.browsingContext);
         break;
       // XXX print preview not currently supported - bug 497994 to implement.
       // case "cmd_printpreview":
@@ -832,7 +855,7 @@ var specialTabs = {
       // First clone the page and set up the basics.
       let clone = document
         .getElementById("contentTab")
-        .firstChild.cloneNode(true);
+        .firstElementChild.cloneNode(true);
 
       if ("opener" in aArgs && aArgs.opener) {
         clone.querySelector("browser").presetOpenerWindow(aArgs.opener);
@@ -847,22 +870,31 @@ var specialTabs = {
       clone.setAttribute("id", "contentTab" + this.lastBrowserId);
       clone.setAttribute("collapsed", false);
 
-      let toolbox = clone.firstChild;
+      let toolbox = clone.firstElementChild;
       toolbox.setAttribute("id", "contentTabToolbox" + this.lastBrowserId);
-      toolbox.firstChild.setAttribute(
+      toolbox.firstElementChild.setAttribute(
         "id",
         "contentTabToolbar" + this.lastBrowserId
       );
 
+      if (aArgs.skipLoad) {
+        clone.querySelector("browser").setAttribute("nodefaultsrc", "true");
+      }
       aTab.panel.setAttribute("id", "contentTabWrapper" + this.lastBrowserId);
       aTab.panel.appendChild(clone);
       aTab.root = clone;
 
       // Start setting up the browser.
-      aTab.browser = aTab.panel.querySelector("browser");
+      aTab.linkedBrowser = aTab.browser = aTab.panel.querySelector("browser");
       aTab.toolbar = aTab.panel.querySelector(".contentTabToolbar");
-      aTab.security = aTab.panel.querySelector(".contentTabSecurity");
-      aTab.urlbar = aTab.panel.querySelector(".contentTabUrlbar");
+      aTab.backButton = aTab.toolbar.querySelector(".back-btn");
+      aTab.backButton.addEventListener("command", () => aTab.browser.goBack());
+      aTab.forwardButton = aTab.toolbar.querySelector(".forward-btn");
+      aTab.forwardButton.addEventListener("command", () =>
+        aTab.browser.goForward()
+      );
+      aTab.security = aTab.toolbar.querySelector(".contentTabSecurity");
+      aTab.urlbar = aTab.toolbar.querySelector(".contentTabUrlbar");
       aTab.urlbar.textContent = aArgs.contentPage;
 
       ExtensionParent.apiManager.emit(
@@ -949,10 +981,12 @@ var specialTabs = {
       // Now start loading the content.
       aTab.title = this.loadingTabString;
 
-      let params = {
-        triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
-      };
-      aTab.browser.loadURI(aArgs.contentPage, params);
+      if (!aArgs.skipLoad) {
+        let params = {
+          triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+        };
+        aTab.browser.loadURI(aArgs.contentPage, params);
+      }
 
       this.lastBrowserId++;
     },
@@ -980,12 +1014,20 @@ var specialTabs = {
       };
     },
     restoreTab(aTabmail, aPersistedState) {
-      aTabmail.openTab("contentTab", {
+      let tab = aTabmail.openTab("contentTab", {
         contentPage: aPersistedState.tabURI,
         clickHandler: aPersistedState.clickHandler,
         duplicate: aPersistedState.duplicate,
         background: true,
       });
+      if (aPersistedState.tabURI == "about:addons") {
+        // Also in `openAddonsMgr` in mailCore.js.
+        tab.browser.droppedLinkHandler = event =>
+          tab.browser.contentWindow.gDragDrop.onDrop(event);
+      }
+      if (aPersistedState.tabURI == "about:accountsettings") {
+        tab.tabNode.setAttribute("type", "accountManager");
+      }
     },
   },
 
@@ -1387,14 +1429,14 @@ var specialTabs = {
       // First clone the page and set up the basics.
       let clone = document
         .getElementById("chromeTab")
-        .firstChild.cloneNode(true);
+        .firstElementChild.cloneNode(true);
 
       clone.setAttribute("id", "chromeTab" + this.lastBrowserId);
       clone.setAttribute("collapsed", false);
 
-      let toolbox = clone.firstChild;
+      let toolbox = clone.firstElementChild;
       toolbox.setAttribute("id", "chromeTabToolbox" + this.lastBrowserId);
-      toolbox.firstChild.setAttribute(
+      toolbox.firstElementChild.setAttribute(
         "id",
         "chromeTabToolbar" + this.lastBrowserId
       );
@@ -1544,7 +1586,7 @@ var specialTabs = {
           break;
         case "cmd_print":
           let browser = this.getBrowser(aTab);
-          PrintUtils.printWindow(browser.outerWindowID, browser);
+          PrintUtils.printWindow(browser.browsingContext);
           break;
         // XXX print preview not currently supported - bug 497994 to implement.
         // case "cmd_printpreview":

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// This file is loaded in messenger.xul.
+// This file is loaded in messenger.xhtml.
 /* globals gatherTextUnder, goUpdateGlobalEditMenuItems, makeURLAbsolute, Services */
 
 var gChatContextMenu = null;
@@ -36,10 +36,11 @@ function imContextMenu(aXulMenu) {
 // Prototype for nsContextMenu "class."
 imContextMenu.prototype = {
   cleanup() {
-    let elt = document.getElementById("context-sep-messageactions").nextSibling;
+    let elt = document.getElementById("context-sep-messageactions")
+      .nextElementSibling;
     // remove the action menuitems added last time we opened the popup
     while (elt && elt.localName != "menuseparator") {
-      let tmp = elt.nextSibling;
+      let tmp = elt.nextElementSibling;
       elt.remove();
       elt = tmp;
     }

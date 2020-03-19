@@ -7,13 +7,17 @@ linux64/opt:
     index:
         product: thunderbird
         job-name: linux64-opt
+    dependencies:
+        thirdparty-libotr-linux64: thirdparty-libotr-linux64
     treeherder:
         platform: linux64/opt
         symbol: B
     worker-type: b-linux
     worker:
         docker-image: {in-tree: "debian7-amd64-build"}
-        max-run-time: 36000
+        max-run-time: 7200
+        env:
+            MOZ_AUTOMATION_PACKAGE_TESTS: "1"
     run:
         using: mozharness
         comm-checkout: true
@@ -33,12 +37,16 @@ linux64/opt:
             - linux64-nasm
             - linux64-node
             - linux64-rust
+            - linux64-rust-size
             - linux64-sccache
+        thirdparty-libotr-linux64:
+            - libotr.tar.xz
 
 linux64-shippable/opt:
     description: "Linux64 Shippable"
     attributes:
         shippable: true
+        nightly: true
         enable-full-crashsymbols: true
     shipping-phase: build
     shipping-product: thunderbird
@@ -46,13 +54,17 @@ linux64-shippable/opt:
         product: thunderbird
         job-name: linux64-opt
         type: shippable
+    dependencies:
+        thirdparty-libotr-linux64: thirdparty-libotr-linux64
     treeherder:
         platform: linux64-shippable/opt
         symbol: B
     worker-type: b-linux
     worker:
         docker-image: {in-tree: "debian7-amd64-build"}
-        max-run-time: 36000
+        max-run-time: 7200
+        env:
+            MOZ_AUTOMATION_PACKAGE_TESTS: "1"
     run:
         using: mozharness
         comm-checkout: true
@@ -73,19 +85,26 @@ linux64-shippable/opt:
             - linux64-nasm
             - linux64-node
             - linux64-rust
+            - linux64-rust-size
+        thirdparty-libotr-linux64:
+            - libotr.tar.xz
 
 linux64/debug:
     description: "Linux64 Debug"
     index:
         product: thunderbird
         job-name: linux64-debug
+    dependencies:
+        thirdparty-libotr-linux64: thirdparty-libotr-linux64
     treeherder:
         platform: linux64/debug
         symbol: B
     worker-type: b-linux
     worker:
         docker-image: {in-tree: "debian7-amd64-build"}
-        max-run-time: 36000
+        max-run-time: 7200
+        env:
+            MOZ_AUTOMATION_PACKAGE_TESTS: "1"
     run:
         using: mozharness
         comm-checkout: true
@@ -107,20 +126,27 @@ linux64/debug:
             - linux64-nasm
             - linux64-node
             - linux64-rust
+            - linux64-rust-size
             - linux64-sccache
+        thirdparty-libotr-linux64:
+            - libotr.tar.xz
 
 linux/opt:
     description: "Linux32 Opt"
     index:
         product: thunderbird
         job-name: linux32-opt
+    dependencies:
+        thirdparty-libotr-linux32: thirdparty-libotr-linux32
     treeherder:
         platform: linux32/opt
         symbol: B
     worker-type: b-linux
     worker:
         docker-image: {in-tree: "debian7-i386-build"}
-        max-run-time: 36000
+        max-run-time: 7200
+        env:
+            MOZ_AUTOMATION_PACKAGE_TESTS: "1"
     run:
         using: mozharness
         comm-checkout: true
@@ -140,12 +166,16 @@ linux/opt:
             - linux64-nasm
             - linux64-node
             - linux64-rust
+            - linux64-rust-size
             - linux64-sccache
+        thirdparty-libotr-linux32:
+            - libotr.tar.xz
 
 linux-shippable/opt:
     description: "Linux32 Shippable"
     attributes:
         shippable: true
+        nightly: true
         enable-full-crashsymbols: true
     shipping-phase: build
     shipping-product: thunderbird
@@ -153,13 +183,17 @@ linux-shippable/opt:
         product: thunderbird
         job-name: linux32-opt
         type: shippable
+    dependencies:
+        thirdparty-libotr-linux32: thirdparty-libotr-linux32
     treeherder:
         platform: linux32-shippable/opt
         symbol: B
     worker-type: b-linux
     worker:
         docker-image: {in-tree: "debian7-i386-build"}
-        max-run-time: 36000
+        max-run-time: 7200
+        env:
+            MOZ_AUTOMATION_PACKAGE_TESTS: "1"
     run:
         using: mozharness
         comm-checkout: true
@@ -180,19 +214,26 @@ linux-shippable/opt:
             - linux64-nasm
             - linux64-node
             - linux64-rust
+            - linux64-rust-size
+        thirdparty-libotr-linux32:
+            - libotr.tar.xz
 
 linux/debug:
     description: "Linux32 Debug"
     index:
         product: thunderbird
         job-name: linux32-debug
+    dependencies:
+        thirdparty-libotr-linux32: thirdparty-libotr-linux32
     treeherder:
         platform: linux32/debug
         symbol: B
     worker-type: b-linux
     worker:
         docker-image: {in-tree: "debian7-i386-build"}
-        max-run-time: 36000
+        max-run-time: 7200
+        env:
+            MOZ_AUTOMATION_PACKAGE_TESTS: "1"
     run:
         using: mozharness
         comm-checkout: true
@@ -214,4 +255,7 @@ linux/debug:
             - linux64-nasm
             - linux64-node
             - linux64-rust
+            - linux64-rust-size
             - linux64-sccache
+        thirdparty-libotr-linux32:
+            - libotr.tar.xz

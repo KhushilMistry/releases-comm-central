@@ -2,34 +2,103 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, you can obtain one at http://mozilla.org/MPL/2.0/. */
 
+let { AddonManager } = ChromeUtils.import(
+  "resource://gre/modules/AddonManager.jsm"
+);
+let { cloudFileAccounts } = ChromeUtils.import(
+  "resource:///modules/cloudFileAccounts.jsm"
+);
+let { MockRegistrar } = ChromeUtils.import(
+  "resource://testing-common/MockRegistrar.jsm"
+);
+
 add_task(async () => {
-  // Mock the prompt service. We're going to be asked if we're sure
-  // we want to remove an account, so let's say yes.
-
-  let mockPromptService = {
-    confirmCount: 0,
-    confirm() {
-      this.confirmCount++;
-      return true;
-    },
-    QueryInterface: ChromeUtils.generateQI([Ci.nsIPromptService]),
-  };
-
-  let { MockRegistrar } = ChromeUtils.import(
-    "resource://testing-common/MockRegistrar.jsm"
+  let weTransfer = await AddonManager.getAddonByID(
+    "wetransfer@extensions.thunderbird.net"
   );
-  let mockPromptServiceCID = MockRegistrar.register(
-    "@mozilla.org/embedcomp/prompt-service;1",
-    mockPromptService
-  );
+  if (!weTransfer) {
+    // WeTransfer isn't registered in artifact builds because the wrong
+    // built_in_addons.json is used. For the purposes of this test, pretend
+    // that it is registered.
+    cloudFileAccounts.registerProvider("WeTransfer-Test", {
+      displayName: "WeTransfer",
+      type: "ext-wetransfer@extensions.thunderbird.net",
+    });
+    registerCleanupFunction(() => {
+      cloudFileAccounts.unregisterProvider("WeTransfer-Test");
+    });
+  }
+});
 
-  registerCleanupFunction(() => {
-    MockRegistrar.unregister(mockPromptServiceCID);
-  });
+const ICON_URL = getRootDirectory(gTestPath) + "files/icon.svg";
+const MANAGEMENT_URL = getRootDirectory(gTestPath) + "files/management.html";
+let accountIsConfigured = false;
+let provider = {
+  type: "Mochitest",
+  displayName: "Mochitest",
+  iconURL: ICON_URL,
+  initAccount(accountKey) {
+    return {
+      accountKey,
+      type: "Mochitest",
+      get displayName() {
+        return Services.prefs.getCharPref(
+          `mail.cloud_files.accounts.${this.accountKey}.displayName`,
+          "Mochitest Account"
+        );
+      },
+      iconURL: ICON_URL,
+      configured: accountIsConfigured,
+      managementURL: MANAGEMENT_URL,
+    };
+  },
+};
 
-  let { cloudFileAccounts } = ChromeUtils.import(
-    "resource:///modules/cloudFileAccounts.jsm"
-  );
+// Mock the prompt service. We're going to be asked if we're sure
+// we want to remove an account, so let's say yes.
+
+/** @implements {nsIPromptService} */
+let mockPromptService = {
+  confirmCount: 0,
+  confirm() {
+    this.confirmCount++;
+    return true;
+  },
+  QueryInterface: ChromeUtils.generateQI([Ci.nsIPromptService]),
+};
+/** @implements {nsIExternalProtocolService} */
+let mockExternalProtocolService = {
+  _loadedURLs: [],
+  externalProtocolHandlerExists(aProtocolScheme) {},
+  getApplicationDescription(aScheme) {},
+  getProtocolHandlerInfo(aProtocolScheme) {},
+  getProtocolHandlerInfoFromOS(aProtocolScheme, aFound) {},
+  isExposedProtocol(aProtocolScheme) {},
+  loadURI(aURI, aWindowContext) {
+    this._loadedURLs.push(aURI.spec);
+  },
+  setProtocolHandlerDefaults(aHandlerInfo, aOSHandlerExists) {},
+  urlLoaded(aURL) {
+    return this._loadedURLs.includes(aURL);
+  },
+  QueryInterface: ChromeUtils.generateQI([Ci.nsIExternalProtocolService]),
+};
+
+let mockPromptServiceCID = MockRegistrar.register(
+  "@mozilla.org/embedcomp/prompt-service;1",
+  mockPromptService
+);
+let mockExternalProtocolServiceCID = MockRegistrar.register(
+  "@mozilla.org/uriloader/external-protocol-service;1",
+  mockExternalProtocolService
+);
+
+registerCleanupFunction(() => {
+  MockRegistrar.unregister(mockPromptServiceCID);
+  MockRegistrar.unregister(mockExternalProtocolServiceCID);
+});
+
+add_task(async function addRemoveAccounts() {
   is(cloudFileAccounts.providers.length, 1);
   is(cloudFileAccounts.accounts.length, 0);
 
@@ -72,30 +141,6 @@ add_task(async () => {
 
   // Register our test provider.
 
-  const ICON_URL = getRootDirectory(gTestPath) + "files/icon.svg";
-  const MANAGEMENT_URL = getRootDirectory(gTestPath) + "files/management.html";
-
-  let accountIsConfigured = false;
-  let provider = {
-    type: "Mochitest",
-    displayName: "Mochitest",
-    iconURL: ICON_URL,
-    initAccount(accountKey) {
-      return {
-        accountKey,
-        type: "Mochitest",
-        get displayName() {
-          return Services.prefs.getCharPref(
-            `mail.cloud_files.accounts.${this.accountKey}.displayName`,
-            "Mochitest Account"
-          );
-        },
-        iconURL: ICON_URL,
-        configured: accountIsConfigured,
-        managementURL: MANAGEMENT_URL,
-      };
-    },
-  };
   cloudFileAccounts.registerProvider("Mochitest", provider);
   is(cloudFileAccounts.providers.length, 2);
   is(cloudFileAccounts.accounts.length, 0);
@@ -162,6 +207,19 @@ add_task(async () => {
 
   let iframe = iframeWrapper.firstElementChild;
   is(iframe.src, `${MANAGEMENT_URL}?accountId=${accountKey}`);
+  if (iframe.contentDocument.readyState != "complete") {
+    await BrowserTestUtils.waitForEvent(iframe, "load");
+  }
+  is(iframe.contentDocument.readyState, "complete");
+  EventUtils.synthesizeMouseAtCenter(
+    iframe.contentDocument.getElementById("a"),
+    {},
+    iframe.contentWindow
+  );
+  ok(
+    mockExternalProtocolService.urlLoaded("https://www.example.com/"),
+    "Link click sent to external protocol service."
+  );
 
   // Rename the account.
 
@@ -174,12 +232,12 @@ add_task(async () => {
   await new Promise(resolve => prefsWindow.requestAnimationFrame(resolve));
 
   is(
-    prefsDocument.activeElement.closest("textbox"),
-    accountListItem.querySelector("textbox")
+    prefsDocument.activeElement.closest("input"),
+    accountListItem.querySelector("input")
   );
   ok(accountListItem.querySelector("label").hidden);
-  ok(!accountListItem.querySelector("textbox").hidden);
-  is(accountListItem.querySelector("textbox").value, "Mochitest Account");
+  ok(!accountListItem.querySelector("input").hidden);
+  is(accountListItem.querySelector("input").value, "Mochitest Account");
   EventUtils.synthesizeKey("VK_RIGHT", undefined, prefsWindow);
   EventUtils.synthesizeKey("!", undefined, prefsWindow);
   EventUtils.synthesizeKey("VK_RETURN", undefined, prefsWindow);
@@ -189,7 +247,7 @@ add_task(async () => {
   is(prefsDocument.activeElement, accountList);
   ok(!accountListItem.querySelector("label").hidden);
   is(accountListItem.querySelector("label").value, "Mochitest Account!");
-  ok(accountListItem.querySelector("textbox").hidden);
+  ok(accountListItem.querySelector("input").hidden);
   is(
     Services.prefs.getCharPref(
       `mail.cloud_files.accounts.${accountKey}.displayName`
@@ -208,8 +266,8 @@ add_task(async () => {
   await new Promise(resolve => prefsWindow.requestAnimationFrame(resolve));
 
   is(
-    prefsDocument.activeElement.closest("textbox"),
-    accountListItem.querySelector("textbox")
+    prefsDocument.activeElement.closest("input"),
+    accountListItem.querySelector("input")
   );
   EventUtils.synthesizeKey("O", undefined, prefsWindow);
   EventUtils.synthesizeKey("o", undefined, prefsWindow);
@@ -222,7 +280,7 @@ add_task(async () => {
   is(prefsDocument.activeElement, accountList);
   ok(!accountListItem.querySelector("label").hidden);
   is(accountListItem.querySelector("label").value, "Mochitest Account!");
-  ok(accountListItem.querySelector("textbox").hidden);
+  ok(accountListItem.querySelector("input").hidden);
   is(
     Services.prefs.getCharPref(
       `mail.cloud_files.accounts.${accountKey}.displayName`
@@ -335,37 +393,12 @@ add_task(async () => {
   await closePrefsTab();
 });
 
-add_task(async () => {
-  let { cloudFileAccounts } = ChromeUtils.import(
-    "resource:///modules/cloudFileAccounts.jsm"
-  );
+add_task(async function accountListOverflow() {
+  is(cloudFileAccounts.providers.length, 1);
+  is(cloudFileAccounts.accounts.length, 0);
 
   // Register our test provider.
 
-  const ICON_URL = getRootDirectory(gTestPath) + "files/icon.svg";
-  const MANAGEMENT_URL = getRootDirectory(gTestPath) + "files/management.html";
-
-  let accountIsConfigured = false;
-  let provider = {
-    type: "Mochitest",
-    displayName: "Mochitest",
-    iconURL: ICON_URL,
-    initAccount(accountKey) {
-      return {
-        accountKey,
-        type: "Mochitest",
-        get displayName() {
-          return Services.prefs.getCharPref(
-            `mail.cloud_files.accounts.${this.accountKey}.displayName`,
-            "Mochitest Account"
-          );
-        },
-        iconURL: ICON_URL,
-        configured: accountIsConfigured,
-        managementURL: MANAGEMENT_URL,
-      };
-    },
-  };
   cloudFileAccounts.registerProvider("Mochitest", provider);
   is(cloudFileAccounts.providers.length, 2);
   is(cloudFileAccounts.accounts.length, 0);
@@ -431,4 +464,50 @@ add_task(async () => {
   // Close the preferences tab.
 
   await closePrefsTab();
+  cloudFileAccounts.unregisterProvider("Mochitest");
+  Services.prefs.deleteBranch("mail.cloud_files.accounts");
+});
+
+add_task(async function accountListOrder() {
+  is(cloudFileAccounts.providers.length, 1);
+  is(cloudFileAccounts.accounts.length, 0);
+
+  for (let [key, displayName] of [
+    ["someKey1", "carl's Account"],
+    ["someKey2", "Amber's Account"],
+    ["someKey3", "alice's Account"],
+    ["someKey4", "Bob's Account"],
+  ]) {
+    Services.prefs.setCharPref(
+      `mail.cloud_files.accounts.${key}.type`,
+      "Mochitest"
+    );
+    Services.prefs.setCharPref(
+      `mail.cloud_files.accounts.${key}.displayName`,
+      displayName
+    );
+  }
+
+  // Register our test provider.
+
+  cloudFileAccounts.registerProvider("Mochitest", provider);
+  is(cloudFileAccounts.providers.length, 2);
+  is(cloudFileAccounts.accounts.length, 4);
+
+  let { prefsDocument } = await openNewPrefsTab(
+    "paneCompose",
+    "compositionAttachmentsCategory"
+  );
+
+  let accountList = prefsDocument.getElementById("cloudFileView");
+  is(accountList.itemCount, 4);
+
+  is(accountList.getItemAtIndex(0).value, "someKey3");
+  is(accountList.getItemAtIndex(1).value, "someKey2");
+  is(accountList.getItemAtIndex(2).value, "someKey4");
+  is(accountList.getItemAtIndex(3).value, "someKey1");
+
+  await closePrefsTab();
+  cloudFileAccounts.unregisterProvider("Mochitest");
+  Services.prefs.deleteBranch("mail.cloud_files.accounts");
 });

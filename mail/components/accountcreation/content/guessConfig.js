@@ -5,7 +5,7 @@
 
 /* import-globals-from emailWizard.js */
 
-var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 // This is a bit ugly - we set outgoingDone to false
@@ -133,8 +133,8 @@ function guessConfig(
   };
 
   var errorInCallback = function(e) {
-    // The caller's errorCallback threw.
-    // hopefully shouldn't happen for users.
+    // The caller's errorCallback threw. Hopefully shouldn't happen for users.
+    console.error(e);
     alertPrompt("Error in errorCallback for guessConfig()", e);
   };
 
@@ -1002,9 +1002,8 @@ function protocolToString(type) {
 // ----------------------
 // SSL cert error handler
 
+// TODO: Add new error handling that uses this code. See bug 1547096.
 /**
- * Called by MyBadCertHandler.js, which called by PSM
- * to tell us about SSL certificate errors.
  * @param thisTry {HostTry}
  * @param logger {Log4Moz logger}
  */
@@ -1178,11 +1177,7 @@ function SocketUtil(
 
   transport.setTimeout(Ci.nsISocketTransport.TIMEOUT_CONNECT, timeout);
   transport.setTimeout(Ci.nsISocketTransport.TIMEOUT_READ_WRITE, timeout);
-  try {
-    transport.securityCallbacks = new BadCertHandler(sslErrorHandler);
-  } catch (e) {
-    _error(e);
-  }
+
   var outstream = transport.openOutputStream(0, 0, 0);
   var stream = transport.openInputStream(0, 0, 0);
   var instream = Cc["@mozilla.org/scriptableinputstream;1"].createInstance(

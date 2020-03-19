@@ -33,7 +33,6 @@
 #include "nsISupportsPrimitives.h"
 #include "nsIMsgDatabase.h"
 #include "nsIMsgHdr.h"
-#include "nsAutoPtr.h"
 #include "prmem.h"
 #include "nsComponentManagerUtils.h"
 #include "nsServiceManagerUtils.h"
@@ -51,7 +50,7 @@
 #include "mozilla/Services.h"
 #include "mozilla/mailnews/MimeHeaderParser.h"
 
-#define ALERT_CHROME_URL "chrome://messenger/content/newmailalert.xul"
+#define ALERT_CHROME_URL "chrome://messenger/content/newmailalert.xhtml"
 #define NEW_MAIL_ALERT_ICON "chrome://messenger/skin/icons/new-mail-alert.png"
 #define SHOW_ALERT_PREF "mail.biff.show_alert"
 #define SHOW_ALERT_PREVIEW_LENGTH "mail.biff.alert.preview_length"
@@ -83,7 +82,7 @@ static void openMailWindow(const nsACString &aFolderUri) {
     if (domWindow) {
       nsCOMPtr<nsPIDOMWindowOuter> privateWindow =
           nsPIDOMWindowOuter::From(domWindow);
-      privateWindow->Focus();
+      privateWindow->Focus(mozilla::dom::CallerType::System);
     }
   } else {
     // the user doesn't have a mail window open already so open one for them...
@@ -119,15 +118,16 @@ nsresult nsMessengerUnixIntegration::Init() {
 NS_IMETHODIMP
 nsMessengerUnixIntegration::OnItemPropertyChanged(nsIMsgFolder *,
                                                   const nsACString &,
-                                                  char const *, char const *) {
+                                                  const nsACString &,
+                                                  const nsACString &) {
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsMessengerUnixIntegration::OnItemUnicharPropertyChanged(nsIMsgFolder *,
                                                          const nsACString &,
-                                                         const char16_t *,
-                                                         const char16_t *) {
+                                                         const nsAString &,
+                                                         const nsAString &) {
   return NS_OK;
 }
 
@@ -226,8 +226,9 @@ bool nsMessengerUnixIntegration::BuildNotificationBody(nsIMsgDBHdr *aHdr,
   if (NS_FAILED(aHdr->GetMessageKey(&messageKey))) return false;
 
   bool asyncResult = false;
-  nsresult rv = folder->FetchMsgPreviewText(&messageKey, 1, localOnly, this,
-                                            &asyncResult);
+  nsTArray<nsMsgKey> singleKey({messageKey});
+  nsresult rv =
+      folder->FetchMsgPreviewText(singleKey, localOnly, this, &asyncResult);
   // If we're still waiting on getting the message previews,
   // bail early.  We'll come back later when the async operation
   // finishes.
@@ -438,14 +439,12 @@ void nsMessengerUnixIntegration::FillToolTipInfo() {
     if (NS_FAILED(folderWithNewMail->GetMsgDatabase(getter_AddRefs(db))))
       return;
 
-    uint32_t numNewKeys = 0;
-    uint32_t *newMessageKeys;
-    db->GetNewList(&numNewKeys, &newMessageKeys);
+    nsTArray<nsMsgKey> newMessageKeys;
+    db->GetNewList(newMessageKeys);
 
     // If we had new messages, we *should* have new keys, but we'll
     // check just in case.
-    if (numNewKeys <= 0) {
-      free(newMessageKeys);
+    if (newMessageKeys.IsEmpty()) {
       return;
     }
 
@@ -458,7 +457,7 @@ void nsMessengerUnixIntegration::FillToolTipInfo() {
     // Next, add the new message headers to an nsCOMArray.  We
     // only add message headers that are newer than lastMRUTime.
     nsCOMArray<nsIMsgDBHdr> newMsgHdrs;
-    for (unsigned int i = 0; i < numNewKeys; ++i) {
+    for (unsigned int i = 0; i < newMessageKeys.Length(); ++i) {
       nsCOMPtr<nsIMsgDBHdr> hdr;
       if (NS_FAILED(
               db->GetMsgHdrForKey(newMessageKeys[i], getter_AddRefs(hdr))))
@@ -469,10 +468,6 @@ void nsMessengerUnixIntegration::FillToolTipInfo() {
 
       if (dateInSeconds > lastMRUTime) newMsgHdrs.AppendObject(hdr);
     }
-
-    // At this point, we don't need newMessageKeys any more,
-    // so let's free it.
-    free(newMessageKeys);
 
     // If we didn't happen to add any message headers, bail out
     if (!newMsgHdrs.Count()) return;

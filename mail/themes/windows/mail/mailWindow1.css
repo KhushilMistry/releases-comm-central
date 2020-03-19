@@ -13,6 +13,10 @@
 @import url("chrome://messenger/skin/messageIcons.css");
 @import url("chrome://messenger/skin/shared/mailWindow1.css");
 
+#messengerBox {
+  background-color: -moz-Dialog;
+}
+
 #folderPane-toolbar {
   border-top-style: none;
   border-bottom: 1px solid ThreeDShadow;
@@ -137,6 +141,14 @@ treechildren::-moz-tree-row(dummy, selected, focus) {
 
 #messengerWindow:not([tabsintitlebar]) .titlebar-placeholder {
   visibility: collapse;
+}
+
+@media (-moz-os-version: windows-win7) and (-moz-windows-glass: 0) {
+  #messengerWindow[tabsintitlebar]
+    #mail-toolbar-menubar2:not([autohide]) + #tabs-toolbar >
+    .titlebar-placeholder {
+    visibility: collapse;
+  }
 }
 
 /* Add extra space to titlebar for dragging */
@@ -420,10 +432,6 @@ treechildren::-moz-tree-row(dummy, selected, focus) {
       }
     }
   }
-
-  #mail-toolbar-menubar2 > .titlebar-placeholder {
-    display: none;
-  }
 }
 
 #folderpane_splitter,
@@ -542,7 +550,7 @@ treechildren::-moz-tree-row(dummy, selected, focus) {
     -moz-box-align: center;
     -moz-box-pack: center;
     list-style-image: url("chrome://messenger/skin/icons/toolbarbutton-arrow.svg");
-    -moz-image-region: auto;
+    -moz-image-region: auto !important;
     -moz-context-properties: fill;
     fill: currentColor;
     margin-top: 0;
@@ -562,13 +570,6 @@ treechildren::-moz-tree-row(dummy, selected, focus) {
   #viewPickerPopup menuitem {
     height: 2em;
     border: 1px solid transparent;
-  }
-
-  #folderPaneHeader {
-    -moz-appearance: none;
-    background-color: #f8f8f8;
-    border-top: 0px;
-    border-bottom: 1px solid #a9b1b8;
   }
 
   :root:not([lwt-tree]) #folderTree {

@@ -24,7 +24,7 @@ function outgoingPageValidate() {
     canAdvance = false;
   }
 
-  document.documentElement.canAdvance = canAdvance;
+  document.querySelector("wizard").canAdvance = canAdvance;
 }
 
 function outgoingPageUnload() {
@@ -117,7 +117,7 @@ function modifyStaticText(smtpMod, smtpBox) {
   // or username for the smtp server.
   var smtpStatic = document.getElementById("smtpStaticText" + smtpBox);
   if (smtpStatic && smtpStatic.hasChildNodes()) {
-    smtpStatic.childNodes[0].nodeValue =
+    smtpStatic.children[0].nodeValue =
       smtpStatic.getAttribute("prefix") +
       smtpMod +
       smtpStatic.getAttribute("suffix");

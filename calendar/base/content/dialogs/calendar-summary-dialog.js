@@ -11,9 +11,9 @@
 /* import-globals-from ../../src/calApplicationUtils.js */
 /* import-globals-from calendar-dialog-utils.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { recurrenceRule2String } = ChromeUtils.import(
-  "resource://calendar/modules/calRecurrenceUtils.jsm"
+  "resource:///modules/calendar/calRecurrenceUtils.jsm"
 );
 var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 
@@ -34,6 +34,7 @@ function onLoad() {
   let item = args.calendarEvent;
   item = item.clone(); // use an own copy of the passed item
   window.calendarItem = item;
+  let dialog = document.querySelector("dialog");
 
   // the calling entity provides us with an object that is responsible
   // for recording details about the initiated modification. the 'finalize'-property
@@ -58,12 +59,12 @@ function onLoad() {
 
   // set the dialog-id to enable the right window-icon to be loaded.
   if (cal.item.isEvent(item)) {
-    setDialogId(document.documentElement, "calendar-event-summary-dialog");
+    setDialogId(dialog, "calendar-event-summary-dialog");
   } else if (cal.item.isToDo(item)) {
-    setDialogId(document.documentElement, "calendar-task-summary-dialog");
+    setDialogId(dialog, "calendar-task-summary-dialog");
   }
 
-  window.attendees = item.getAttendees({});
+  window.attendees = item.getAttendees();
 
   let calendar = cal.wrapInstance(item.calendar, Ci.calISchedulingSupport);
   window.readOnly = !(
@@ -75,7 +76,7 @@ function onLoad() {
     let attendee = calendar.getInvitedAttendee(item);
     if (attendee) {
       // if this is an unresponded invitation, preset our default alarm values:
-      if (!item.getAlarms({}).length && attendee.participationStatus == "NEEDS-ACTION") {
+      if (!item.getAlarms().length && attendee.participationStatus == "NEEDS-ACTION") {
         cal.alarms.setDefaultValues(item);
       }
 
@@ -123,7 +124,7 @@ function onLoad() {
     argCalendar.getProperty("capabilities.alarms.oninvitations.supported") !== false;
   if (!window.readOnly && supportsReminders) {
     document.getElementById("reminder-row").removeAttribute("hidden");
-    loadReminders(window.calendarItem.getAlarms({}));
+    loadReminders(window.calendarItem.getAlarms());
     updateReminder();
   }
 
@@ -137,7 +138,7 @@ function onLoad() {
     document.getElementById("item-location").value = location;
   }
 
-  let categories = item.getCategories({});
+  let categories = item.getCategories();
   if (categories.length > 0) {
     document.getElementById("category-row").removeAttribute("hidden");
     document.getElementById("item-category").value = categories.join(", "); // TODO l10n-unfriendly
@@ -208,7 +209,7 @@ function onLoad() {
 
   document.title = item.title;
 
-  let attachments = item.getAttachments({});
+  let attachments = item.getAttachments();
   if (attachments.length) {
     // we only want to display uri type attachments and no ones received inline with the
     // invitation message (having a CID: prefix results in about:blank) here
@@ -250,13 +251,13 @@ function onLoad() {
   // If this item is read only we remove the 'cancel' button as users
   // can't modify anything, thus we go ahead with an 'ok' button only.
   if (window.readOnly) {
-    document.documentElement.getButton("cancel").setAttribute("collapsed", "true");
-    document.documentElement.getButton("accept").focus();
+    dialog.getButton("cancel").setAttribute("collapsed", "true");
+    dialog.getButton("accept").focus();
   }
 
   // disable default controls
-  let accept = document.documentElement.getButton("accept");
-  let cancel = document.documentElement.getButton("cancel");
+  let accept = dialog.getButton("accept");
+  let cancel = dialog.getButton("cancel");
   accept.setAttribute("collapsed", "true");
   cancel.setAttribute("collapsed", "true");
   cancel.parentNode.setAttribute("collapsed", "true");
@@ -319,7 +320,7 @@ function reply(aResponseMode, aPartStat) {
   if (window.attendee) {
     let aclEntry = window.calendarItem.calendar.aclEntry;
     if (aclEntry) {
-      let userAddresses = aclEntry.getUserAddresses({});
+      let userAddresses = aclEntry.getUserAddresses();
       if (
         userAddresses.length > 0 &&
         !cal.email.attendeeMatchesAddresses(window.attendee, userAddresses)
@@ -343,7 +344,7 @@ function reply(aResponseMode, aPartStat) {
  */
 function saveAndClose(aResponseMode) {
   window.responseMode = aResponseMode;
-  document.documentElement.acceptDialog();
+  document.querySelector("dialog").acceptDialog();
 }
 
 function updateToolbar() {
@@ -439,17 +440,17 @@ function updateRepeatDetails() {
   // Now display the string...
   let lines = detailsString.split("\n");
   repeatDetails.removeAttribute("collapsed");
-  while (repeatDetails.childNodes.length > lines.length) {
+  while (repeatDetails.children.length > lines.length) {
     repeatDetails.lastChild.remove();
   }
-  let numChilds = repeatDetails.childNodes.length;
+  let numChilds = repeatDetails.children.length;
   for (let i = 0; i < lines.length; i++) {
     if (i >= numChilds) {
-      let newNode = repeatDetails.firstChild.cloneNode(true);
+      let newNode = repeatDetails.firstElementChild.cloneNode(true);
       repeatDetails.appendChild(newNode);
     }
-    repeatDetails.childNodes[i].value = lines[i];
-    repeatDetails.childNodes[i].setAttribute("tooltiptext", detailsString);
+    repeatDetails.children[i].value = lines[i];
+    repeatDetails.children[i].setAttribute("tooltiptext", detailsString);
   }
 }
 
@@ -510,7 +511,7 @@ function openAttachment(aAttachmentId) {
   let args = window.arguments[0];
   let item = args.calendarEvent;
   let attachments = item
-    .getAttachments({})
+    .getAttachments()
     .filter(aAttachment => aAttachment.hashId == aAttachmentId);
   if (attachments.length && attachments[0].uri && attachments[0].uri.spec != "about:blank") {
     Cc["@mozilla.org/uriloader/external-protocol-service;1"]

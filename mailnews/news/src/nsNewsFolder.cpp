@@ -54,7 +54,6 @@
 #include "nsILoginManager.h"
 #include "nsEmbedCID.h"
 #include "mozilla/Services.h"
-#include "nsAutoPtr.h"
 #include "nsIInputStream.h"
 #include "nsMemory.h"
 #include "nsIURIMutator.h"
@@ -440,8 +439,8 @@ NS_IMETHODIMP nsMsgNewsFolder::CreateSubfolder(const nsAString &newsgroupName,
   return rv;
 }
 
-NS_IMETHODIMP nsMsgNewsFolder::Delete() {
-  nsresult rv = nsMsgDBFolder::Delete();
+NS_IMETHODIMP nsMsgNewsFolder::DeleteStorage() {
+  nsresult rv = nsMsgDBFolder::DeleteStorage();
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<nsINntpIncomingServer> nntpServer;
@@ -1399,8 +1398,7 @@ NS_IMETHODIMP nsMsgNewsFolder::RemoveMessages(nsTArray<nsMsgKey> &aMsgKeys) {
     notifier->NotifyMsgsDeleted(msgHdrs);
   }
 
-  return mDatabase->DeleteMessages(aMsgKeys.Length(), aMsgKeys.Elements(),
-                                   nullptr);
+  return mDatabase->DeleteMessages(aMsgKeys, nullptr);
 }
 
 NS_IMETHODIMP nsMsgNewsFolder::CancelComplete() {

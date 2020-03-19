@@ -8,7 +8,7 @@
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  const { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+  const { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
   /**
    * The MozCalendarEventColumn widget used for displaying event boxes in one column per day.
@@ -33,9 +33,8 @@
             <box class="multiday-column-bg-box" flex="1"/>
             <box class="multiday-column-top-box"
                  flex="1"
-                 equalsize="always"
-                 mousethrough="always"/>
-            <box class="timeIndicator" mousethrough="always" hidden="true"/>
+                 equalsize="always"/>
+            <box class="timeIndicator" hidden="true"/>
             <box class="fgdragcontainer" flex="1">
               <box class="fgdragspacer">
                 <spacer flex="1"/>
@@ -66,7 +65,7 @@
         }
 
         if (event.button == 0 && !(event.ctrlKey || event.metaKey)) {
-          this.calendarView.setSelectedItems(0, []);
+          this.calendarView.setSelectedItems([]);
           this.focus();
         } else if (event.button == 2) {
           let newStart = this.getClickedDateTime(event);
@@ -212,14 +211,14 @@
     set selected(val) {
       this.mSelected = val;
       if (this.bgbox && this.bgbox.hasChildNodes()) {
-        let child = this.bgbox.firstChild;
+        let child = this.bgbox.firstElementChild;
         while (child) {
           if (val) {
             child.setAttribute("selected", "true");
           } else {
             child.removeAttribute("selected");
           }
-          child = child.nextSibling;
+          child = child.nextElementSibling;
         }
       }
       return val;
@@ -431,8 +430,8 @@
       return {
         start: startHour * 60 + startMinute,
         end: endHour * 60 + endMinute,
-        realStart: realStart,
-        realEnd: realEnd,
+        realStart,
+        realEnd,
       };
     }
 
@@ -1107,9 +1106,9 @@
 
       // Return values needed to build the shadows while dragging.
       return {
-        shadows: shadows, // Number of shadows.
-        offset: offset, // Offset first<->selected shadows.
-        startMin: startMin, // First shadow start minute.
+        shadows, // Number of shadows.
+        offset, // Offset first<->selected shadows.
+        startMin, // First shadow start minute.
         endMin: end % this.mEndMin, // Last shadow end minute.
       };
     }
@@ -1119,13 +1118,13 @@
       let lastCol = this; // eslint-disable-line consistent-this
       let firstIndex = offset == null ? this.mDragState.offset : offset;
       let lastIndex = firstIndex;
-      while (firstCol.previousSibling && firstIndex > 0) {
-        firstCol = firstCol.previousSibling;
+      while (firstCol.previousElementSibling && firstIndex > 0) {
+        firstCol = firstCol.previousElementSibling;
         firstIndex--;
       }
       let lastShadow = shadows == null ? this.mDragState.shadows : shadows;
-      while (lastCol.nextSibling && lastIndex < lastShadow - 1) {
-        lastCol = lastCol.nextSibling;
+      while (lastCol.nextElementSibling && lastIndex < lastShadow - 1) {
+        lastCol = lastCol.nextElementSibling;
         lastIndex++;
       }
 
@@ -1133,10 +1132,10 @@
       // week and the positions of these (visible) columns in the set of
       // columns shadows of the occurrence.
       return {
-        firstCol: firstCol,
-        firstIndex: firstIndex,
-        lastCol: lastCol,
-        lastIndex: lastIndex,
+        firstCol,
+        firstIndex,
+        lastCol,
+        lastIndex,
       };
     }
 
@@ -1151,17 +1150,17 @@
       // next/previous day. This happens when current offset is different
       // from offset stored in mDragState.
       if (aCurrentOffset != null) {
-        if (this.mDragState.offset > aCurrentOffset && firstCol.previousSibling) {
-          firstCol.previousSibling.fgboxes.dragbox.removeAttribute("dragging");
-          firstCol.previousSibling.fgboxes.box.removeAttribute("dragging");
+        if (this.mDragState.offset > aCurrentOffset && firstCol.previousElementSibling) {
+          firstCol.previousElementSibling.fgboxes.dragbox.removeAttribute("dragging");
+          firstCol.previousElementSibling.fgboxes.box.removeAttribute("dragging");
         }
         let currentOffsetEndSide = aCurrentShadows - 1 - aCurrentOffset;
         if (
           this.mDragState.shadows - 1 - this.mDragState.offset > currentOffsetEndSide &&
-          lastCol.nextSibling
+          lastCol.nextElementSibling
         ) {
-          lastCol.nextSibling.fgboxes.dragbox.removeAttribute("dragging");
-          lastCol.nextSibling.fgboxes.box.removeAttribute("dragging");
+          lastCol.nextElementSibling.fgboxes.dragbox.removeAttribute("dragging");
+          lastCol.nextElementSibling.fgboxes.box.removeAttribute("dragging");
         }
       }
 
@@ -1184,7 +1183,7 @@
           column.fgboxes.dragspacer.setAttribute(aSizeattr, 0);
           column.fgboxes.dragbox.setAttribute(aSizeattr, this.mEndMin * column.mPixPerMin);
         }
-        column = column.nextSibling;
+        column = column.nextElementSibling;
       }
     }
 
@@ -1201,7 +1200,7 @@
         while (column && index < col.mDragState.shadows) {
           column.fgboxes.dragbox.removeAttribute("dragging");
           column.fgboxes.box.removeAttribute("dragging");
-          column = column.nextSibling;
+          column = column.nextElementSibling;
           index++;
         }
 
@@ -1287,7 +1286,7 @@
         for (
           let column = firstCol, i = firstIndex;
           column && i < col.mDragState.shadows;
-          column = column.nextSibling, i++
+          column = column.nextElementSibling, i++
         ) {
           column.fgboxes.dragbox.removeAttribute("dragging");
           column.fgboxes.box.removeAttribute("dragging");
@@ -1308,9 +1307,9 @@
         // targets will ask for selected items in order to pull the data from
         // the packets. that's why we need to make sure at least the currently
         // dragged event is contained in the set of selected items.
-        let selectedItems = this.getSelectedItems({});
+        let selectedItems = this.getSelectedItems();
         if (!selectedItems.some(aItem => aItem.hashId == item.hashId)) {
-          col.calendarView.setSelectedItems(1, [event.ctrlKey ? item.parentItem : item]);
+          col.calendarView.setSelectedItems([event.ctrlKey ? item.parentItem : item]);
         }
         invokeEventDragSession(dragState.dragOccurrence, col);
         return;
@@ -1349,7 +1348,7 @@
         for (
           let column = firstCol, i = firstIndex;
           column && i < col.mDragState.shadows;
-          column = column.nextSibling, i++
+          column = column.nextElementSibling, i++
         ) {
           column.fgboxes.dragbox.removeAttribute("dragging");
           column.fgboxes.box.removeAttribute("dragging");
@@ -1478,7 +1477,7 @@
       while (column && index < dragState.shadows) {
         column.fgboxes.dragbox.removeAttribute("dragging");
         column.fgboxes.box.removeAttribute("dragging");
-        column = column.nextSibling;
+        column = column.nextElementSibling;
         index++;
       }
 

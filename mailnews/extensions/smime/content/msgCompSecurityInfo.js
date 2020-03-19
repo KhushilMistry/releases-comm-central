@@ -49,9 +49,7 @@ function onLoad() {
     try {
       helper.getRecipientCertsInfo(
         params.compFields,
-        gCount,
         gEmailAddresses,
-        {}, // certStatusSummaries - provide no useful info anymore
         gCertIssuedInfos,
         gCertExpiresInfos,
         gCerts,
@@ -93,7 +91,7 @@ function onLoad() {
 
         if (autocompleteDirectory) {
           window.openDialog(
-            "chrome://messenger-smime/content/certFetchingStatus.xul",
+            "chrome://messenger-smime/content/certFetchingStatus.xhtml",
             "",
             "chrome,resizable=1,modal=1,dialog=1",
             autocompleteDirectory,
@@ -283,7 +281,7 @@ function onSelectionChange(event) {
 function viewCertHelper(parent, cert) {
   Services.ww.openWindow(
     parent,
-    "chrome://pippki/content/certViewer.xul",
+    "chrome://pippki/content/certViewer.xhtml",
     "_blank",
     "centerscreen,chrome,titlebar",
     cert

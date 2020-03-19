@@ -6,6 +6,9 @@
 var {Services} = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var {XPCOMUtils} = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 const {AeroPeek} = ChromeUtils.import("resource:///modules/WindowsPreviewPerTab.jsm");
+var {AppConstants} = ChromeUtils.import(
+  "resource://gre/modules/AppConstants.jsm"
+);
 
 XPCOMUtils.defineLazyModuleGetters(this, {
   NetUtil: "resource://gre/modules/NetUtil.jsm",
@@ -687,6 +690,9 @@ nsBrowserAccess.prototype = {
                                     .getInterface(nsIWebNavigation)
                                     .currentURI : null;
     let referrerPolicy = Ci.nsIHttpChannel.REFERRER_POLICY_UNSET;
+    if (aOpener && aOpener.document) {
+      referrerPolicy = aOpener.document.referrerPolicy;
+    }
     var uri = aURI ? aURI.spec : "about:blank";
 
     switch (aWhere) {
@@ -973,20 +979,11 @@ function Startup()
 
       let userContextId = (window.arguments[6] != undefined ?
           window.arguments[6] : Ci.nsIScriptSecurityManager.DEFAULT_USER_CONTEXT_ID);
-
-      try {
-        openLinkIn(uriToLoad, "current",
-                   { referrerURI,
-                     referrerPolicy,
-                     postData: window.arguments[3] || null,
-                     allowThirdPartyFixup: window.arguments[4] || false,
-                     userContextId,
-                     // pass the origin principal (if any) and force its use to create
-                     // an initial about:blank viewer if present:
-                     originPrincipal: window.arguments[7],
-                     triggeringPrincipal: window.arguments[8],
-                   });
-      } catch (e) {}
+      loadURI(uriToLoad, referrerURI, window.arguments[3] || null,
+              window.arguments[4] || false, referrerPolicy, userContextId,
+              // pass the origin principal (if any) and force its use to create
+              // an initial about:blank viewer if present:
+              window.arguments[7], !!window.arguments[7], window.arguments[8]);
     } else {
       // Note: loadOneOrMoreURIs *must not* be called if window.arguments.length >= 3.
       // Such callers expect that window.arguments[0] is handled as a single URI.
@@ -1409,35 +1406,13 @@ function BrowserHandleShiftBackspace()
   }
 }
 
-function SetGroupHistory(popupMenu, direction)
-{
-  while (popupMenu.hasChildNodes())
-    popupMenu.lastChild.remove();
-
-  var menuItem = document.createElementNS(XUL_NS, "menuitem");
-  var label = gNavigatorBundle.getString("tabs.historyItem");
-  menuItem.setAttribute("label", label);
-  menuItem.setAttribute("index", direction);
-  popupMenu.appendChild(menuItem);
-}
-
 function BrowserBackMenu(event)
 {
-  if (gBrowser.backBrowserGroup.length != 0) {
-    SetGroupHistory(event.target, "back");
-    return true;
-  }
-
   return FillHistoryMenu(event.target, "back");
 }
 
 function BrowserForwardMenu(event)
 {
-  if (gBrowser.forwardBrowserGroup.length != 0) {
-    SetGroupHistory(event.target, "forward");
-    return true;
-  }
-
   return FillHistoryMenu(event.target, "forward");
 }
 
@@ -1949,10 +1924,16 @@ function updateCloseItems()
     closeItem.setAttribute("accesskey", gNavigatorBundle.getString("tabs.closeTab.accesskey"));
   }
 
-  var hideCloseOtherTabs = !browser || !browser.getStripVisibility();
-  document.getElementById("menu_closeOtherTabs").hidden = hideCloseOtherTabs;
-  if (!hideCloseOtherTabs)
-    document.getElementById("cmd_closeOtherTabs").setAttribute("disabled", hideCloseWindow);
+  var hideClose = !browser || !browser.getStripVisibility();
+  document.getElementById("menu_closeOtherTabs").hidden = hideClose;
+  if (!hideClose)
+    document.getElementById("cmd_closeOtherTabs").disabled = hideCloseWindow;
+
+  hideClose = !browser ||
+              (browser.getTabsToTheEndFrom(browser.mCurrentTab).length == 0);
+  document.getElementById("menu_closeTabsToTheEnd").hidden = hideClose;
+  if (!hideClose)
+    document.getElementById("cmd_closeTabsToTheEnd").disabled = hideClose;
 }
 
 function updateRecentMenuItems()
@@ -2046,6 +2027,12 @@ function BrowserCloseOtherTabs()
   browser.removeAllTabsBut(browser.mCurrentTab);
 }
 
+function BrowserCloseTabsToTheEnd()
+{
+  var browser = getBrowser();
+  browser.removeTabsToTheEndFrom(browser.mCurrentTab);
+}
+
 function BrowserCloseTabOrWindow()
 {
   var browser = getBrowser();
@@ -2089,26 +2076,20 @@ function BrowserCloseWindow()
   window.close();
 }
 
-// TODO align the function parameters with Firefox
-// function loadURI(uri, referrer, postData, allowThirdPartyFixup, referrerPolicy,
-//                  userContextId, originPrincipal, forceAboutBlankViewerInCurrent,
-//                  triggeringPrincipal)
-function loadURI(uri, referrer, postData, allowThirdPartyFixup)
-{
+function loadURI(uri, referrer, postData, allowThirdPartyFixup, referrerPolicy,
+                 userContextId, originPrincipal,
+                 forceAboutBlankViewerInCurrent, triggeringPrincipal) {
   try {
-    var flags = nsIWebNavigation.LOAD_FLAGS_NONE;
-    if (allowThirdPartyFixup) {
-      flags = nsIWebNavigation.LOAD_FLAGS_ALLOW_THIRD_PARTY_FIXUP |
-              nsIWebNavigation.LOAD_FLAGS_FIXUP_SCHEME_TYPOS;
-    }
-    if (!flags && typeof postData == "number") {
-      // Deal with legacy code that passes load flags in the third argument.
-      flags = postData;
-      postData = null;
-    }
-    gBrowser.loadURIWithFlags(uri, flags, referrer, null, postData);
-  } catch (e) {
-  }
+    openLinkIn(uri, "current",
+               { referrerURI: referrer,
+                 referrerPolicy: referrerPolicy,
+                 postData: postData,
+                 allowThirdPartyFixup: allowThirdPartyFixup,
+                 userContextId: userContextId,
+                 originPrincipal,
+                 triggeringPrincipal,
+                 forceAboutBlankViewerInCurrent, });
+  } catch (e) {}
 }
 
 function loadOneOrMoreURIs(aURIString, aTriggeringPrincipal) {
@@ -2952,9 +2933,8 @@ function WindowIsClosing()
   var browser = getBrowser();
   var cn = browser.tabContainer.childNodes;
   var numtabs = cn.length;
-  var reallyClose = true;
 
-  if (!gPrivate && !/Mac/.test(navigator.platform) && isClosingLastBrowser()) {
+  if (!gPrivate && AppConstants.platform != "macosx" && isClosingLastBrowser()) {
     let closingCanceled = Cc["@mozilla.org/supports-PRBool;1"]
                             .createInstance(Ci.nsISupportsPRBool);
     Services.obs.notifyObservers(closingCanceled, "browser-lastwindow-close-requested");
@@ -2966,28 +2946,8 @@ function WindowIsClosing()
     return true;
   }
 
-  if (!gPrivate && numtabs > 1) {
-    var shouldPrompt = Services.prefs.getBoolPref("browser.tabs.warnOnClose");
-    if (shouldPrompt) {
-      //default to true: if it were false, we wouldn't get this far
-      var warnOnClose = {value:true};
-
-       var buttonPressed = Services.prompt.confirmEx(window,
-         gNavigatorBundle.getString('tabs.closeWarningTitle'),
-         gNavigatorBundle.getFormattedString("tabs.closeWarning", [numtabs]),
-         (Services.prompt.BUTTON_TITLE_IS_STRING * Services.prompt.BUTTON_POS_0)
-            + (Services.prompt.BUTTON_TITLE_CANCEL * Services.prompt.BUTTON_POS_1),
-            gNavigatorBundle.getString('tabs.closeButton'),
-            null, null,
-            gNavigatorBundle.getString('tabs.closeWarningPromptMe'),
-            warnOnClose);
-      reallyClose = (buttonPressed == 0);
-      //don't set the pref unless they press OK and it's false
-      if (reallyClose && !warnOnClose.value) {
-        Services.prefs.setBoolPref("browser.tabs.warnOnClose", false);
-      }
-    } //if the warn-me pref was true
-  } //if multiple tabs are open
+  var reallyClose = gPrivate ||
+                    browser.warnAboutClosingTabs(browser.closingTabsEnum.ALL);
 
   for (var i = 0; reallyClose && i < numtabs; ++i) {
     var ds = browser.getBrowserForTab(cn[i]).docShell;

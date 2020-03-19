@@ -270,7 +270,7 @@ NS_IMETHODIMP nsImapService::OpenAttachment(
 
   nsAutoCString uri(aMessageUri);
   nsAutoCString urlString(aUrl);
-  MsgReplaceSubstring(urlString, "/;section", "?section");
+  urlString.ReplaceSubstring("/;section", "?section");
 
   // more stuff i don't understand
   int32_t sectionPos = urlString.Find("?section");
@@ -486,8 +486,8 @@ NS_IMETHODIMP nsImapService::DisplayMessage(const char *aMessageURI,
       int32_t keySeparator = uriStr.RFindChar('#');
       if (keySeparator != -1) {
         int32_t keyEndSeparator = MsgFindCharInSet(uriStr, "/?&", keySeparator);
-        int32_t mpodFetchPos = MsgFind(uriStr, "fetchCompleteMessage=true",
-                                       false, keyEndSeparator);
+        int32_t mpodFetchPos =
+            uriStr.Find("fetchCompleteMessage=true", false, keyEndSeparator);
         if (mpodFetchPos != -1) useMimePartsOnDemand = false;
       }
 
@@ -607,7 +607,7 @@ nsresult nsImapService::FetchMimePart(
         loadState->SetLoadType(LOAD_LINK);
       loadState->SetFirstParty(false);
       loadState->SetTriggeringPrincipal(nsContentUtils::GetSystemPrincipal());
-      rv = docShell->LoadURI(loadState);
+      rv = docShell->LoadURI(loadState, false);
     } else {
       nsCOMPtr<nsIStreamListener> aStreamListener =
           do_QueryInterface(aDisplayConsumer, &rv);
@@ -716,11 +716,11 @@ NS_IMETHODIMP nsImapService::CopyMessage(const char *aSrcMailboxURI,
 }
 
 NS_IMETHODIMP nsImapService::CopyMessages(
-    uint32_t aNumKeys, nsMsgKey *aKeys, nsIMsgFolder *srcFolder,
+    const nsTArray<nsMsgKey> &aKeys, nsIMsgFolder *srcFolder,
     nsIStreamListener *aMailboxCopy, bool moveMessage,
     nsIUrlListener *aUrlListener, nsIMsgWindow *aMsgWindow, nsIURI **aURL) {
   NS_ENSURE_ARG_POINTER(aMailboxCopy);
-  NS_ENSURE_ARG_POINTER(aKeys);
+  NS_ENSURE_TRUE(!aKeys.IsEmpty(), NS_ERROR_INVALID_ARG);
 
   nsresult rv;
   nsCOMPtr<nsISupports> streamSupport = do_QueryInterface(aMailboxCopy, &rv);
@@ -738,7 +738,11 @@ NS_IMETHODIMP nsImapService::CopyMessages(
       srcFolder->GenerateMessageURI(aKeys[0], uri);
 
       nsCString messageIds;
-      AllocateImapUidString(aKeys, aNumKeys, nullptr, messageIds);
+      // TODO: AllocateImapUidString() maxes out at 950 keys or so... it
+      // updates the numKeys passed in, but here the resulting value is
+      // ignored. Does this need sorting out?
+      uint32_t numKeys = aKeys.Length();
+      AllocateImapUidString(aKeys.Elements(), numKeys, nullptr, messageIds);
       nsCOMPtr<nsIImapUrl> imapUrl;
       nsAutoCString urlSpec;
       char hierarchyDelimiter = GetHierarchyDelimiter(folder);
@@ -1008,7 +1012,7 @@ nsresult nsImapService::GetMessageFromUrl(
     loadState->SetLoadFlags(nsIWebNavigation::LOAD_FLAGS_NONE);
     loadState->SetFirstParty(false);
     loadState->SetTriggeringPrincipal(nsContentUtils::GetSystemPrincipal());
-    rv = docShell->LoadURI(loadState);
+    rv = docShell->LoadURI(loadState, false);
   } else {
     nsCOMPtr<nsIStreamListener> streamListener =
         do_QueryInterface(aDisplayConsumer, &rv);
@@ -2414,7 +2418,14 @@ nsresult nsImapService::NewURI(const nsACString &aSpec,
   // now try to get the folder in question...
   nsCOMPtr<nsIMsgFolder> rootFolder;
   server->GetRootFolder(getter_AddRefs(rootFolder));
-  if (rootFolder && !folderName.IsEmpty()) {
+  bool ready;
+  if (rootFolder && !folderName.IsEmpty() &&
+      // Skip folder processing if folder names aren't ready yet.
+      // They may not be available during early initialization.
+      // XXX TODO: This hack can be removed when the localization system gets
+      // initialized in M-C code before, for example, the permission manager
+      // which creates all sorts of URIs incl. imap: URIs.
+      NS_SUCCEEDED(rootFolder->FolderNamesReady(&ready)) && ready) {
     nsCOMPtr<nsIMsgFolder> folder;
     nsCOMPtr<nsIMsgImapMailFolder> imapRoot = do_QueryInterface(rootFolder);
     nsCOMPtr<nsIMsgImapMailFolder> subFolder;
@@ -2500,6 +2511,17 @@ NS_IMETHODIMP nsImapService::NewChannel(nsIURI *aURI, nsILoadInfo *aLoadInfo,
 
   bool externalLinkUrl;
   imapUrl->GetExternalLinkUrl(&externalLinkUrl);
+
+  // Only external imap links with no action are supported. Ignore links that
+  // attempt to cause an effect such as fetching a mime part. This avoids
+  // spurious prompts to subscribe to folders due to "imap://...Fetch..." links
+  // residing in legacy emails residing in an imap mailbox.
+  if (externalLinkUrl) {
+    nsImapAction imapAction;
+    imapUrl->GetImapAction(&imapAction);
+    if (imapAction != 0) externalLinkUrl = false;
+  }
+
   if (externalLinkUrl) {
     // everything after here is to handle clicking on an external link. We only
     // want to do this if we didn't run the url through the various

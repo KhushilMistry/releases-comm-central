@@ -32,7 +32,7 @@ function clickStoreTypeMenu(aStoreTypeElement) {
   // otherwise 'response.newRootFolder' will be null.
   let response = { newRootFolder: null };
   // Send 'response' as an argument to converterDialog.xhtml.
-  window.openDialog(
+  window.docShell.rootTreeItem.domWindow.openDialog(
     "converterDialog.xhtml",
     "mailnews:mailstoreconverter",
     "modal,centerscreen,resizable=no,width=700,height=130",
@@ -97,8 +97,10 @@ function onInit(aPageId, aServerId) {
     setupImapDeleteUI(aServerId);
   }
 
-  // TLS Cert (External) and OAuth2 are only supported on IMAP.
-  document.getElementById("authMethod-oauth2").hidden = serverType != "imap";
+  // OAuth2 are only supported on IMAP and POP.
+  document.getElementById("authMethod-oauth2").hidden =
+    serverType != "imap" && serverType != "pop3";
+  // TLS Cert (External) only supported on IMAP.
   document.getElementById("authMethod-external").hidden = serverType != "imap";
 
   // "STARTTLS, if available" is vulnerable to MITM attacks so we shouldn't
@@ -227,7 +229,6 @@ function onAdvanced() {
     serverSettings.maximumConnectionsNumber = document
       .getElementById("imap.maximumConnectionsNumber")
       .getAttribute("value");
-    // string prefs
     serverSettings.personalNamespace = document
       .getElementById("imap.personalNamespace")
       .getAttribute("value");
@@ -252,148 +253,146 @@ function onAdvanced() {
       .getAttribute("value");
   }
 
-  window.openDialog(
-    "chrome://messenger/content/am-server-advanced.xul",
-    "_blank",
-    "chrome,modal,titlebar",
-    serverSettings
-  );
-
-  if (serverType == "imap") {
-    document.getElementById("imap.dualUseFolders").checked =
-      serverSettings.dualUseFolders;
-    document.getElementById("imap.usingSubscription").checked =
-      serverSettings.usingSubscription;
-    document
-      .getElementById("imap.maximumConnectionsNumber")
-      .setAttribute("value", serverSettings.maximumConnectionsNumber);
-    // string prefs
-    document
-      .getElementById("imap.personalNamespace")
-      .setAttribute("value", serverSettings.personalNamespace);
-    document
-      .getElementById("imap.publicNamespace")
-      .setAttribute("value", serverSettings.publicNamespace);
-    document
-      .getElementById("imap.serverDirectory")
-      .setAttribute("value", serverSettings.serverDirectory);
-    document
-      .getElementById("imap.otherUsersNamespace")
-      .setAttribute("value", serverSettings.otherUsersNamespace);
-    document.getElementById("imap.overrideNamespaces").checked =
-      serverSettings.overrideNamespaces;
-  } else if (serverType == "pop3") {
-    document.getElementById("pop3.deferGetNewMail").checked =
-      serverSettings.deferGetNewMail;
-    document
-      .getElementById("pop3.deferredToAccount")
-      .setAttribute("value", serverSettings.deferredToAccount);
-    let pop3Server = gServer.QueryInterface(Ci.nsIPop3IncomingServer);
-    // we're explicitly setting this so we'll go through the SetDeferredToAccount method
-    pop3Server.deferredToAccount = serverSettings.deferredToAccount;
-    // Setting the server to be deferred causes a rebuild of the account tree,
-    // losing the current selection. Reselect the current server again as it
-    // didn't really disappear.
-    parent.selectServer(
-      parent.getCurrentAccount().incomingServer,
-      parent.currentPageId
-    );
-
-    // Iterate over all accounts to see if any of their junk targets are now
-    // invalid (pointed to the account that is now deferred).
-    // If any such target is found it is reset to a new safe folder
-    // (the deferred to account or Local Folders). If junk was really moved
-    // to that folder (moveOnSpam = true) then moving junk is disabled
-    // (so that the user notices it and checks the settings).
-    // This is the same sanitization as in am-junk.js, just applied to all POP accounts.
-    let deferredURI =
-      serverSettings.deferredToAccount &&
-      MailServices.accounts.getAccount(serverSettings.deferredToAccount)
-        .incomingServer.serverURI;
-
-    for (let account of fixIterator(
-      MailServices.accounts.accounts,
-      Ci.nsIMsgAccount
-    )) {
-      let accountValues = parent.getValueArrayFor(account);
-      let type = parent.getAccountValue(
-        account,
-        accountValues,
-        "server",
-        "type",
-        null,
-        false
+  let onCloseAdvanced = function() {
+    if (serverType == "imap") {
+      document.getElementById("imap.dualUseFolders").checked =
+        serverSettings.dualUseFolders;
+      document.getElementById("imap.usingSubscription").checked =
+        serverSettings.usingSubscription;
+      document
+        .getElementById("imap.maximumConnectionsNumber")
+        .setAttribute("value", serverSettings.maximumConnectionsNumber);
+      document
+        .getElementById("imap.personalNamespace")
+        .setAttribute("value", serverSettings.personalNamespace);
+      document
+        .getElementById("imap.publicNamespace")
+        .setAttribute("value", serverSettings.publicNamespace);
+      document
+        .getElementById("imap.serverDirectory")
+        .setAttribute("value", serverSettings.serverDirectory);
+      document
+        .getElementById("imap.otherUsersNamespace")
+        .setAttribute("value", serverSettings.otherUsersNamespace);
+      document.getElementById("imap.overrideNamespaces").checked =
+        serverSettings.overrideNamespaces;
+    } else if (serverType == "pop3") {
+      document.getElementById("pop3.deferGetNewMail").checked =
+        serverSettings.deferGetNewMail;
+      document
+        .getElementById("pop3.deferredToAccount")
+        .setAttribute("value", serverSettings.deferredToAccount);
+      let pop3Server = gServer.QueryInterface(Ci.nsIPop3IncomingServer);
+      // we're explicitly setting this so we'll go through the SetDeferredToAccount method
+      pop3Server.deferredToAccount = serverSettings.deferredToAccount;
+      // Setting the server to be deferred causes a rebuild of the account tree,
+      // losing the current selection. Reselect the current server again as it
+      // didn't really disappear.
+      parent.selectServer(
+        parent.getCurrentAccount().incomingServer,
+        parent.currentPageId
       );
-      // Try to keep this list of account types not having Junk settings
-      // synchronized with the list in AccountManager.js.
-      if (type != "nntp" && type != "rss" && type != "im") {
-        let spamActionTargetAccount = parent.getAccountValue(
-          account,
-          accountValues,
-          "server",
-          "spamActionTargetAccount",
-          "string",
-          true
-        );
-        let spamActionTargetFolder = parent.getAccountValue(
-          account,
-          accountValues,
-          "server",
-          "spamActionTargetFolder",
-          "string",
-          true
-        );
-        let moveOnSpam = parent.getAccountValue(
-          account,
-          accountValues,
-          "server",
-          "moveOnSpam",
-          "bool",
-          true
-        );
 
-        // Check if there are any invalid junk targets and fix them.
-        [
-          spamActionTargetAccount,
-          spamActionTargetFolder,
-          moveOnSpam,
-        ] = sanitizeJunkTargets(
-          spamActionTargetAccount,
-          spamActionTargetFolder,
-          deferredURI || account.incomingServer.serverURI,
-          parent.getAccountValue(
+      // Iterate over all accounts to see if any of their junk targets are now
+      // invalid (pointed to the account that is now deferred).
+      // If any such target is found it is reset to a new safe folder
+      // (the deferred to account or Local Folders). If junk was really moved
+      // to that folder (moveOnSpam = true) then moving junk is disabled
+      // (so that the user notices it and checks the settings).
+      // This is the same sanitization as in am-junk.js, just applied to all POP accounts.
+      let deferredURI =
+        serverSettings.deferredToAccount &&
+        MailServices.accounts.getAccount(serverSettings.deferredToAccount)
+          .incomingServer.serverURI;
+
+      for (let account of MailServices.accounts.accounts) {
+        let accountValues = parent.getValueArrayFor(account);
+        let type = parent.getAccountValue(
+          account,
+          accountValues,
+          "server",
+          "type",
+          null,
+          false
+        );
+        // Try to keep this list of account types not having Junk settings
+        // synchronized with the list in AccountManager.js.
+        if (type != "nntp" && type != "rss" && type != "im") {
+          let spamActionTargetAccount = parent.getAccountValue(
             account,
             accountValues,
             "server",
-            "moveTargetMode",
-            "int",
+            "spamActionTargetAccount",
+            "string",
             true
-          ),
-          account.incomingServer.spamSettings,
-          moveOnSpam
-        );
+          );
+          let spamActionTargetFolder = parent.getAccountValue(
+            account,
+            accountValues,
+            "server",
+            "spamActionTargetFolder",
+            "string",
+            true
+          );
+          let moveOnSpam = parent.getAccountValue(
+            account,
+            accountValues,
+            "server",
+            "moveOnSpam",
+            "bool",
+            true
+          );
 
-        parent.setAccountValue(
-          accountValues,
-          "server",
-          "moveOnSpam",
-          moveOnSpam
-        );
-        parent.setAccountValue(
-          accountValues,
-          "server",
-          "spamActionTargetAccount",
-          spamActionTargetAccount
-        );
-        parent.setAccountValue(
-          accountValues,
-          "server",
-          "spamActionTargetFolder",
-          spamActionTargetFolder
-        );
+          // Check if there are any invalid junk targets and fix them.
+          [
+            spamActionTargetAccount,
+            spamActionTargetFolder,
+            moveOnSpam,
+          ] = sanitizeJunkTargets(
+            spamActionTargetAccount,
+            spamActionTargetFolder,
+            deferredURI || account.incomingServer.serverURI,
+            parent.getAccountValue(
+              account,
+              accountValues,
+              "server",
+              "moveTargetMode",
+              "int",
+              true
+            ),
+            account.incomingServer.spamSettings,
+            moveOnSpam
+          );
+
+          parent.setAccountValue(
+            accountValues,
+            "server",
+            "moveOnSpam",
+            moveOnSpam
+          );
+          parent.setAccountValue(
+            accountValues,
+            "server",
+            "spamActionTargetAccount",
+            spamActionTargetAccount
+          );
+          parent.setAccountValue(
+            accountValues,
+            "server",
+            "spamActionTargetFolder",
+            spamActionTargetFolder
+          );
+        }
       }
     }
-  }
+  };
+
+  parent.gSubDialog.open(
+    "chrome://messenger/content/am-server-advanced.xhtml",
+    null,
+    serverSettings,
+    onCloseAdvanced
+  );
 }
 
 function secureSelect(aLoading) {

@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = ["autosyncModule"];
+const EXPORTED_SYMBOLS = ["autosyncModule"];
 
 var nsActProcess = Components.Constructor(
   "@mozilla.org/activity-process;1",
@@ -17,7 +17,7 @@ var nsActEvent = Components.Constructor(
 );
 
 const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 
 var nsIAutoSyncMgrListener = Ci.nsIAutoSyncMgrListener;
 
@@ -142,7 +142,7 @@ var autosyncModule = {
 
       // transfer all subjects.
       // same as above, not mandatory
-      let subjects = process.getSubjects({});
+      let subjects = process.getSubjects();
       for (let subject of subjects) {
         event.addSubject(subject);
       }

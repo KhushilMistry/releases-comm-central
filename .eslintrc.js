@@ -32,31 +32,9 @@ module.exports = {
   plugins: ["html", "mozilla"],
 
   rules: {
+    complexity: ["error", 80],
     "func-names": ["error", "never"],
-    "no-multi-spaces": [
-      "error",
-      {
-        exceptions: {
-          ArrayExpression: true,
-          AssignmentExpression: true,
-          ObjectExpression: true,
-          VariableDeclarator: true,
-        },
-        ignoreEOLComments: true,
-      },
-    ],
-    "semi-spacing": ["error", { before: false, after: true }],
-    "space-in-parens": ["error", "never"],
-    curly: ["error", "all"],
-
-    // Use brace-style because Prettier covers most brace issues but not this:
-    //
-    //     }
-    //     // a comment
-    //     else {
-    //
-    // Allow single line for inline JS in XUL files.
-    "brace-style": ["error", "1tbs", { allowSingleLine: true }],
+    "mozilla/prefer-boolean-length-check": "off",
   },
 
   // To avoid bad interactions of the html plugin with the xml preprocessor in
@@ -68,14 +46,6 @@ module.exports = {
 
   overrides: [
     {
-      // eslint-plugin-html handles eol-last slightly different - it applies to
-      // each set of script tags, so we turn it off here.
-      files: "**/*.*html",
-      rules: {
-        "eol-last": "off",
-      },
-    },
-    {
       files: "**/.eslintrc.js",
       env: {
         node: true,
@@ -85,16 +55,19 @@ module.exports = {
       ...removeOverrides(xpcshellTestConfig),
       files: xpcshellTestPaths.map(path => `${path}**`),
       rules: {
+        ...xpcshellTestConfig.rules,
         "func-names": "off",
-        "mozilla/import-headjs-globals": "error",
       },
     },
     {
-      // If it is an xpcshell head file, we turn off global unused variable checks, as it
+      // If it is a test head file, we turn off global unused variable checks, as it
       // would require searching the other test files to know if they are used or not.
       // This would be expensive and slow, and it isn't worth it for head files.
       // We could get developers to declare as exported, but that doesn't seem worth it.
-      files: xpcshellTestPaths.map(path => `${path}head*.js`),
+      files: [
+        ...browserTestPaths.map(path => `${path}head*.js`),
+        ...xpcshellTestPaths.map(path => `${path}head*.js`),
+      ],
       rules: {
         "no-unused-vars": [
           "error",
@@ -109,8 +82,8 @@ module.exports = {
       ...browserTestConfig,
       files: browserTestPaths.map(path => `${path}**`),
       rules: {
+        ...browserTestConfig.rules,
         "func-names": "off",
-        "mozilla/import-headjs-globals": "error",
       },
     },
   ],

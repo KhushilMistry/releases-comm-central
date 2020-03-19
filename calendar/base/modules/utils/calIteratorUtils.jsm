@@ -3,9 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "cal", "resource://calendar/modules/calUtils.jsm", "cal");
+ChromeUtils.defineModuleGetter(this, "cal", "resource:///modules/calendar/calUtils.jsm");
 
 /*
  * Iterators for various data structures
@@ -24,12 +23,12 @@ var caliterate = {
    * @param {calIItemBase[]} items        array of items to iterate
    * @yields {calIItemBase}
    */
-  items: function*(items) {
+  *items(items) {
     for (let item of items) {
       yield item;
       let rec = item.recurrenceInfo;
       if (rec) {
-        for (let exid of rec.getExceptionIds({})) {
+        for (let exid of rec.getExceptionIds()) {
           yield rec.getExceptionFor(exid);
         }
       }
@@ -69,7 +68,7 @@ var caliterate = {
 
       // This is our dispatcher, it will be used for the iterations
       let dispatcher = {
-        run: function() {
+        run() {
           let startTime = new Date().getTime();
           while (new Date().getTime() - startTime < LATENCY) {
             let next = ourIter.next();
@@ -117,7 +116,7 @@ var caliterate = {
    *  @param {String} aCompType               The type of item to iterate.
    *  @yields {calIIcalComponent}             The iterator that yields all items.
    */
-  icalComponent: function*(aComponent, aCompType = "ANY") {
+  *icalComponent(aComponent, aCompType = "ANY") {
     if (aComponent && aComponent.componentType == "VCALENDAR") {
       yield* cal.iterate.icalSubcomponent(aComponent, aCompType);
     } else if (aComponent && aComponent.componentType == "XROOT") {
@@ -141,7 +140,7 @@ var caliterate = {
    *                                            If not given, "ANY" will be used.
    * @yields {calIIcalComponent}              An iterator object to iterate the properties.
    */
-  icalSubcomponent: function*(aComponent, aSubcomp = "ANY") {
+  *icalSubcomponent(aComponent, aSubcomp = "ANY") {
     for (
       let subcomp = aComponent.getFirstSubcomponent(aSubcomp);
       subcomp;
@@ -161,7 +160,7 @@ var caliterate = {
    *                                            If not given, "ANY" will be used.
    * @yields {calIIcalProperty}               An iterator object to iterate the properties.
    */
-  icalProperty: function*(aComponent, aProperty = "ANY") {
+  *icalProperty(aComponent, aProperty = "ANY") {
     for (
       let prop = aComponent.getFirstProperty(aProperty);
       prop;
@@ -181,7 +180,7 @@ var caliterate = {
    * @param {calIIcalProperty} aProperty         The property to iterate.
    * @yields {[String, String]}                  An iterator object to iterate the properties.
    */
-  icalParameter: function*(aProperty) {
+  *icalParameter(aProperty) {
     let paramSet = new Set();
     for (
       let paramName = aProperty.getFirstParameterName();

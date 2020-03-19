@@ -4,7 +4,7 @@
 
 /* exported onLoad */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 function onLoad() {
   let extension = window.arguments[0].extension;
@@ -12,7 +12,7 @@ function onLoad() {
 
   let calendarList = document.getElementById("calendar-list");
 
-  for (let calendar of cal.getCalendarManager().getCalendars({})) {
+  for (let calendar of cal.getCalendarManager().getCalendars()) {
     if (calendar.providerID != extension.id) {
       continue;
     }

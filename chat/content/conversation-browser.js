@@ -335,18 +335,20 @@
         Services.clipboard.supportsSelectionClipboard() &&
         Services.prefs.getBoolPref("clipboard.autocopy");
       if (this.autoCopyEnabled) {
-        this.contentWindow
-          .getSelection()
-          .addSelectionListener(this.chatSelectionListener);
+        let selection = this.contentWindow.getSelection();
+        if (selection) {
+          selection.addSelectionListener(this.chatSelectionListener);
+        }
       }
     }
 
     disableMagicCopy() {
       this.contentWindow.controllers.removeController(this.copyController);
       if (this.autoCopyEnabled) {
-        this.contentWindow
-          .getSelection()
-          .removeSelectionListener(this.chatSelectionListener);
+        let selection = this.contentWindow.getSelection();
+        if (selection) {
+          selection.removeSelectionListener(this.chatSelectionListener);
+        }
       }
     }
 
@@ -637,7 +639,7 @@
           insert.parentNode.insertBefore(marker, insert);
           marker = doc.createElement("div");
           marker.id = "next-messages-end";
-          insert.parentNode.insertBefore(marker, insert.nextSibling);
+          insert.parentNode.insertBefore(marker, insert.nextElementSibling);
         }
       } else {
         let html = getHTMLForMessage(aMsg, this.theme, next, aContext);
@@ -693,9 +695,9 @@
           ruler.nextMsgHtml
         );
         for (
-          let root = documentFragment.firstChild;
+          let root = documentFragment.firstElementChild;
           root;
-          root = root.nextSibling
+          root = root.nextElementSibling
         ) {
           root._originalMsg = ruler._originalMsg;
         }

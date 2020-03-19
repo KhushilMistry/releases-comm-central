@@ -208,7 +208,7 @@ add_task(async function testIcalData() {
     let count = 0;
     await new Promise(resolve => {
       let listener = {
-        onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+        onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
           equal(aStatus, 0);
           if (aOperationType == Ci.calIOperationListener.ADD) {
             // perform getItems() on calendar
@@ -218,10 +218,10 @@ add_task(async function testIcalData() {
             resolve();
           }
         },
-        onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
-          if (aCount) {
-            count += aCount;
-            for (let i = 0; i < aCount; i++) {
+        onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
+          if (aItems.length) {
+            count += aItems.length;
+            for (let i = 0; i < aItems.length; i++) {
               // Don't check creationDate as it changed when we added the item to the database.
               compareItemsSpecific(aItems[i].parentItem, aItem, [
                 "start",
@@ -261,7 +261,7 @@ add_task(async function testIcalData() {
       let returnedItem = null;
       let listener = {
         promises: [],
-        onOperationComplete: async function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+        async onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
           equal(aStatus, 0);
           if (aOperationType == Ci.calIOperationListener.ADD) {
             compareItemsSpecific(aDetail, aItem);
@@ -287,9 +287,9 @@ add_task(async function testIcalData() {
           }
           this.promises.pop()();
         },
-        onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
-          if (aCount) {
-            count += aCount;
+        onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
+          if (aItems.length) {
+            count += aItems.length;
             returnedItem = aItems[0];
           }
         },
@@ -314,7 +314,7 @@ add_task(async function testMetaData() {
     event1.id = "item1";
     await new Promise(resolve => {
       aCalendar.addItem(event1, {
-        onGetResult: function() {},
+        onGetResult(calendar, aStatus, aItemType, aDetail, aItems) {},
         onOperationComplete: resolve,
       });
     });
@@ -326,7 +326,7 @@ add_task(async function testMetaData() {
     event2.id = "item2";
     await new Promise(resolve => {
       aCalendar.addItem(event2, {
-        onGetResult: function() {},
+        onGetResult(calendar, aStatus, aItemType, aDetail, aItems) {},
         onOperationComplete: resolve,
       });
     });
@@ -336,32 +336,35 @@ add_task(async function testMetaData() {
     aCalendar.setMetaData("item2", "meta2");
     equal(aCalendar.getMetaData("item2"), "meta2");
 
-    let count = {};
-    let ids = {};
-    let values = {};
-    aCalendar.getAllMetaData(count, ids, values);
-    equal(count.value, 2);
-    ok(ids.value[0] == "item1" || ids.value[1] == "item1");
-    ok(ids.value[0] == "item2" || ids.value[1] == "item2");
-    ok(values.value[0] == "meta1" || values.value[1] == "meta1");
-    ok(values.value[0] == "meta2" || values.value[1] == "meta2");
+    let ids = aCalendar.getAllMetaDataIds();
+    let values = aCalendar.getAllMetaDataValues();
+    equal(values.length, 2);
+    equal(ids.length, 2);
+    ok(ids[0] == "item1" || ids[1] == "item1");
+    ok(ids[0] == "item2" || ids[1] == "item2");
+    ok(values[0] == "meta1" || values[1] == "meta1");
+    ok(values[0] == "meta2" || values[1] == "meta2");
 
     await new Promise(resolve => {
       aCalendar.deleteItem(event1, {
-        onGetResult: () => {},
+        onGetResult: (calendar, aStatus, aItemType, aDetail, aItems) => {},
         onOperationComplete: resolve,
       });
     });
     equal(aCalendar.getMetaData("item1"), null);
-    aCalendar.getAllMetaData(count, ids, values);
-    equal(count.value, 1);
-    ok(ids.value[0] == "item2");
-    ok(values.value[0] == "meta2");
+    ids = aCalendar.getAllMetaDataIds();
+    values = aCalendar.getAllMetaDataValues();
+    equal(values.length, 1);
+    equal(ids.length, 1);
+    ok(ids[0] == "item2");
+    ok(values[0] == "meta2");
 
     aCalendar.deleteMetaData("item2");
     equal(aCalendar.getMetaData("item2"), null);
-    aCalendar.getAllMetaData(count, ids, values);
-    equal(count.value, 0);
+    values = aCalendar.getAllMetaDataValues();
+    ids = aCalendar.getAllMetaDataIds();
+    equal(values.length, 0);
+    equal(ids.length, 0);
 
     aCalendar.setMetaData("item2", "meta2");
     equal(aCalendar.getMetaData("item2"), "meta2");
@@ -371,9 +374,10 @@ add_task(async function testMetaData() {
         onDeleteCalendar: resolve,
       });
     });
-    equal(aCalendar.getMetaData("item2"), null);
-    aCalendar.getAllMetaData(count, ids, values);
-    equal(count.value, 0);
+    values = aCalendar.getAllMetaDataValues();
+    ids = aCalendar.getAllMetaDataIds();
+    equal(values.length, 0);
+    equal(ids.length, 0);
 
     aCalendar.deleteMetaData("unknown"); // check graceful return
   }

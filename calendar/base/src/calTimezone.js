@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
-var { ICAL } = ChromeUtils.import("resource://calendar/modules/ical.js");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
+var { ICAL } = ChromeUtils.import("resource:///modules/calendar/Ical.jsm");
 
 function calICALJSTimezone(innerObject) {
   this.innerObject = innerObject || new ICAL.Timezone();
@@ -58,7 +58,7 @@ calICALJSTimezone.prototype = {
     return displayName;
   },
 
-  tostring: function() {
+  tostring() {
     return this.innerObject.toString();
   },
 };
@@ -76,7 +76,7 @@ calLibicalTimezone.prototype = {
   QueryInterface: ChromeUtils.generateQI([Ci.calITimezone]),
   classID: Components.ID("{6702eb17-a968-4b43-b562-0d0c5f8e9eb5}"),
 
-  toString: function() {
+  toString() {
     return this.icalComponent ? this.icalComponent.toString() : this.tzid;
   },
 

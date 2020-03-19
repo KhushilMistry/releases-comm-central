@@ -3,6 +3,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/* import-globals-from am-smtp.js */
+
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
@@ -232,10 +234,7 @@ function openPrefsFromAccountManager(
  *                      searching the name. If unset, do not skip any account.
  */
 function accountNameExists(aAccountName, aAccountKey) {
-  for (let account of fixIterator(
-    MailServices.accounts.accounts,
-    Ci.nsIMsgAccount
-  )) {
+  for (let account of MailServices.accounts.accounts) {
     if (
       account.key != aAccountKey &&
       account.incomingServer &&
@@ -258,11 +257,17 @@ function accountNameExists(aAccountName, aAccountKey) {
 function editSMTPServer(aServer) {
   let args = { server: aServer, result: false, addSmtpServer: "" };
 
-  window.openDialog(
-    "chrome://messenger/content/SmtpServerEdit.xul",
-    "smtpEdit",
-    "chrome,titlebar,modal,centerscreen",
-    args
+  let onCloseSMTPDialog = function() {
+    if (args.result) {
+      gSmtpServerListWindow.refreshServerList(aServer, true);
+    }
+  };
+
+  parent.gSubDialog.open(
+    "chrome://messenger/content/SmtpServerEdit.xhtml",
+    null,
+    args,
+    onCloseSMTPDialog
   );
 
   return args;

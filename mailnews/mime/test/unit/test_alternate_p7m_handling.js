@@ -3,15 +3,15 @@
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
 
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 /* import-globals-from ../../../test/resources/messageModifier.js */
 /* import-globals-from ../../../test/resources/messageInjection.js */
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 load("../../../resources/messageModifier.js");
 load("../../../resources/messageInjection.js");
 
 var { MsgHdrToMimeMessage } = ChromeUtils.import(
-  "resource:///modules/gloda/mimemsg.js"
+  "resource:///modules/gloda/MimeMessage.jsm"
 );
 
 // Create a message generator
@@ -40,10 +40,6 @@ function* worker(params) {
   let msgHdr = synSet.getMsgHdr(0);
 
   Services.prefs.setBoolPref("mailnews.p7m_external", params.all_external);
-  Services.prefs.setBoolPref(
-    "mailnews.p7m_subparts_external",
-    params.subparts_external
-  );
 
   MsgHdrToMimeMessage(msgHdr, null, function(aMsgHdr, aMimeMsg) {
     try {
@@ -60,20 +56,8 @@ function* worker(params) {
 /* ===== Driver ===== */
 
 var tests = [
-  parameterizeTest(worker, [
-    { messages, all_external: false, subparts_external: false, count: 0 },
-  ]),
-  // We are only testing with a p7m attachment, so whether all parts or just subparts are
-  // made external yields the same result: one attachment which is not inlined.
-  parameterizeTest(worker, [
-    { messages, all_external: true, subparts_external: false, count: 1 },
-  ]),
-  parameterizeTest(worker, [
-    { messages, all_external: false, subparts_external: true, count: 1 },
-  ]),
-  parameterizeTest(worker, [
-    { messages, all_external: true, subparts_external: true, count: 1 },
-  ]),
+  parameterizeTest(worker, [{ messages, all_external: false, count: 1 }]),
+  parameterizeTest(worker, [{ messages, all_external: true, count: 1 }]),
 ];
 
 var gInbox;

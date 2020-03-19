@@ -4,6 +4,7 @@
 
 "use strict";
 
+/* global MozElements */
 /* global MozXULElement */
 /* global getBrowser */
 
@@ -16,9 +17,9 @@
    * The MozChatTooltip widget implements a custom tooltip for chat. This tooltip
    * is used to display a rich tooltip when you mouse over contacts, channels
    * etc. in the chat view.
-   * @extends {MozXULElement}
+   * @extends {XULPopupElement}
    */
-  class MozChatTooltip extends MozXULElement {
+  class MozChatTooltip extends MozElements.MozElementMixin(XULPopupElement) {
     static get inheritedAttributes() {
       return {
         ".userIconHolder": "userIcon",
@@ -83,9 +84,8 @@
         return false;
       }
 
-      let elt = document.tooltipNode;
       // No tooltip for elements that have already been removed.
-      if (!elt.parentNode) {
+      if (!document.tooltipNode.parentNode) {
         return false;
       }
 
@@ -94,42 +94,39 @@
       largeTooltip.hidden = false;
       this.removeAttribute("label");
 
-      let localName = elt.localName;
+      // We have a few cases that have special behavior. These are richlistitems
+      // and have tooltip="<myid>".
+      let item = document.tooltipNode.closest(
+        `[tooltip="${this.id}"] richlistitem`
+      );
 
-      if (
-        localName == "richlistitem" &&
-        elt.getAttribute("is") == "chat-group"
-      ) {
+      if (item && item.matches(`:scope[is="chat-group-richlistitem"]`)) {
         return false;
       }
 
-      if (
-        localName == "richlistitem" &&
-        elt.getAttribute("is") == "chat-imconv" &&
-        elt.conv
-      ) {
-        return this.updateTooltipFromConversation(elt.conv);
+      if (item && item.matches(`:scope[is="chat-imconv-richlistitem"]`)) {
+        return this.updateTooltipFromConversation(item.conv);
       }
 
-      if (
-        localName == "richlistitem" &&
-        elt.getAttribute("is") == "chat-contact"
-      ) {
+      if (item && item.matches(`:scope[is="chat-contact-richlistitem"]`)) {
         return this.updateTooltipFromBuddy(
-          elt.contact.preferredBuddy.preferredAccountBuddy
+          item.contact.preferredBuddy.preferredAccountBuddy
         );
       }
 
-      if (localName == "richlistitem") {
+      if (item) {
         let contactlistbox = document.getElementById("contactlistbox");
         let conv = contactlistbox.selectedItem.conv;
         return this.updateTooltipFromParticipant(
-          elt.chatBuddy.name,
+          item.chatBuddy.name,
           conv,
-          elt.chatBuddy
+          item.chatBuddy
         );
       }
 
+      // Tooltips are also used for the chat content, where we need to do
+      // some more general checks.
+      let elt = document.tooltipNode;
       let classList = elt.classList;
       if (
         classList.contains("ib-nick") ||
@@ -192,7 +189,7 @@
         MozXULElement.parseXULToFragment(`
           <vbox class="largeTooltip">
             <hbox align="start" crop="end" flex="1">
-              <vbox flex="1">
+              <vbox>
                 <stack>
                   <!-- The box around the user icon is a workaround for bug 955673. -->
                   <box class="userIconHolder">
@@ -210,7 +207,7 @@
                   </hbox>
                   <spacer flex="1"></spacer>
                 </vbox>
-                <description class="tooltipMessage"></description>
+                <description class="tooltipMessage" crop="end"></description>
               </stack>
             </hbox>
             <html:table class="tooltipTable">
@@ -255,19 +252,9 @@
       return this._table;
     }
 
-    setBuddyIcon(aSrc) {
-      let img = this.querySelector(".userIcon");
-      if (aSrc) {
-        img.setAttribute("userIcon", aSrc);
-      } else {
-        img.removeAttribute("userIcon");
-      }
-    }
-
     setMessage(aMessage) {
-      // Setting the textContent directly allows text wrapping.
       let msg = this.querySelector(".tooltipMessage");
-      msg.textContent = aMessage;
+      msg.value = aMessage;
     }
 
     reset() {
@@ -303,7 +290,7 @@
 
     addSeparator() {
       if (this.table.hasChildNodes()) {
-        let lastElement = this.table.lastChild;
+        let lastElement = this.table.lastElementChild;
         lastElement.querySelector("th").classList.add("chatTooltipSeparator");
         lastElement.querySelector("td").classList.add("chatTooltipSeparator");
       }
@@ -316,7 +303,7 @@
       // so we only use it for JavaScript prpls.
       // This is a terrible, terrible hack to work around the fact that
       // ClassInfo.implementationLanguage has gone.
-      if (!aAccount.prplAccount.wrappedJSObject) {
+      if (!aAccount.prplAccount || !aAccount.prplAccount.wrappedJSObject) {
         return;
       }
       this.observedUserInfo = aObservedName;
@@ -333,7 +320,11 @@
       this.setAttribute("displayname", displayName);
       let account = aBuddy.account;
       this.setAttribute("iconPrpl", account.protocol.iconBaseURI + "icon.png");
-      this.setBuddyIcon(aBuddy.buddyIconFilename);
+      if (aBuddy.buddyIconFilename || aBuddy.buddyIconFilename == "") {
+        this.setAttribute("userIcon", aBuddy.buddyIconFilename);
+      } else {
+        this.removeAttribute("userIcon");
+      }
 
       let statusType = aBuddy.statusType;
       this.setAttribute("status", Status.toAttribute(statusType));
@@ -355,8 +346,7 @@
     }
 
     updateTooltipInfo(aTooltipInfo) {
-      while (aTooltipInfo.hasMoreElements()) {
-        let elt = aTooltipInfo.getNext().QueryInterface(Ci.prplITooltipInfo);
+      for (let elt of aTooltipInfo) {
         switch (elt.type) {
           case Ci.prplITooltipInfo.pair:
           case Ci.prplITooltipInfo.sectionHeader:
@@ -371,7 +361,7 @@
             this.setMessage(Status.toLabel(statusType, elt.value));
             break;
           case Ci.prplITooltipInfo.icon:
-            this.setBuddyIcon(elt.value);
+            this.setAttribute("userIcon", elt.value);
             break;
         }
       }
@@ -386,7 +376,7 @@
       this.setAttribute("displayname", aConv.name);
       let account = aConv.account;
       this.setAttribute("iconPrpl", account.protocol.iconBaseURI + "icon.png");
-      this.setBuddyIcon(null);
+      this.removeAttribute("userIcon");
       if (aConv.isChat) {
         this.setAttribute("status", "chat");
         if (!aConv.account.connected || aConv.left) {
@@ -438,11 +428,18 @@
       this.setAttribute("iconPrpl", account.protocol.iconBaseURI + "icon.png");
       this.setAttribute("status", "unknown");
       this.setMessage(Status.toLabel("unknown"));
-      this.setBuddyIcon(aParticipant ? aParticipant.buddyIconFilename : null);
+      if (
+        aParticipant.buddyIconFilename ||
+        aParticipant.buddyIconFilename == ""
+      ) {
+        this.setAttribute("userIcon", aParticipant.buddyIconFilename);
+      } else {
+        this.removeAttribute("userIcon");
+      }
+
       this.requestBuddyInfo(account, normalizedNick);
       return true;
     }
   }
-
-  customElements.define("chat-tooltip", MozChatTooltip);
+  customElements.define("chat-tooltip", MozChatTooltip, { extends: "tooltip" });
 }

@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -15,7 +15,6 @@
 #include "nsMsgLocalCID.h"
 #include "nsMsgFolderFlags.h"
 #include "nsPop3Protocol.h"
-#include "nsAutoPtr.h"
 #include "nsMsgKeyArray.h"
 #include "nsIMsgLocalMailFolder.h"
 #include "nsIMsgAccountManager.h"
@@ -34,17 +33,17 @@ class nsPop3GetMailChainer final : public nsIUrlListener {
   NS_DECL_NSIURLLISTENER
 
   nsPop3GetMailChainer();
-  nsresult GetNewMailForServers(nsIPop3IncomingServer **servers, uint32_t count,
-                                nsIMsgWindow *msgWindow,
-                                nsIMsgFolder *folderToDownloadTo,
-                                nsIUrlListener *listener);
+  nsresult GetNewMailForServers(
+      const nsTArray<RefPtr<nsIPop3IncomingServer>> &servers,
+      nsIMsgWindow *msgWindow, nsIMsgFolder *folderToDownloadTo,
+      nsIUrlListener *listener);
   nsresult RunNextGetNewMail();
 
  protected:
   ~nsPop3GetMailChainer();
   nsCOMPtr<nsIMsgFolder> m_folderToDownloadTo;
   nsCOMPtr<nsIMsgWindow> m_downloadingMsgWindow;
-  nsCOMArray<nsIPop3IncomingServer> m_serversToGetNewMailFor;
+  nsTArray<RefPtr<nsIPop3IncomingServer>> m_serversToGetNewMailFor;
   nsCOMPtr<nsIUrlListener> m_listener;
 };
 
@@ -426,11 +425,12 @@ nsPop3IncomingServer::VerifyLogon(nsIUrlListener *aUrlListener,
 }
 
 NS_IMETHODIMP nsPop3IncomingServer::DownloadMailFromServers(
-    nsIPop3IncomingServer **aServers, uint32_t aCount, nsIMsgWindow *aMsgWindow,
-    nsIMsgFolder *aFolder, nsIUrlListener *aUrlListener) {
+    const nsTArray<RefPtr<nsIPop3IncomingServer>> &aServers,
+    nsIMsgWindow *aMsgWindow, nsIMsgFolder *aFolder,
+    nsIUrlListener *aUrlListener) {
   RefPtr<nsPop3GetMailChainer> getMailChainer = new nsPop3GetMailChainer;
-  return getMailChainer->GetNewMailForServers(aServers, aCount, aMsgWindow,
-                                              aFolder, aUrlListener);
+  return getMailChainer->GetNewMailForServers(aServers, aMsgWindow, aFolder,
+                                              aUrlListener);
 }
 
 NS_IMETHODIMP nsPop3IncomingServer::GetNewMail(nsIMsgWindow *aMsgWindow,
@@ -461,7 +461,7 @@ nsPop3IncomingServer::GetNewMessages(nsIMsgFolder *aFolder,
   NS_ENSURE_SUCCESS(rv, rv);
   nsCOMPtr<nsIURI> url;
   nsCOMPtr<nsIMsgIncomingServer> server;
-  nsCOMArray<nsIPop3IncomingServer> deferredServers;
+  nsTArray<RefPtr<nsIPop3IncomingServer>> deferredServers;
   nsCString deferredToAccount;
   GetDeferredToAccount(deferredToAccount);
 
@@ -472,9 +472,8 @@ nsPop3IncomingServer::GetNewMessages(nsIMsgFolder *aFolder,
   if (deferredToAccount.IsEmpty() && !deferredServers.IsEmpty()) {
     RefPtr<nsPop3GetMailChainer> getMailChainer = new nsPop3GetMailChainer;
     deferredServers.InsertElementAt(0, this);
-    return getMailChainer->GetNewMailForServers(
-        deferredServers.Elements(), deferredServers.Length(), aMsgWindow, inbox,
-        aUrlListener);
+    return getMailChainer->GetNewMailForServers(deferredServers, aMsgWindow,
+                                                inbox, aUrlListener);
   }
   if (m_runningProtocol) return NS_MSG_FOLDER_BUSY;
 
@@ -591,11 +590,13 @@ nsPop3GetMailChainer::nsPop3GetMailChainer() {}
 nsPop3GetMailChainer::~nsPop3GetMailChainer() {}
 
 nsresult nsPop3GetMailChainer::GetNewMailForServers(
-    nsIPop3IncomingServer **servers, uint32_t count, nsIMsgWindow *msgWindow,
-    nsIMsgFolder *folderToDownloadTo, nsIUrlListener *listener) {
+    const nsTArray<RefPtr<nsIPop3IncomingServer>> &servers,
+    nsIMsgWindow *msgWindow, nsIMsgFolder *folderToDownloadTo,
+    nsIUrlListener *listener) {
   NS_ENSURE_ARG_POINTER(folderToDownloadTo);
 
-  m_serversToGetNewMailFor.AppendElements(servers, count);
+  m_serversToGetNewMailFor = servers;
+  m_serversToGetNewMailFor.Reverse();
   m_folderToDownloadTo = folderToDownloadTo;
   m_downloadingMsgWindow = msgWindow;
   m_listener = listener;
@@ -625,12 +626,10 @@ nsPop3GetMailChainer::OnStopRunningUrl(nsIURI *aUrl, nsresult aExitCode) {
 
 nsresult nsPop3GetMailChainer::RunNextGetNewMail() {
   nsresult rv;
-  uint32_t numServersLeft = m_serversToGetNewMailFor.Count();
 
-  for (; numServersLeft > 0;) {
-    nsCOMPtr<nsIPop3IncomingServer> popServer(m_serversToGetNewMailFor[0]);
-    m_serversToGetNewMailFor.RemoveObjectAt(0);
-    numServersLeft--;
+  while (!m_serversToGetNewMailFor.IsEmpty()) {
+    RefPtr<nsIPop3IncomingServer> popServer(
+        m_serversToGetNewMailFor.PopLastElement());
     if (popServer) {
       bool deferGetNewMail = false;
       nsCOMPtr<nsIMsgIncomingServer> downloadingToServer;

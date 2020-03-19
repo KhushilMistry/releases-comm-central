@@ -25,8 +25,11 @@
     "resource:///modules/MailServices.jsm"
   );
   const { MailUtils } = ChromeUtils.import("resource:///modules/MailUtils.jsm");
+  const { Services } = ChromeUtils.import(
+    "resource://gre/modules/Services.jsm"
+  );
   const { StringBundle } = ChromeUtils.import(
-    "resource:///modules/StringBundle.js"
+    "resource:///modules/StringBundle.jsm"
   );
 
   /**
@@ -218,9 +221,6 @@
           },
         };
 
-        // The maximum number of entries in the "Recent" menu.
-        this._MAXRECENT = 15;
-
         // Is this list containing only servers (accounts) and no real folders?
         this._serversOnly = true;
 
@@ -301,12 +301,12 @@
               if (
                 this._menu.getAttribute("showRecent") != "true" ||
                 !this._menu._initializedSpecials.has("recent") ||
-                !this._menu.childWrapper.firstChild
+                !this._menu.childWrapper.firstElementChild
               ) {
                 return;
               }
 
-              const recentMenuItem = this._menu.childWrapper.firstChild;
+              const recentMenuItem = this._menu.childWrapper.firstElementChild;
               const recentSubMenu = this._menu._getSubMenuForMenuItem(
                 recentMenuItem
               );
@@ -348,7 +348,7 @@
             ) {
               return null;
             }
-            for (let child of menu.childWrapper.childNodes) {
+            for (let child of menu.childWrapper.children) {
               if (child._folder && child._folder.URI == item.URI) {
                 return child;
               }
@@ -574,10 +574,10 @@
 
         switch (specialType) {
           case "recent":
-            // Find 15 (_MAXRECENT) of most recently modified ones.
+            // Find the most recently modified ones.
             specialFolders = getMostRecentFolders(
               specialFolders,
-              this._MAXRECENT,
+              Services.prefs.getIntPref("mail.folder_widget.max_recent"),
               "MRMTime"
             );
             break;
@@ -589,7 +589,7 @@
         }
 
         // Cache the pretty names so that they do not need to be fetched
-        // _MAXRECENT^2 times later.
+        // with quadratic complexity when sorting by name.
         let specialFoldersMap = specialFolders.map(folder => {
           return {
             folder,
@@ -976,7 +976,7 @@
 
         let folder;
         if (inputFolder) {
-          for (let child of this.childNodes) {
+          for (let child of this.children) {
             if (
               child &&
               child._folder &&
@@ -1025,8 +1025,8 @@
         if (!this._initialized) {
           return;
         }
-        const children = this.childWrapper.childNodes;
-        // We iterate in reverse order because childNodes is live so it changes
+        const children = this.childWrapper.children;
+        // We iterate in reverse order because children is live so it changes
         // as we remove child nodes.
         for (let i = children.length - 1; i >= 0; i--) {
           const item = children[i];

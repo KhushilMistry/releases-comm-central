@@ -5,7 +5,7 @@
 /* import-globals-from retention.js */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { Gloda } = ChromeUtils.import("resource:///modules/gloda/gloda.js");
+var { Gloda } = ChromeUtils.import("resource:///modules/gloda/Gloda.jsm");
 
 var gMsgFolder;
 var gLockedPref = null;
@@ -104,7 +104,9 @@ var gFolderPropsSink = {
 
 function doEnabling() {
   var nameTextbox = document.getElementById("name");
-  document.documentElement.getButton("accept").disabled = !nameTextbox.value;
+  document
+    .querySelector("dialog")
+    .getButton("accept").disabled = !nameTextbox.value;
 }
 
 function folderPropsOKButton(event) {

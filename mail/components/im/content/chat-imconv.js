@@ -19,13 +19,13 @@
   );
 
   /**
-   * The MozChatConv widget displays opened conversation information from the
+   * The MozChatConvRichlistitem widget displays opened conversation information from the
    * contacts: i.e name and icon. It gets displayed under conversation expansion
    * twisty in the contactlist richlistbox.
    *
    * @extends {MozElements.MozRichlistitem}
    */
-  class MozChatConv extends MozElements.MozRichlistitem {
+  class MozChatConvRichlistitem extends MozElements.MozRichlistitem {
     static get inheritedAttributes() {
       return {
         ".box-line": "selected",
@@ -42,7 +42,7 @@
         return;
       }
 
-      this.setAttribute("is", "chat-imconv");
+      this.setAttribute("is", "chat-imconv-richlistitem");
 
       this.addEventListener(
         "mousedown",
@@ -64,22 +64,16 @@
           <vbox class="box-line"></vbox>
           <button class="closeConversationButton close-icon"
                   tooltiptext="&closeConversationButton.tooltip;"></button>
-          <stack class="prplBuddyIcon" mousethrough="always">
+          <stack class="prplBuddyIcon">
             <image class="protoIcon"></image>
             <image class="statusIcon"></image>
           </stack>
-          <hbox flex="1" class="conv-hbox" mousethrough="always">
-            <label crop="end"
-                   flex="1"
-                   mousethrough="always"
-                   class="convDisplayName blistDisplayName">
+          <hbox flex="1" class="conv-hbox">
+            <label crop="end" flex="1" class="convDisplayName blistDisplayName">
             </label>
-            <label class="convUnreadCount"
-                   crop="end"
-                   mousethrough="never"></label>
+            <label class="convUnreadCount" crop="end"></label>
             <box class="convUnreadTargetedCount">
-              <label class="convUnreadTargetedCountLabel"
-                     crop="end" mousethrough="never"></label>
+              <label class="convUnreadTargetedCountLabel" crop="end"></label>
             </box>
             <spacer flex="1000000"></spacer>
           </hbox>
@@ -120,7 +114,10 @@
             this.update();
           }
           if (topic == "update-conv-title") {
-            this.group.updateContactPosition(this.conv);
+            this.group.updateContactPosition(
+              this.conv,
+              "chat-imconv-richlistitem"
+            );
           }
         }.bind(this),
       };
@@ -176,7 +173,9 @@
         this.removeAttribute("unread");
         this.removeAttribute("attention");
       } else {
-        let unreadCount = this.conv.unreadIncomingMessageCount;
+        let unreadCount =
+          this.conv.unreadIncomingMessageCount +
+          this.conv.unreadOTRNotificationCount;
         let directedMessages = unreadCount;
         if (unreadCount) {
           this.setAttribute("unread", "true");
@@ -250,7 +249,7 @@
       let newSelectedItem;
       let list = this.parentNode;
       if (list.selectedItem == this) {
-        newSelectedItem = this.previousSibling;
+        newSelectedItem = this.previousElementSibling;
       }
 
       if (this.log) {
@@ -305,11 +304,11 @@
     }
   }
 
-  MozXULElement.implementCustomInterface(MozChatConv, [
+  MozXULElement.implementCustomInterface(MozChatConvRichlistitem, [
     Ci.nsIDOMXULSelectControlItemElement,
   ]);
 
-  customElements.define("chat-imconv", MozChatConv, {
+  customElements.define("chat-imconv-richlistitem", MozChatConvRichlistitem, {
     extends: "richlistitem",
   });
 }

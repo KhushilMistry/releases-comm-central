@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { ltn } = ChromeUtils.import("resource://calendar/modules/ltnInvitationUtils.jsm");
+var { ltn } = ChromeUtils.import("resource:///modules/calendar/ltnInvitationUtils.jsm");
 var { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
@@ -414,7 +414,7 @@ add_task(async function createInvitationOverlay_test() {
     itipItem.init(item);
     let parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
     parser.parseString(item);
-    let dom = ltn.invitation.createInvitationOverlay(parser.getItems({})[0], itipItem);
+    let dom = ltn.invitation.createInvitationOverlay(parser.getItems()[0], itipItem);
     let observed = dom.getElementById(test.expected.node).innerHTML;
     // we remove line-breaks and leading white spaces here so we can keep expected test results
     // above more comprehensive
@@ -442,7 +442,7 @@ add_task(async function compareInvitationOverlay_test() {
     itipItem.init(item);
     let parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
     parser.parseString(item);
-    let dom = ltn.invitation.createInvitationOverlay(parser.getItems({})[0], itipItem);
+    let dom = ltn.invitation.createInvitationOverlay(parser.getItems()[0], itipItem);
     return cal.xml.serializeDOM(dom);
   }
   let data = [

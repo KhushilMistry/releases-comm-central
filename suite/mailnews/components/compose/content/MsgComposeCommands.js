@@ -20,7 +20,6 @@ var nsIMsgCompConvertible = Ci.nsIMsgCompConvertible;
 var nsIMsgCompType = Ci.nsIMsgCompType;
 var nsIMsgCompFormat = Ci.nsIMsgCompFormat;
 var nsIAbPreferMailFormat = Ci.nsIAbPreferMailFormat;
-var nsIPlaintextEditorMail = Ci.nsIPlaintextEditor;
 var mozISpellCheckingEngine = Ci.mozISpellCheckingEngine;
 
 /**
@@ -74,8 +73,6 @@ var gMsgHeadersToolbarElement;
 var gComposeType;
 
 // i18n globals
-var gSendDefaultCharset;
-var gCharsetTitle;
 var gCharsetConvertManager;
 
 var gLastWindowToHaveFocus;
@@ -106,8 +103,6 @@ function InitializeGlobalVariables()
   gCloseWindowAfterSave = false;
   gSavedSendNowKey = null;
   gSendFormat = nsIMsgCompSendFormat.AskUser;
-  gSendDefaultCharset = null;
-  gCharsetTitle = null;
   gCharsetConvertManager = Cc['@mozilla.org/charset-converter-manager;1'].getService(Ci.nsICharsetConverterManager);
   gMailSession = Cc["@mozilla.org/messenger/services/session;1"].getService(Ci.nsIMsgMailSession);
   gHideMenus = false;
@@ -134,7 +129,7 @@ function ReleaseGlobalVariables()
 
 function disableEditableFields()
 {
-  gMsgCompose.editor.flags |= nsIPlaintextEditorMail.eEditorReadonlyMask;
+  gMsgCompose.editor.flags |= Ci.nsIEditor.eEditorReadonlyMask;
   var disableElements = document.getElementsByAttribute("disableonsend", "true");
   for (let i = 0; i < disableElements.length; i++)
     disableElements[i].setAttribute('disabled', 'true');
@@ -143,7 +138,7 @@ function disableEditableFields()
 
 function enableEditableFields()
 {
-  gMsgCompose.editor.flags &= ~nsIPlaintextEditorMail.eEditorReadonlyMask;
+  gMsgCompose.editor.flags &= ~Ci.nsIEditor.eEditorReadonlyMask;
   var enableElements = document.getElementsByAttribute("disableonsend", "true");
   for (let i = 0; i < enableElements.length; i++)
     enableElements[i].removeAttribute('disabled');
@@ -982,8 +977,7 @@ function ComposeFieldsReady()
   //If we are in plain text, we need to set the wrap column
   if (! gMsgCompose.composeHTML) {
     try {
-      gMsgCompose.editor.QueryInterface(nsIPlaintextEditorMail).wrapWidth
-          = gMsgCompose.wrapLength;
+      gMsgCompose.editor.wrapWidth = gMsgCompose.wrapLength;
     }
     catch (e) {
       dump("### textEditor.wrapWidth exception text: " + e + " - failed\n");
@@ -1523,7 +1517,7 @@ function ComposeUnload()
 function ComposeSetCharacterSet(aEvent)
 {
   if (gMsgCompose)
-    SetDocumentCharacterSet(aEvent.target.getAttribute("charset");
+    SetDocumentCharacterSet(aEvent.target.getAttribute("charset"));
   else
     dump("Compose has not been created!\n");
 }
@@ -1535,55 +1529,25 @@ function SetDocumentCharacterSet(aCharset)
     aCharset = "ISO-2022-JP";
   }
   gMsgCompose.SetDocumentCharset(aCharset);
-  gCharsetTitle = null;
   SetComposeWindowTitle();
 }
 
 function GetCharsetUIString()
 {
-  var charset = gMsgCompose.compFields.characterSet;
-  if (gSendDefaultCharset == null) {
-    gSendDefaultCharset = gMsgCompose.compFields.defaultCharacterSet;
-  }
+  // The charset here is already the canonical charset (not an alias).
+  let charset = gMsgCompose.compFields.characterSet;
+  if (!charset)
+    return "";
 
-  charset = charset.toUpperCase();
-  if (charset == "US-ASCII")
-    charset = "ISO-8859-1";
-
-  if (charset != gSendDefaultCharset) {
-
-    if (gCharsetTitle == null) {
-      try {
-        // check if we have a converter for this charset
-        var charsetAlias = gCharsetConvertManager.getCharsetAlias(charset);
-        var encoderList = gCharsetConvertManager.getEncoderList();
-        var found = false;
-        while (encoderList.hasMore()) {
-            if (charsetAlias == encoderList.getNext()) {
-                found = true;
-                break;
-            }
-        }
-        if (!found)
-        {
-          dump("no charset converter available for " +  charset + " default charset is used instead\n");
-          // set to default charset, no need to show it in the window title
-          gMsgCompose.compFields.characterSet = gSendDefaultCharset;
-          return "";
-        }
-
-        // get a localized string
-        gCharsetTitle = gCharsetConvertManager.getCharsetTitle(charsetAlias);
-      }
-      catch (ex) {
-        dump("failed to get a charset title of " + charset + "!\n");
-        gCharsetTitle = charset; // just show the charset itself
-      }
+  if (charset.toLowerCase() != gMsgCompose.compFields.defaultCharacterSet.toLowerCase()) {
+    try {
+      return " - " + gCharsetConvertManager.getCharsetTitle(charset);
     }
-
-    return " - " + gCharsetTitle;
+    catch(e) { // Not a canonical charset after all...
+      Cu.reportError("Not charset title for charset=" + charset);
+      return " - " + charset;
+    }
   }
-
   return "";
 }
 
@@ -1603,7 +1567,7 @@ function GenericSendMessage( msgType )
       Recipients2CompFields(msgCompFields);
       var address = GetMsgIdentityElement().value;
       address = MailServices.headerParser.makeFromDisplayAddress(address);
-      msgCompFields.from = MailServices.headerParser.makeMimeHeader(address, 1);
+      msgCompFields.from = MailServices.headerParser.makeMimeHeader([address[0]]);
       var subject = GetMsgSubjectElement().value;
       msgCompFields.subject = subject;
       Attachments2CompFields(msgCompFields);
@@ -1832,8 +1796,7 @@ function CheckValidEmailAddress(aTo, aCC, aBCC)
 function SendMessage()
 {
   let sendInBackground = Services.prefs.getBoolPref("mailnews.sendInBackground");
-  if (sendInBackground && !/Mac/.test(navigator.platform))
-  {
+  if (sendInBackground && AppConstants.platform != "macosx") {
     let enumerator = Services.wm.getEnumerator(null);
     let count = 0;
     while (enumerator.hasMoreElements() && count < 2)
@@ -2343,7 +2306,7 @@ function ComposeCanClose()
               (Services.prompt.BUTTON_TITLE_IS_STRING * Services.prompt.BUTTON_POS_2),
               null,
               null,
-              getComposeBundle().getString("discardButtonLabel"),
+              sComposeMsgsBundle.getString("discardButtonLabel"),
               null, {value:0}))
     {
       case 0: //Save
@@ -2387,7 +2350,7 @@ function RemoveDraft()
       if (folder instanceof Ci.nsIMsgImapMailFolder)
       {
         const kImapMsgDeletedFlag = 0x0008;
-        folder.storeImapFlags(kImapMsgDeletedFlag, true, [msgKey], 1, null);
+        folder.storeImapFlags(kImapMsgDeletedFlag, true, [msgKey], null);
       }
     }
   } catch (ex) {}
@@ -2864,8 +2827,8 @@ function LoadIdentity(startup)
               awAddRecipients(msgCompFields, "addr_reply", newReplyTo);
           }
 
-          let toAddrs = new Set(msgCompFields.splitRecipients(msgCompFields.to, true, {}));
-          let ccAddrs = new Set(msgCompFields.splitRecipients(msgCompFields.cc, true, {}));
+          let toAddrs = new Set(msgCompFields.splitRecipients(msgCompFields.to, true));
+          let ccAddrs = new Set(msgCompFields.splitRecipients(msgCompFields.cc, true));
 
           if (newCc != prevCc)
           {
@@ -2874,7 +2837,7 @@ function LoadIdentity(startup)
               awRemoveRecipients(msgCompFields, "addr_cc", prevCc);
             if (newCc) {
               // Ensure none of the Ccs are already in To.
-              let cc2 = msgCompFields.splitRecipients(newCc, true, {});
+              let cc2 = msgCompFields.splitRecipients(newCc, true);
               newCc = cc2.filter(x => !toAddrs.has(x)).join(", ");
               awAddRecipients(msgCompFields, "addr_cc", newCc);
             }
@@ -2887,7 +2850,7 @@ function LoadIdentity(startup)
               awRemoveRecipients(msgCompFields, "addr_bcc", prevBcc);
             if (newBcc) {
               // Ensure none of the Bccs are already in To or Cc.
-              let bcc2 = msgCompFields.splitRecipients(newBcc, true, {});
+              let bcc2 = msgCompFields.splitRecipients(newBcc, true);
               let toCcAddrs = new Set([...toAddrs, ...ccAddrs]);
               newBcc = bcc2.filter(x => !toCcAddrs.has(x)).join(", ");
               awAddRecipients(msgCompFields, "addr_bcc", newBcc);
@@ -3329,7 +3292,7 @@ function InitEditor(editor)
   // Set the eEditorMailMask flag to avoid using content prefs for the spell
   // checker, otherwise the dictionary setting in preferences is ignored and
   // the dictionary is inconsistent between the subject and message body.
-  var eEditorMailMask = Ci.nsIPlaintextEditor.eEditorMailMask;
+  var eEditorMailMask = Ci.nsIEditor.eEditorMailMask;
   editor.flags |= eEditorMailMask;
   GetMsgSubjectElement().editor.flags |= eEditorMailMask;
 

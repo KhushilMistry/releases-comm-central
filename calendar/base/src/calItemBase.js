@@ -2,9 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* import-globals-from calItemModule.js */
-
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
+var { CalAttendee } = ChromeUtils.import("resource:///modules/CalAttendee.jsm");
+var { CalRelation } = ChromeUtils.import("resource:///modules/CalRelation.jsm");
+var { CalAttachment } = ChromeUtils.import("resource:///modules/CalAttachment.jsm");
 
 /**
  * calItemBase prototype definition
@@ -43,7 +44,7 @@ calItemBase.prototype = {
    * Initialize the base item's attributes. Can be called from inheriting
    * objects in their constructor.
    */
-  initItemBase: function() {
+  initItemBase() {
     this.wrappedJSObject = this;
     this.mProperties = new Map();
     this.mPropertyParams = {};
@@ -143,7 +144,7 @@ calItemBase.prototype = {
    * @param aParentItem     The parent item to initialize the proxy on.
    * @param aRecurrenceId   The recurrence id to initialize the proxy for.
    */
-  initializeProxy: function(aParentItem, aRecurrenceId) {
+  initializeProxy(aParentItem, aRecurrenceId) {
     this.mIsProxy = true;
 
     aParentItem = cal.unwrapInstance(aParentItem);
@@ -167,7 +168,7 @@ calItemBase.prototype = {
    * checks if the item is immutable and throws accordingly, and sets the
    * mDirty property.
    */
-  modify: function() {
+  modify() {
     if (this.mImmutable) {
       throw Cr.NS_ERROR_OBJECT_IS_IMMUTABLE;
     }
@@ -178,7 +179,7 @@ calItemBase.prototype = {
    * Makes sure the item is not dirty. If the item is dirty, properties like
    * LAST-MODIFIED and DTSTAMP are set to now.
    */
-  ensureNotDirty: function() {
+  ensureNotDirty() {
     if (this.mDirty) {
       let now = cal.dtz.jsDateToDateTime(new Date());
       this.setProperty("LAST-MODIFIED", now);
@@ -191,7 +192,7 @@ calItemBase.prototype = {
    * Makes all properties of the base item immutable. Can be called by
    * inheriting objects' makeImmutable method.
    */
-  makeItemBaseImmutable: function() {
+  makeItemBaseImmutable() {
     if (this.mImmutable) {
       return;
     }
@@ -231,7 +232,7 @@ calItemBase.prototype = {
   },
 
   // boolean hasSameIds(in calIItemBase aItem);
-  hasSameIds: function(that) {
+  hasSameIds(that) {
     return (
       that &&
       this.id == that.id &&
@@ -243,7 +244,7 @@ calItemBase.prototype = {
   },
 
   // calIItemBase clone();
-  clone: function() {
+  clone() {
     return this.cloneShallow(this.mParentItem);
   },
 
@@ -254,7 +255,7 @@ calItemBase.prototype = {
    * @param m     The item to clone this item into
    * @param aNewParent    (optional) The new parent item to set on m.
    */
-  cloneItemBaseInto: function(cloned, aNewParent) {
+  cloneItemBaseInto(cloned, aNewParent) {
     cloned.mImmutable = false;
     cloned.mACLEntry = this.mACLEntry;
     cloned.mIsProxy = this.mIsProxy;
@@ -273,7 +274,7 @@ calItemBase.prototype = {
     cloned.mOrganizer = org;
 
     cloned.mAttendees = [];
-    for (let att of this.getAttendees({})) {
+    for (let att of this.getAttendees()) {
       cloned.mAttendees.push(att.clone());
     }
 
@@ -296,19 +297,19 @@ calItemBase.prototype = {
     }
 
     cloned.mAttachments = [];
-    for (let att of this.getAttachments({})) {
+    for (let att of this.getAttachments()) {
       cloned.mAttachments.push(att.clone());
     }
 
     cloned.mRelations = [];
-    for (let rel of this.getRelations({})) {
+    for (let rel of this.getRelations()) {
       cloned.mRelations.push(rel.clone());
     }
 
-    cloned.mCategories = this.getCategories({});
+    cloned.mCategories = this.getCategories();
 
     cloned.mAlarms = [];
-    for (let alarm of this.getAlarms({})) {
+    for (let alarm of this.getAlarms()) {
       // Clone alarms into new item, assume the alarms from the old item
       // are valid and don't need validation.
       cloned.mAlarms.push(alarm.clone());
@@ -367,22 +368,21 @@ calItemBase.prototype = {
   },
 
   // nsIVariant getProperty(in AString name);
-  getProperty: function(aName) {
+  getProperty(aName) {
     let name = aName.toUpperCase();
     if (this.mProperties.has(name)) {
       return this.mProperties.get(name);
-    } else {
-      return this.mIsProxy ? this.mParentItem.getProperty(name) : null;
     }
+    return this.mIsProxy ? this.mParentItem.getProperty(name) : null;
   },
 
   // boolean hasProperty(in AString name);
-  hasProperty: function(aName) {
+  hasProperty(aName) {
     return this.getProperty(aName.toUpperCase()) != null;
   },
 
   // void setProperty(in AString name, in nsIVariant value);
-  setProperty: function(aName, aValue) {
+  setProperty(aName, aValue) {
     this.modify();
     aName = aName.toUpperCase();
     if (aValue || !isNaN(parseInt(aValue, 10))) {
@@ -397,7 +397,7 @@ calItemBase.prototype = {
   },
 
   // void deleteProperty(in AString name);
-  deleteProperty: function(aName) {
+  deleteProperty(aName) {
     this.modify();
     aName = aName.toUpperCase();
     if (this.mIsProxy) {
@@ -412,7 +412,7 @@ calItemBase.prototype = {
 
   // AString getPropertyParameter(in AString aPropertyName,
   //                              in AString aParameterName);
-  getPropertyParameter: function(aPropName, aParamName) {
+  getPropertyParameter(aPropName, aParamName) {
     let propName = aPropName.toUpperCase();
     let paramName = aParamName.toUpperCase();
     if (propName in this.mPropertyParams && paramName in this.mPropertyParams[propName]) {
@@ -425,7 +425,7 @@ calItemBase.prototype = {
 
   // boolean hasPropertyParameter(in AString aPropertyName,
   //                              in AString aParameterName);
-  hasPropertyParameter: function(aPropName, aParamName) {
+  hasPropertyParameter(aPropName, aParamName) {
     let propName = aPropName.toUpperCase();
     let paramName = aParamName.toUpperCase();
     return propName in this.mPropertyParams && paramName in this.mPropertyParams[propName];
@@ -434,7 +434,7 @@ calItemBase.prototype = {
   // void setPropertyParameter(in AString aPropertyName,
   //                           in AString aParameterName,
   //                           in AUTF8String aParameterValue);
-  setPropertyParameter: function(aPropName, aParamName, aParamValue) {
+  setPropertyParameter(aPropName, aParamName, aParamValue) {
     let propName = aPropName.toUpperCase();
     let paramName = aParamName.toUpperCase();
     this.modify();
@@ -454,7 +454,7 @@ calItemBase.prototype = {
   },
 
   // nsISimpleEnumerator getParameterEnumerator(in AString aPropertyName);
-  getParameterEnumerator: function(aPropName) {
+  getParameterEnumerator(aPropName) {
     let propName = aPropName.toUpperCase();
     if (!(propName in this.mPropertyParams)) {
       throw new Error("Property " + aPropName + " not set");
@@ -465,11 +465,11 @@ calItemBase.prototype = {
       QueryInterface: ChromeUtils.generateQI([Ci.nsISimpleEnumerator]),
 
       mParamNames: Object.keys(parameters),
-      hasMoreElements: function() {
+      hasMoreElements() {
         return this.mParamNames.length > 0;
       },
 
-      getNext: function() {
+      getNext() {
         let paramName = this.mParamNames.pop();
         return {
           // nsIProperty
@@ -483,22 +483,19 @@ calItemBase.prototype = {
 
   // void getAttendees(out PRUint32 count,
   //                   [array,size_is(count),retval] out calIAttendee attendees);
-  getAttendees: function(countObj) {
+  getAttendees() {
     if (!this.mAttendees && this.mIsProxy) {
-      this.mAttendees = this.mParentItem.getAttendees(countObj);
+      this.mAttendees = this.mParentItem.getAttendees();
     }
     if (this.mAttendees) {
-      countObj.value = this.mAttendees.length;
       return this.mAttendees.concat([]); // clone
-    } else {
-      countObj.value = 0;
-      return [];
     }
+    return [];
   },
 
   // calIAttendee getAttendeeById(in AUTF8String id);
-  getAttendeeById: function(id) {
-    let attendees = this.getAttendees({});
+  getAttendeeById(id) {
+    let attendees = this.getAttendees();
     let lowerCaseId = id.toLowerCase();
     for (let attendee of attendees) {
       // This match must be case insensitive to deal with differing
@@ -511,11 +508,11 @@ calItemBase.prototype = {
   },
 
   // void removeAttendee(in calIAttendee attendee);
-  removeAttendee: function(attendee) {
+  removeAttendee(attendee) {
     this.modify();
     let found = false,
       newAttendees = [];
-    let attendees = this.getAttendees({});
+    let attendees = this.getAttendees();
     let attIdLowerCase = attendee.id.toLowerCase();
 
     for (let i = 0; i < attendees.length; i++) {
@@ -531,13 +528,13 @@ calItemBase.prototype = {
   },
 
   // void removeAllAttendees();
-  removeAllAttendees: function() {
+  removeAllAttendees() {
     this.modify();
     this.mAttendees = [];
   },
 
   // void addAttendee(in calIAttendee attendee);
-  addAttendee: function(attendee) {
+  addAttendee(attendee) {
     // the duplicate check is migration code for bug 1204255
     let exists = this.getAttendeeById(attendee.id);
     if (exists) {
@@ -574,28 +571,24 @@ calItemBase.prototype = {
         }
       }
       this.modify();
-      this.mAttendees = this.getAttendees({});
+      this.mAttendees = this.getAttendees();
       this.mAttendees.push(attendee);
     }
   },
 
-  // void getAttachments(out PRUint32 count,
-  //                     [array,size_is(count),retval] out calIAttachment attachments);
-  getAttachments: function(aCount) {
+  // Array<calIAttachment> getAttachments();
+  getAttachments() {
     if (!this.mAttachments && this.mIsProxy) {
-      this.mAttachments = this.mParentItem.getAttachments(aCount);
+      this.mAttachments = this.mParentItem.getAttachments();
     }
     if (this.mAttachments) {
-      aCount.value = this.mAttachments.length;
       return this.mAttachments.concat([]); // clone
-    } else {
-      aCount.value = 0;
-      return [];
     }
+    return [];
   },
 
   // void removeAttachment(in calIAttachment attachment);
-  removeAttachment: function(aAttachment) {
+  removeAttachment(aAttachment) {
     this.modify();
     for (let attIndex in this.mAttachments) {
       if (cal.data.compareObjects(this.mAttachments[attIndex], aAttachment, Ci.calIAttachment)) {
@@ -607,37 +600,33 @@ calItemBase.prototype = {
   },
 
   // void addAttachment(in calIAttachment attachment);
-  addAttachment: function(attachment) {
+  addAttachment(attachment) {
     this.modify();
-    this.mAttachments = this.getAttachments({});
+    this.mAttachments = this.getAttachments();
     if (!this.mAttachments.some(x => x.hashId == attachment.hashId)) {
       this.mAttachments.push(attachment);
     }
   },
 
   // void removeAllAttachments();
-  removeAllAttachments: function() {
+  removeAllAttachments() {
     this.modify();
     this.mAttachments = [];
   },
 
-  // void getRelations(out PRUint32 count,
-  //                   [array,size_is(count),retval] out calIRelation relations);
-  getRelations: function(aCount) {
+  // Array<calIRelation> getRelations();
+  getRelations() {
     if (!this.mRelations && this.mIsProxy) {
-      this.mRelations = this.mParentItem.getRelations(aCount);
+      this.mRelations = this.mParentItem.getRelations();
     }
     if (this.mRelations) {
-      aCount.value = this.mRelations.length;
       return this.mRelations.concat([]);
-    } else {
-      aCount.value = 0;
-      return [];
     }
+    return [];
   },
 
   // void removeRelation(in calIRelation relation);
-  removeRelation: function(aRelation) {
+  removeRelation(aRelation) {
     this.modify();
     for (let attIndex in this.mRelations) {
       // Could we have the same item as parent and as child ?
@@ -653,15 +642,15 @@ calItemBase.prototype = {
   },
 
   // void addRelation(in calIRelation relation);
-  addRelation: function(aRelation) {
+  addRelation(aRelation) {
     this.modify();
-    this.mRelations = this.getRelations({});
+    this.mRelations = this.getRelations();
     this.mRelations.push(aRelation);
     // XXX ensure that the relation isn't already there?
   },
 
   // void removeAllRelations();
-  removeAllRelations: function() {
+  removeAllRelations() {
     this.modify();
     this.mRelations = [];
   },
@@ -670,9 +659,8 @@ calItemBase.prototype = {
   get calendar() {
     if (!this.mCalendar && this.parentItem != this) {
       return this.parentItem.calendar;
-    } else {
-      return this.mCalendar;
     }
+    return this.mCalendar;
   },
   set calendar(calendar) {
     if (this.mImmutable) {
@@ -686,33 +674,27 @@ calItemBase.prototype = {
   get organizer() {
     if (this.mIsProxy && this.mOrganizer === undefined) {
       return this.mParentItem.organizer;
-    } else {
-      return this.mOrganizer;
     }
+    return this.mOrganizer;
   },
   set organizer(organizer) {
     this.modify();
     this.mOrganizer = organizer;
   },
 
-  // void getCategories(out PRUint32 aCount,
-  //                    [array, size_is(aCount), retval] out wstring aCategories);
-  getCategories: function(aCount) {
+  // Array<AString> getCategories();
+  getCategories() {
     if (!this.mCategories && this.mIsProxy) {
-      this.mCategories = this.mParentItem.getCategories(aCount);
+      this.mCategories = this.mParentItem.getCategories();
     }
     if (this.mCategories) {
-      aCount.value = this.mCategories.length;
       return this.mCategories.concat([]); // clone
-    } else {
-      aCount.value = 0;
-      return [];
     }
+    return [];
   },
 
-  // void setCategories(in PRUint32 aCount,
-  //                    [array, size_is(aCount)] in wstring aCategories);
-  setCategories: function(aCount, aCategories) {
+  // void setCategories(in Array<AString> aCategories);
+  setCategories(aCategories) {
     this.modify();
     this.mCategories = aCategories.concat([]);
   },
@@ -774,7 +756,7 @@ calItemBase.prototype = {
    * @param icalcomp      The calIIcalComponent to read from.
    * @param propmap       The property map to walk through.
    */
-  mapPropsFromICS: function(icalcomp, propmap) {
+  mapPropsFromICS(icalcomp, propmap) {
     for (let i = 0; i < propmap.length; i++) {
       let prop = propmap[i];
       let val = icalcomp[prop.ics];
@@ -792,7 +774,7 @@ calItemBase.prototype = {
    * @param icalcomp      The calIIcalComponent to write to.
    * @param propmap       The property map to walk through.
    */
-  mapPropsToICS: function(icalcomp, propmap) {
+  mapPropsToICS(icalcomp, propmap) {
     for (let i = 0; i < propmap.length; i++) {
       let prop = propmap[i];
       let val = this.getProperty(prop.cal);
@@ -808,7 +790,7 @@ calItemBase.prototype = {
    *
    * @param icalcomp      The ical component to read.
    */
-  setItemBaseFromICS: function(icalcomp) {
+  setItemBaseFromICS(icalcomp) {
     this.modify();
 
     // re-initializing from scratch -- no light proxy anymore:
@@ -820,21 +802,21 @@ calItemBase.prototype = {
 
     this.mAttendees = []; // don't inherit anything from parent
     for (let attprop of cal.iterate.icalProperty(icalcomp, "ATTENDEE")) {
-      let att = new calAttendee();
+      let att = new CalAttendee();
       att.icalProperty = attprop;
       this.addAttendee(att);
     }
 
     this.mAttachments = []; // don't inherit anything from parent
     for (let attprop of cal.iterate.icalProperty(icalcomp, "ATTACH")) {
-      let att = new calAttachment();
+      let att = new CalAttachment();
       att.icalProperty = attprop;
       this.addAttachment(att);
     }
 
     this.mRelations = []; // don't inherit anything from parent
     for (let relprop of cal.iterate.icalProperty(icalcomp, "RELATED-TO")) {
-      let rel = new calRelation();
+      let rel = new CalRelation();
       rel.icalProperty = relprop;
       this.addRelation(rel);
     }
@@ -842,7 +824,7 @@ calItemBase.prototype = {
     let org = null;
     let orgprop = icalcomp.getFirstProperty("ORGANIZER");
     if (orgprop) {
-      org = new calAttendee();
+      org = new CalAttendee();
       org.icalProperty = orgprop;
       org.isOrganizer = true;
     }
@@ -915,7 +897,7 @@ calItemBase.prototype = {
    * @param icalcomp      The ical component to read.
    * @param promoted      The map of promoted properties.
    */
-  importUnpromotedProperties: function(icalcomp, promoted) {
+  importUnpromotedProperties(icalcomp, promoted) {
     for (let prop of cal.iterate.icalProperty(icalcomp)) {
       let propName = prop.propertyName;
       if (!promoted[propName]) {
@@ -931,7 +913,7 @@ calItemBase.prototype = {
   },
 
   // boolean isPropertyPromoted(in AString name);
-  isPropertyPromoted: function(name) {
+  isPropertyPromoted(name) {
     return this.itemBasePromotedProps[name.toUpperCase()];
   },
 
@@ -957,7 +939,7 @@ calItemBase.prototype = {
    *
    * @param icalcomp    The ical component to write to.
    */
-  fillIcalComponentFromBase: function(icalcomp) {
+  fillIcalComponentFromBase(icalcomp) {
     this.ensureNotDirty();
     let icssvc = cal.getIcsService();
 
@@ -968,25 +950,25 @@ calItemBase.prototype = {
       icalcomp.addProperty(org.icalProperty);
     }
 
-    for (let attendee of this.getAttendees({})) {
+    for (let attendee of this.getAttendees()) {
       icalcomp.addProperty(attendee.icalProperty);
     }
 
-    for (let attachment of this.getAttachments({})) {
+    for (let attachment of this.getAttachments()) {
       icalcomp.addProperty(attachment.icalProperty);
     }
 
-    for (let relation of this.getRelations({})) {
+    for (let relation of this.getRelations()) {
       icalcomp.addProperty(relation.icalProperty);
     }
 
     if (this.mRecurrenceInfo) {
-      for (let ritem of this.mRecurrenceInfo.getRecurrenceItems({})) {
+      for (let ritem of this.mRecurrenceInfo.getRecurrenceItems()) {
         icalcomp.addProperty(ritem.icalProperty);
       }
     }
 
-    for (let cat of this.getCategories({})) {
+    for (let cat of this.getCategories()) {
       let catprop = icssvc.createIcalProperty("CATEGORIES");
       catprop.value = cat;
       icalcomp.addProperty(catprop);
@@ -1007,22 +989,15 @@ calItemBase.prototype = {
     }
   },
 
-  // void getAlarms(out PRUint32 count, [array, size_is(count), retval] out calIAlarm aAlarms);
-  getAlarms: function(aCount) {
-    if (typeof aCount != "object") {
-      throw Cr.NS_ERROR_XPC_NEED_OUT_OBJECT;
-    }
-
+  // Array<calIAlarm> getAlarms();
+  getAlarms() {
     if (!this.mAlarms && this.mIsProxy) {
-      this.mAlarms = this.mParentItem.getAlarms(aCount);
+      this.mAlarms = this.mParentItem.getAlarms();
     }
     if (this.mAlarms) {
-      aCount.value = this.mAlarms.length;
       return this.mAlarms.concat([]); // clone
-    } else {
-      aCount.value = 0;
-      return [];
     }
+    return [];
   },
 
   /**
@@ -1033,7 +1008,7 @@ calItemBase.prototype = {
    * @param aDoNotValidate    Don't serialize the component to check for
    *                            errors.
    */
-  addAlarm: function(aAlarm, aDoNotValidate) {
+  addAlarm(aAlarm, aDoNotValidate) {
     if (!aDoNotValidate) {
       try {
         // Trigger the icalComponent getter to make sure the alarm is valid.
@@ -1044,14 +1019,14 @@ calItemBase.prototype = {
     }
 
     this.modify();
-    this.mAlarms = this.getAlarms({});
+    this.mAlarms = this.getAlarms();
     this.mAlarms.push(aAlarm);
   },
 
   // void deleteAlarm(in calIAlarm aAlarm);
-  deleteAlarm: function(aAlarm) {
+  deleteAlarm(aAlarm) {
     this.modify();
-    this.mAlarms = this.getAlarms({});
+    this.mAlarms = this.getAlarms();
     for (let i = 0; i < this.mAlarms.length; i++) {
       if (cal.data.compareObjects(this.mAlarms[i], aAlarm, Ci.calIAlarm)) {
         this.mAlarms.splice(i, 1);
@@ -1061,25 +1036,21 @@ calItemBase.prototype = {
   },
 
   // void clearAlarms();
-  clearAlarms: function() {
+  clearAlarms() {
     this.modify();
     this.mAlarms = [];
   },
 
-  // void getOccurrencesBetween (in calIDateTime aStartDate, in calIDateTime aEndDate,
-  //                             out PRUint32 aCount,
-  //                             [array,size_is(aCount),retval] out calIItemBase aOccurrences);
-  getOccurrencesBetween: function(aStartDate, aEndDate, aCount) {
+  // Array<calIItemBase> getOccurrencesBetween(in calIDateTime aStartDate, in calIDateTime aEndDate);
+  getOccurrencesBetween(aStartDate, aEndDate) {
     if (this.recurrenceInfo) {
-      return this.recurrenceInfo.getOccurrences(aStartDate, aEndDate, 0, aCount);
+      return this.recurrenceInfo.getOccurrences(aStartDate, aEndDate, 0);
     }
 
     if (cal.item.checkIfInRange(this, aStartDate, aEndDate)) {
-      aCount.value = 1;
       return [this];
     }
 
-    aCount.value = 0;
     return [];
   },
 };
@@ -1109,17 +1080,15 @@ function makeMemberAttr(ctor, varname, dflt, attr, asProperty) {
   let getter = function() {
     if (asProperty) {
       return this.getProperty(varname);
-    } else {
-      return varname in this ? this[varname] : undefined;
     }
+    return varname in this ? this[varname] : undefined;
   };
   let setter = function(value) {
     this.modify();
     if (asProperty) {
       return this.setProperty(varname, value);
-    } else {
-      return (this[varname] = value);
     }
+    return (this[varname] = value);
   };
   ctor.prototype.__defineGetter__(attr, getter);
   ctor.prototype.__defineSetter__(attr, setter);

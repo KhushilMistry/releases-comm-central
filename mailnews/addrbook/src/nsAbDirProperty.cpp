@@ -43,8 +43,7 @@ nsAbDirProperty::~nsAbDirProperty(void) {
 #endif
 }
 
-NS_IMPL_ISUPPORTS(nsAbDirProperty, nsIAbDirectory, nsISupportsWeakReference,
-                  nsIAbCollection, nsIAbItem)
+NS_IMPL_ISUPPORTS(nsAbDirProperty, nsIAbDirectory, nsISupportsWeakReference)
 
 NS_IMETHODIMP nsAbDirProperty::GetUuid(nsACString &uuid) {
   // XXX: not all directories have a dirPrefId...
@@ -57,15 +56,9 @@ NS_IMETHODIMP nsAbDirProperty::GetUuid(nsACString &uuid) {
   return rv;
 }
 
-NS_IMETHODIMP nsAbDirProperty::GenerateName(int32_t aGenerateFormat,
-                                            nsIStringBundle *aBundle,
-                                            nsAString &name) {
-  return GetDirName(name);
-}
-
 NS_IMETHODIMP nsAbDirProperty::GetPropertiesChromeURI(nsACString &aResult) {
   aResult.AssignLiteral(
-      "chrome://messenger/content/addressbook/abAddressBookNameDialog.xul");
+      "chrome://messenger/content/addressbook/abAddressBookNameDialog.xhtml");
   return NS_OK;
 }
 
@@ -125,8 +118,7 @@ NS_IMETHODIMP nsAbDirProperty::SetDirName(const nsAString &aDirName) {
   if (NS_SUCCEEDED(rv))
     // We inherit from nsIAbDirectory, so this static cast should be safe.
     abManager->NotifyItemPropertyChanged(static_cast<nsIAbDirectory *>(this),
-                                         "DirName", oldDirName.get(),
-                                         nsString(aDirName).get());
+                                         "DirName", oldDirName, aDirName);
 
   return NS_OK;
 }
@@ -348,20 +340,6 @@ nsAbDirProperty::HasMailListWithName(const char16_t *aName, bool *aHasList) {
     }
   }
   return NS_OK;
-}
-
-NS_IMETHODIMP
-nsAbDirProperty::CreateNewDirectory(const nsAString &aDirName,
-                                    const nsACString &aURI, uint32_t aType,
-                                    const nsACString &aPrefName,
-                                    nsACString &aResult) {
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
-NS_IMETHODIMP
-nsAbDirProperty::CreateDirectoryByURI(const nsAString &aDisplayName,
-                                      const nsACString &aURI) {
-  return NS_ERROR_NOT_IMPLEMENTED;
 }
 
 NS_IMETHODIMP nsAbDirProperty::AddMailList(nsIAbDirectory *list,

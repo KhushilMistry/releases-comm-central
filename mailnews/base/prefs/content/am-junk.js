@@ -9,9 +9,6 @@
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
-var { fixIterator } = ChromeUtils.import(
-  "resource:///modules/iteratorUtils.jsm"
-);
 var { MailUtils } = ChromeUtils.import("resource:///modules/MailUtils.jsm");
 
 var gDeferredToAccount = "";
@@ -84,7 +81,7 @@ function onInit(aPageId, aServerId) {
 
   // Populate the listbox with address books
   let abItems = [];
-  for (let ab of fixIterator(MailServices.ab.directories, Ci.nsIAbDirectory)) {
+  for (let ab of MailServices.ab.directories) {
     // We skip mailing lists and remote address books.
     if (ab.isMailList || ab.isRemote) {
       continue;
@@ -190,7 +187,7 @@ function onAdaptiveJunkToggle() {
   for (let i = 0; i < wList.getRowCount(); i++) {
     let item = wList.getItemAtIndex(i);
     item.setAttribute("disabled", wListDisabled);
-    item.firstChild.setAttribute("disabled", wListDisabled);
+    item.firstElementChild.setAttribute("disabled", wListDisabled);
   }
 }
 
@@ -244,7 +241,7 @@ function onSaveWhiteList() {
     // as they may not return the right value or may even not exist.
     // Always get the attributes only.
     var wlNode = wList.getItemAtIndex(i);
-    if (wlNode.firstChild.getAttribute("checked") == "true") {
+    if (wlNode.firstElementChild.getAttribute("checked") == "true") {
       let abURI = wlNode.getAttribute("value");
       wlArray.push(abURI);
     }
@@ -312,10 +309,8 @@ function buildServerFilterListFromDir(aDir, aExistingEntries) {
   let newEntries = [];
   // Now iterate over each file in the directory looking for .sfd files.
   const kSuffix = ".sfd";
-  let entries = aDir.directoryEntries.QueryInterface(Ci.nsIDirectoryEnumerator);
 
-  while (entries.hasMoreElements()) {
-    let entry = entries.nextFile;
+  for (let entry of aDir.directoryEntries) {
     // we only care about files that end in .sfd
     if (entry.isFile() && entry.leafName.endsWith(kSuffix)) {
       let fileName = entry.leafName.slice(0, -kSuffix.length);

@@ -1528,7 +1528,7 @@ function EditorSelectColor(colorType, mouseEvent) {
     // Launch the ColorPicker dialog
     // TODO: Figure out how to position this under the color buttons on the toolbar
     window.openDialog(
-      "chrome://editor/content/EdColorPicker.xul",
+      "chrome://editor/content/EdColorPicker.xhtml",
       "_blank",
       "chrome,close,titlebar,modal",
       "",
@@ -2810,10 +2810,7 @@ function goUpdateTableMenuItems(commandset) {
   var enabledIfTable = false;
 
   var flags = editor.flags;
-  if (
-    !(flags & nsIPlaintextEditor.eEditorReadonlyMask) &&
-    IsEditingRenderedHTML()
-  ) {
+  if (!(flags & Ci.nsIEditor.eEditorReadonlyMask) && IsEditingRenderedHTML()) {
     var tagNameObj = { value: "" };
     var element;
     try {
@@ -2868,7 +2865,7 @@ function IsInTable() {
     var flags = editor.flags;
     return (
       IsHTMLEditor() &&
-      !(flags & nsIPlaintextEditor.eEditorReadonlyMask) &&
+      !(flags & Ci.nsIEditor.eEditorReadonlyMask) &&
       IsEditingRenderedHTML() &&
       null != editor.getElementOrParentByTagName("table", null)
     );
@@ -2882,7 +2879,7 @@ function IsInTableCell() {
     var flags = editor.flags;
     return (
       IsHTMLEditor() &&
-      !(flags & nsIPlaintextEditor.eEditorReadonlyMask) &&
+      !(flags & Ci.nsIEditor.eEditorReadonlyMask) &&
       IsEditingRenderedHTML() &&
       null != editor.getElementOrParentByTagName("td", null)
     );
@@ -2927,7 +2924,7 @@ function EditorInsertOrEditTable(insertAllowed) {
   if (IsInTable()) {
     // Edit properties of existing table
     window.openDialog(
-      "chrome://editor/content/EdTableProps.xul",
+      "chrome://editor/content/EdTableProps.xhtml",
       "_blank",
       "chrome,close,titlebar,modal",
       "",
@@ -2950,7 +2947,7 @@ function EditorInsertOrEditTable(insertAllowed) {
 function EditorInsertTable() {
   // Insert a new table
   window.openDialog(
-    "chrome://editor/content/EdInsertTable.xul",
+    "chrome://editor/content/EdInsertTable.xhtml",
     "_blank",
     "chrome,close,titlebar,modal",
     ""
@@ -2968,7 +2965,7 @@ function EditorTableCellProperties() {
     if (cell) {
       // Start Table Properties dialog on the "Cell" panel
       window.openDialog(
-        "chrome://editor/content/EdTableProps.xul",
+        "chrome://editor/content/EdTableProps.xhtml",
         "_blank",
         "chrome,close,titlebar,modal",
         "",
@@ -3119,7 +3116,7 @@ function EditorFindOrCreateInsertCharWindow() {
     } else {
       // The dialog will set window.InsertCharWindow to itself
       window.openDialog(
-        "chrome://editor/content/EdInsertChars.xul",
+        "chrome://editor/content/EdInsertChars.xhtml",
         "_blank",
         "chrome,close,titlebar",
         ""
@@ -3395,7 +3392,7 @@ function FillInHTMLTooltipEditor(tooltip) {
 
 function UpdateTOC() {
   window.openDialog(
-    "chrome://editor/content/EdInsertTOC.xul",
+    "chrome://editor/content/EdInsertTOC.xhtml",
     "_blank",
     "chrome,close,modal,titlebar"
   );

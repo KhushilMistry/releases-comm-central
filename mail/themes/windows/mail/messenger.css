@@ -26,7 +26,7 @@
   --toolbarbutton-border-radius: 2px;
   --toolbarbutton-icon-fill-opacity: .85;
   --toolbarbutton-hover-background: rgba(0, 0, 0, .1);
-  --toolbarbutton-hover-bordercolor: rgba(0, 0, 0, .1);
+  --toolbarbutton-hover-bordercolor: rgba(0, 0, 0, .25);
   --toolbarbutton-header-bordercolor: rgba(0, 0, 0, .1);
   --toolbarbutton-hover-boxshadow: none;
 
@@ -124,7 +124,9 @@ toolbar[brighttext] {
 .mail-toolbox > toolbar[brighttext],
 #event-toolbox > toolbar[brighttext],
 #compose-toolbox > toolbar[brighttext],
-#navigation-toolbox > toolbar[brighttext] {
+#navigation-toolbox > toolbar[brighttext],
+:root[lwt-tree-brighttext] .otr-container,
+:root[lwt-tree-brighttext] #searchTerms {
   --toolbarbutton-hover-background: var(--lwt-toolbarbutton-hover-background, rgba(255, 255, 255, .25));
   --toolbarbutton-hover-bordercolor: var(--lwt-toolbarbutton-hover-background, rgba(255, 255, 255, .5));
   --toolbarbutton-header-bordercolor: var(--lwt-toolbarbutton-hover-background, rgba(255, 255, 255, .25));
@@ -300,7 +302,7 @@ toolbar[mode="full"] .toolbarbutton-1 {
   min-width: 55px;
 }
 
-sidebarheader .toolbarbutton-text:not([value]) {
+.sidebar-header .toolbarbutton-text:not([value]) {
   display: none;
 }
 
@@ -832,11 +834,11 @@ menulist > menupopup:not([is="folder-menupopup"]) > menuseparator {
   }
 }
 
-/* Status panel */
-
 .statusbarpanel-iconic {
   padding: 0 1px;
 }
+
+/* Status panel */
 
 .statuspanel-label {
   margin: 0;
@@ -897,20 +899,25 @@ findbar {
 
 /* ::::: groupbox ::::: */
 
-groupbox {
-  -moz-appearance: groupbox;
-  border: 2px groove ThreeDFace;
+fieldset {
+  border: 0.5px groove ThreeDLightShadow;
   border-radius: 3px;
-  margin: 3px;
-  margin-top: 1em;
+  margin: 1em 3px 3px 3px;
   padding: 3px 0 6px;
 }
 
-groupbox > .groupbox-title > .header {
+legend {
   font-weight: normal;
   margin-top: -1em;
   margin-inline-start: 3px;
   padding-right: 3px;
   padding-left: 3px;
   background-color: -moz-dialog;
+  font-weight: bold;
+}
+
+fieldset > hbox,
+fieldset > vbox,
+fieldset > radiogroup {
+  width: -moz-available;
 }

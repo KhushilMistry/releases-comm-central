@@ -37,22 +37,6 @@ var gCopyService = Cc["@mozilla.org/messenger/messagecopyservice;1"]
                      .getService(Ci.nsIMsgCopyService);
 var gMarkViewedMessageAsReadTimer = null; // if the user has configured the app to mark a message as read if it is viewed for more than n seconds
 
-var gTimelineService = null;
-var gTimelineEnabled = ("@mozilla.org;timeline-service;1" in Cc);
-if (gTimelineEnabled) {
-  try {
-    gTimelineEnabled = Services.prefs.getBoolPref("mailnews.timeline_is_enabled");
-    if (gTimelineEnabled) {
-      gTimelineService =
-        Cc["@mozilla.org;timeline-service;1"].getService(Ci.nsITimelineService);
-    }
-  }
-  catch (ex)
-  {
-    gTimelineEnabled = false;
-  }
-}
-
 var gDisallow_classes_no_html = 1; /* the user preference,
      if HTML is not allowed. I assume, that the user could have set this to a
      value > 1 in his prefs.js or user.js, but that the value will not
@@ -109,12 +93,26 @@ function InitEditMessagesMenu()
   goSetMenuValue('cmd_delete', 'valueDefault');
   goSetAccessKey('cmd_delete', 'valueDefaultAccessKey');
   document.commandDispatcher.updateCommands('create-menu-edit');
+
+  // initialize the favorite Folder checkbox in the edit menu
+  let favoriteFolderMenu = document.getElementById("menu_favoriteFolder");
+  if (!favoriteFolderMenu.hasAttribute("disabled")) {
+    let folders = GetSelectedMsgFolders();
+    if (folders.length == 1 && !folders[0].isServer) {
+      let checked = folders[0].getFlag(Ci.nsMsgFolderFlags.Favorite);
+      // Adjust the checked state on the menu item.
+      favoriteFolderMenu.setAttribute("checked", checked);
+      favoriteFolderMenu.hidden = false;
+    } else {
+      favoriteFolderMenu.hidden = true;
+    }
+  }
 }
 
 function InitGoMessagesMenu()
 {
   // deactivate the folders in the go menu if we don't have a folderpane
-  document.getElementById("mailFolderPane")
+  document.getElementById("goFolderMenu")
           .setAttribute("disabled", IsFolderPaneCollapsed());
   document.commandDispatcher.updateCommands('create-menu-go');
 }
@@ -167,7 +165,8 @@ function view_init()
 
   // Initialize the Show Feed Summary menu
   let viewFeedSummary = document.getElementById("viewFeedSummary");
-  viewFeedSummary.hidden = !isFeed;
+  viewFeedSummary.hidden = !isFeed ||
+    document.documentElement.getAttribute("windowtype") != "mail:3pane";
 
   let viewRssMenuItemIds = ["bodyFeedGlobalWebPage",
                             "bodyFeedGlobalSummary",
@@ -488,7 +487,7 @@ function RemoveAllMessageTags()
                    .createInstance(Ci.nsIMutableArray);
   var tagService = Cc["@mozilla.org/messenger/tagservice;1"]
                      .getService(Ci.nsIMsgTagService);
-  var tagArray = tagService.getAllTags({});
+  var tagArray = tagService.getAllTags();
 
   var allKeys = "";
   for (let j = 0; j < tagArray.length; ++j)
@@ -583,7 +582,7 @@ function ToggleMessageTagKey(index)
 
   var tagService = Cc["@mozilla.org/messenger/tagservice;1"]
                      .getService(Ci.nsIMsgTagService);
-  var tagArray = tagService.getAllTags({});
+  var tagArray = tagService.getAllTags();
   for (var i = 0; i < tagArray.length; ++i)
   {
     var key = tagArray[i].key;
@@ -665,7 +664,7 @@ function InitMessageTags(menuPopup)
 {
   var tagService = Cc["@mozilla.org/messenger/tagservice;1"]
                      .getService(Ci.nsIMsgTagService);
-  var tagArray = tagService.getAllTags({});
+  var tagArray = tagService.getAllTags();
   var tagCount = tagArray.length;
 
   // remove any existing non-static entries...
@@ -722,13 +721,9 @@ function PopulateHistoryMenu(menuPopup, navOffset)
   while (menuPopup.hasChildNodes())
     menuPopup.lastChild.remove();
 
-  var curPos = {};
-  var numEntries = {};
-  var historyEntries = {};
-  messenger.getNavigateHistory(curPos, numEntries, historyEntries);
-  var historyArray = historyEntries.value;
-  var maxPos = numEntries.value / 2; // numEntries is always even
-  var startPos = curPos.value;
+  let startPos = messenger.navigatePos;
+  let historyArray = messenger.getNavigateHistory();
+  let maxPos = historyArray.length / 2; // Array consists of pairs.
   if (GetLoadedMessage())
     startPos += navOffset;
 
@@ -976,41 +971,29 @@ function MsgDeleteMessage(aReallyDelete)
     gDBView.doCommand(nsMsgViewCommandType.deleteMsg);
 }
 
-function MsgCopyMessage(destFolder)
-{
-  try {
-    // get the msg folder we're copying messages into
-    var destUri = destFolder.getAttribute('id');
-    let destMsgFolder = GetMsgFolderFromUri(destUri);
-    if (gMessageDisplay.isDummy)
-    {
-      let file = window.arguments[0].QueryInterface(Ci.nsIFileURL).file;
-      MailServices.copy.CopyFileMessage(file, destMsgFolder, null, false,
-                                        Ci.nsMsgMessageFlags.Read,
-                                        "", null, msgWindow);
-    }
-    else
-    {
-      gDBView.doCommandWithFolder(nsMsgViewCommandType.copyMessages, destMsgFolder);
-    }
+/**
+ * Copies the selected messages to the destination folder
+ * @param aDestFolder  the destination folder
+ */
+function MsgCopyMessage(aDestFolder) {
+  if (gMessageDisplay.isDummy) {
+    let file = window.arguments[0].QueryInterface(Ci.nsIFileURL).file;
+    MailServices.copy.CopyFileMessage(file, aDestFolder, null, false,
+                                      Ci.nsMsgMessageFlags.Read,
+                                      "", null, msgWindow);
   }
-  catch (ex) {
-    dump("MsgCopyMessage failed: " + ex + "\n");
+  else {
+    gDBView.doCommandWithFolder(nsMsgViewCommandType.copyMessages, aDestFolder);
   }
 }
 
-function MsgMoveMessage(destFolder)
-{
-  try {
-    // get the msg folder we're moving messages into
-    var destUri = destFolder.getAttribute('id');
-    let destMsgFolder = GetMsgFolderFromUri(destUri);
-    SetNextMessageAfterDelete();
-    gDBView.doCommandWithFolder(nsMsgViewCommandType.moveMessages, destMsgFolder);
-  }
-  catch (ex) {
-    dump("MsgMoveMessage failed: " + ex + "\n");
-  }
+/**
+ * Moves the selected messages to the destination folder
+ * @param aDestFolder  the destination folder
+ */
+function MsgMoveMessage(aDestFolder) {
+  SetNextMessageAfterDelete();
+  gDBView.doCommandWithFolder(nsMsgViewCommandType.moveMessages, aDestFolder);
 }
 
 /**
@@ -1454,75 +1437,6 @@ function MsgCreateFilter()
      top.MsgFilters(emailAddress, folder);
 }
 
-function MsgHome(url)
-{
-  window.open(url, "_blank", "chrome,dependent=yes,all");
-}
-
-function MsgNewFolder(callBackFunctionName)
-{
-    var preselectedFolder = GetFirstSelectedMsgFolder();
-    var dualUseFolders = true;
-    var server = null;
-    var destinationFolder = null;
-
-    if (preselectedFolder)
-    {
-        try {
-            server = preselectedFolder.server;
-            if (server)
-            {
-                destinationFolder = getDestinationFolder(preselectedFolder, server);
-
-                var imapServer =
-                    server.QueryInterface(Ci.nsIImapIncomingServer);
-                if (imapServer)
-                    dualUseFolders = imapServer.dualUseFolders;
-            }
-        } catch (e) {
-            dump ("Exception: dualUseFolders = true\n");
-        }
-    }
-    window.openDialog("chrome://messenger/content/newFolderDialog.xul",
-                      "",
-                      "chrome,modal,centerscreen",
-                      {folder: destinationFolder,
-                       dualUseFolders: dualUseFolders,
-                       okCallback:callBackFunctionName});
-}
-
-function getDestinationFolder(preselectedFolder, server)
-{
-    var destinationFolder = null;
-
-    var isCreateSubfolders = preselectedFolder.canCreateSubfolders;
-    if (!isCreateSubfolders)
-    {
-        destinationFolder = server.rootMsgFolder;
-
-        var verifyCreateSubfolders = null;
-        if (destinationFolder)
-            verifyCreateSubfolders = destinationFolder.canCreateSubfolders;
-
-        // in case the server cannot have subfolders,
-        // get default account and set its incoming server as parent folder
-        if (!verifyCreateSubfolders)
-        {
-            var defaultFolder = GetDefaultAccountRootFolder();
-            var checkCreateSubfolders = null;
-            if (defaultFolder)
-                checkCreateSubfolders = defaultFolder.canCreateSubfolders;
-
-            if (checkCreateSubfolders)
-                destinationFolder = defaultFolder;
-        }
-    }
-    else
-        destinationFolder = preselectedFolder;
-
-    return destinationFolder;
-}
-
 function MsgSubscribe(folder)
 {
   var preselectedFolder = folder || GetFirstSelectedMsgFolder();
@@ -1550,6 +1464,12 @@ function MsgUnsubscribe()
     if (ConfirmUnsubscribe(folder)) {
         UnSubscribe(folder);
     }
+}
+
+function ToggleFavoriteFolderFlag()
+{
+  var folder = GetFirstSelectedMsgFolder();
+  folder.toggleFlag(Ci.nsMsgFolderFlags.Favorite);
 }
 
 function MsgSaveAsFile()
@@ -1589,23 +1509,18 @@ function MsgOpenFromFile()
   });
 }
 
-function MsgOpenNewWindowForMsgHdr(hdr)
-{
-  MsgOpenNewWindowForFolder(hdr.folder.URI, hdr.messageKey);
-}
-
 function MsgOpenNewWindowForFolder(uri, key)
 {
   var uriToOpen = uri;
   var keyToSelect = key;
 
   if (!uriToOpen)
-    // use GetSelectedFolderURI() to find out which message to open instead of
-    // GetLoadedMsgFolder().URI.
-    // This is required because on a right-click, the currentIndex value will be
-    // different from the actual row that is highlighted.  GetSelectedFolderURI()
-    // will return the message that is highlighted.
-    uriToOpen = GetSelectedFolderURI();
+    // Use GetSelectedMsgFolders() to find out which message to open instead of
+    // GetLoadedMsgFolder().URI. This is required because on a right-click, the
+    // currentIndex value will be different from the actual row that is
+    // highlighted. GetSelectedMsgFolders() will return the message that is
+    // highlighted.
+    uriToOpen = GetSelectedMsgFolders()[0].URI;
 
   if (uriToOpen) {
    // get the messenger window open service and ask it to open a new window for us
@@ -1626,6 +1541,9 @@ function MsgOpenSelectedMessages()
         FeedMessageHandler.onOpenPref == FeedMessageHandler.kOpenToggleInMessagePane) {
       let showSummary = FeedMessageHandler.shouldShowSummary(msgHdr, true);
       FeedMessageHandler.setContent(msgHdr, showSummary);
+      FeedMessageHandler.onSelectPref =
+        showSummary ? FeedMessageHandler.kSelectOverrideSummary :
+                      FeedMessageHandler.kSelectOverrideWebPage;
       return;
     }
     if (FeedMessageHandler.onOpenPref == FeedMessageHandler.kOpenLoadInBrowser) {
@@ -1726,13 +1644,13 @@ function MsgOpenNewWindowForMessage(messageUri, folderUri)
     messageUri = gFolderDisplay.selectedMessageUri;
 
     if (!folderUri)
-        // use GetSelectedFolderURI() to find out which message to open
+        // Use GetSelectedMsgFolders() to find out which message to open
         // instead of gDBView.getURIForViewIndex(currentIndex).  This is
         // required because on a right-click, the currentIndex value will be
         // different from the actual row that is highlighted.
-        // GetSelectedFolderURI() will return the message that is
+        // GetSelectedMsgFolders() will return the message that is
         // highlighted.
-        folderUri = GetSelectedFolderURI();
+        folderUri = GetSelectedMsgFolders()[0].URI;
 
     // be sure to pass in the current view....
     if (messageUri && folderUri) {
@@ -1776,10 +1694,10 @@ function MsgMarkReadByDate()
 
 function MsgMarkAllRead()
 {
-    var folder = GetMsgFolderFromUri(GetSelectedFolderURI(), true);
+  var folder = GetSelectedMsgFolders()[0];
 
-    if(folder)
-        folder.markAllMessagesRead(msgWindow);
+  if (folder)
+    folder.markAllMessagesRead(msgWindow);
 }
 
 function MsgDownloadFlagged()
@@ -2123,51 +2041,42 @@ function IsGetNextNMessagesEnabled()
     return false;
 }
 
-function IsEmptyTrashEnabled()
-{
-  var folderURI = GetSelectedFolderURI();
-  var server = GetServer(folderURI);
-  return (server && server.canEmptyTrashOnExit ? IsMailFolderSelected() : false);
-}
-
 function IsCompactFolderEnabled()
 {
-  var server = GetServer(GetSelectedFolderURI());
+  let folder = GetSelectedMsgFolders()[0];
+  if (!folder)
+    return false;
+  let server = folder.server;
   return (server &&
+      (server.type != 'nntp') && // compact news folder is not supported
       ((server.type != 'imap') || server.canCompactFoldersOnServer) &&
       isCommandEnabled("cmd_compactFolder"));   // checks e.g. if IMAP is offline
 }
 
-var gReplyAllButton = null;
-var gDeleteButton = null;
-
 function SetUpToolbarButtons(uri)
 {
-    // Eventually, we might want to set up the toolbar differently for imap,
-    // pop, and news. For now, just tweak it based on if it is news or not.
-    var forNews = isNewsURI(uri);
+  let deleteButton = document.getElementById("button-delete");
+  let replyAllButton = document.getElementById("button-replyall");
 
-    if(!gDeleteButton) gDeleteButton = document.getElementById("button-delete");
-    if (!gReplyAllButton) gReplyAllButton = document.getElementById("button-replyall");
+  // Eventually, we might want to set up the toolbar differently for imap,
+  // pop, and news. For now, just tweak it based on if it is news or not.
+  let forNews = isNewsURI(uri);
 
-    gDeleteButton.hidden = forNews;
-    if (forNews) {
-        gReplyAllButton.setAttribute("type", "menu-button");
-        gReplyAllButton.setAttribute("tooltiptext", gReplyAllButton.getAttribute("tooltiptextnews"));
-    }
-    else {
-        gReplyAllButton.removeAttribute("type");
-        gReplyAllButton.setAttribute("tooltiptext", gReplyAllButton.getAttribute("tooltiptextmail"));
-    }
+  deleteButton.hidden = forNews;
+  if (forNews) {
+    replyAllButton.setAttribute("type", "menu-button");
+    replyAllButton.setAttribute("tooltiptext",
+                                replyAllButton.getAttribute("tooltiptextnews"));
+  } else {
+    replyAllButton.removeAttribute("type");
+    replyAllButton.setAttribute("tooltiptext",
+                                replyAllButton.getAttribute("tooltiptextmail"));
+  }
 }
-
-var gMessageBrowser;
 
 function getMessageBrowser()
 {
-  if (!gMessageBrowser)
-    gMessageBrowser = document.getElementById("messagepane");
-  return gMessageBrowser;
+  return document.getElementById("messagepane");
 }
 
 // The zoom manager, view source and possibly some other functions still rely
@@ -2176,11 +2085,6 @@ function getBrowser()
 {
   return GetTabMail() ? GetTabMail().getBrowserForSelectedTab() :
                         getMessageBrowser();
-}
-
-function getMarkupDocumentViewer()
-{
-  return getMessageBrowser().markupDocumentViewer;
 }
 
 function MsgSynchronizeOffline()
@@ -3008,13 +2912,17 @@ function IgnoreMDNResponse()
   gMessageNotificationBar.mdnGenerator.userDeclined();
 }
 
-function MsgSearchMessages(preselectedFolder)
-{
-  if (!preselectedFolder && ("GetFirstSelectedMsgFolder" in window))
-    preselectedFolder = GetFirstSelectedMsgFolder();
-
-  var args = { folder: preselectedFolder };
-  OpenOrFocusWindow(args, "mailnews:search", "chrome://messenger/content/SearchDialog.xul");
+/**
+ * Opens a search window with the given folder, or the displayed one if none is
+ * chosen.
+ *
+ * @param [aFolder] the folder to open the search window for, if different from
+ *                  the displayed one
+ */
+function MsgSearchMessages(aFolder) {
+  let folder = aFolder || gFolderDisplay.displayedFolder;
+  OpenOrFocusWindow({ folder: folder }, "mailnews:search",
+                    "chrome://messenger/content/SearchDialog.xul");
 }
 
 function MsgJunkMailInfo(aCheckFirstUse)
@@ -3077,11 +2985,6 @@ function MailToolboxCustomizeInit()
 function MailToolboxCustomizeDone(aToolboxChanged)
 {
   toolboxCustomizeDone("mail-menubar", getMailToolbox(), aToolboxChanged);
-  SetupMoveCopyMenus('button-file', accountManagerDataSource, folderDataSource);
-
-  // make sure the folder location picker is initialized, if it exists
-  if ("OnLoadLocationTree" in window)
-    OnLoadLocationTree();
 }
 
 function MailToolboxCustomizeChange(event)

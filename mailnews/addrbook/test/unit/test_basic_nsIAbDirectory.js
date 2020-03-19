@@ -20,8 +20,6 @@
  * - description
  * - editMailListToDatabase
  * - copyMailList
- * - createNewDirectory
- * - createDirectoryByURI
  */
 
 // Main function for the this test so we can check both personal and
@@ -39,7 +37,6 @@ function check_ab(abConfig) {
 
   // Test - Check attributes
 
-  Assert.equal(AB.generateName(0), abConfig.dirName);
   Assert.equal(AB.propertiesChromeURI, kNormalPropertiesURI);
   Assert.equal(AB.readOnly, abConfig.readOnly);
   Assert.equal(AB.dirName, abConfig.dirName);
@@ -59,11 +56,15 @@ function check_ab(abConfig) {
   Assert.equal(AB.useForAutocomplete(""), true);
 
   Services.prefs.setBoolPref("mail.enable_autocomplete", false);
-
   Assert.equal(AB.useForAutocomplete(""), false);
 
   Services.prefs.setBoolPref("mail.enable_autocomplete", true);
+  Assert.equal(AB.useForAutocomplete(""), true);
 
+  AB.setBoolValue("enable_autocomplete", false);
+  Assert.equal(AB.useForAutocomplete(""), false);
+
+  AB.setBoolValue("enable_autocomplete", true);
   Assert.equal(AB.useForAutocomplete(""), true);
 
   // Test - check getting default preferences

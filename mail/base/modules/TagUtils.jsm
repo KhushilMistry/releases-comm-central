@@ -18,7 +18,7 @@ var TagUtils = {
 
 function loadTagsIntoCSS(aDocument) {
   let tagSheet = findTagColorSheet(aDocument);
-  let tagArray = MailServices.tags.getAllTags({});
+  let tagArray = MailServices.tags.getAllTags();
   for (let tag of tagArray) {
     // tag.key is the internal key, like "$label1" for "Important".
     // For user defined keys with non-ASCII characters, key is
@@ -28,15 +28,11 @@ function loadTagsIntoCSS(aDocument) {
 }
 
 function addTagToAllDocumentSheets(aKey, aColor) {
-  let windowList = Services.wm.getEnumerator("mail:3pane", true);
-  while (windowList.hasMoreElements()) {
-    let nextWin = windowList.getNext();
+  for (let nextWin of Services.wm.getEnumerator("mail:3pane", true)) {
     addTagToSheet(aKey, aColor, findTagColorSheet(nextWin.document));
   }
 
-  windowList = Services.wm.getEnumerator("mailnews:search", true);
-  while (windowList.hasMoreElements()) {
-    let nextWin = windowList.getNext();
+  for (let nextWin of Services.wm.getEnumerator("mailnews:search", true)) {
     addTagToSheet(aKey, aColor, findTagColorSheet(nextWin.document));
   }
 }

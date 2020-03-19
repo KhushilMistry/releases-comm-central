@@ -144,10 +144,8 @@ function test()
 
   function addDownload() {
     function createURI(aObj) {
-      var ios = Cc["@mozilla.org/network/io-service;1"]
-                  .getService(Ci.nsIIOService);
-      return (aObj instanceof Ci.nsIFile) ? ios.newFileURI(aObj) :
-                                            ios.newURI(aObj);
+      return (aObj instanceof Ci.nsIFile) ? Services.io.newFileURI(aObj) :
+                                            Services.io.newURI(aObj);
     }
 
     const nsIWBP = Ci.nsIWebBrowserPersist;
@@ -157,9 +155,7 @@ function test()
                            nsIWBP.PERSIST_FLAGS_BYPASS_CACHE |
                            nsIWBP.PERSIST_FLAGS_AUTODETECT_APPLY_CONVERSION;
 
-    var dirSvc = Cc["@mozilla.org/file/directory_service;1"]
-                   .getService(Ci.nsIProperties);
-    var destFile = dirSvc.get("ProfD", Ci.nsIFile);
+    var destFile = Services.dirsvc.get("ProfD", Ci.nsIFile);
     destFile.append("download.result");
     if (destFile.exists())
       destFile.remove(false);
@@ -186,13 +182,9 @@ function test()
 
   // add first download: PAUSED state
   try {
-    var file = Cc["@mozilla.org/file/directory_service;1"]
-                 .getService(Ci.nsIProperties)
-                 .get("TmpD", Ci.nsIFile);
+    var file = Services.dirsvc.get("TmpD", Ci.nsIFile);
     file.append("dltest-paused");
-    var fileSpec = Cc["@mozilla.org/network/io-service;1"]
-                     .getService(Ci.nsIIOService)
-                     .newFileURI(file).spec;
+    var fileSpec = Services.io.newFileURI(file).spec;
     stmt.bindByIndex(0, "http://example.com/file");
     stmt.bindByIndex(1, dm.DOWNLOAD_PAUSED);
     stmt.bindByIndex(2, fileSpec);

@@ -4,8 +4,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* import-globals-from ../../../../toolkit/modules/PageMenu.jsm */
+/* import-globals-from ../../../calendar/lightning/content/messenger-overlay-sidebar.js */
 /* import-globals-from ../../../mailnews/base/prefs/content/accountUtils.js */
-/* import-globals-from ../../../mailnews/base/util/mailnewsMigrator.js */
+/* import-globals-from ../../../mailnews/base/util/MailnewsMigrator.jsm */
 /* import-globals-from ../../components/newmailaccount/content/accountProvisionerTab.js */
 /* import-globals-from ../../components/preferences/preferencesTab.js */
 /* import-globals-from messenger-customization.js */
@@ -23,23 +24,23 @@
 /* globals PanelUI */
 
 ChromeUtils.import("resource:///modules/activity/activityModules.jsm");
-var { logException } = ChromeUtils.import("resource:///modules/errUtils.js");
-var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.js");
+var { logException } = ChromeUtils.import("resource:///modules/ErrUtils.jsm");
+var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.jsm");
 var { JSTreeSelection } = ChromeUtils.import(
-  "resource:///modules/jsTreeSelection.js"
+  "resource:///modules/JsTreeSelection.jsm"
 );
 var { MailConsts } = ChromeUtils.import("resource:///modules/MailConsts.jsm");
 var { MailInstrumentation } = ChromeUtils.import(
   "resource:///modules/MailInstrumentation.jsm"
 );
 var { migrateMailnews } = ChromeUtils.import(
-  "resource:///modules/mailnewsMigrator.js"
+  "resource:///modules/MailnewsMigrator.jsm"
 );
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
 var { msgDBCacheManager } = ChromeUtils.import(
-  "resource:///modules/msgDBCacheManager.js"
+  "resource:///modules/MsgDBCacheManager.jsm"
 );
 var { SessionStoreManager } = ChromeUtils.import(
   "resource:///modules/SessionStoreManager.jsm"
@@ -356,7 +357,7 @@ function UpdateMailPaneConfig(aMsgWindowInitialized) {
     // call destroy here to avoid a nasty leak.
     document.getElementById("messagepane").destroy();
     document.getElementById("FindToolbar").destroy();
-    let footerBox = desiredParent.lastChild;
+    let footerBox = desiredParent.lastElementChild;
     if (footerBox && footerBox.id == "messenger-notification-footer") {
       desiredParent.insertBefore(messagePaneSplitter, footerBox);
       desiredParent.insertBefore(messagePaneBoxWrapper, footerBox);
@@ -368,11 +369,16 @@ function UpdateMailPaneConfig(aMsgWindowInitialized) {
     hdrToolbar = document.getElementById("header-view-toolbar");
     hdrToolbar.firstPermanentChild = firstPermanentChild;
     hdrToolbar.lastPermanentChild = lastPermanentChild;
-    messagePaneSplitter.orient = desiredParent.orient;
+    messagePaneSplitter.setAttribute(
+      "orient",
+      desiredParent.getAttribute("orient")
+    );
     if (aMsgWindowInitialized) {
       messenger.setWindow(null, null);
       messenger.setWindow(window, msgWindow);
-      ReloadMessage();
+      // Hack to make sure that the message is re-displayed
+      // with the correct charset.
+      setTimeout(ReloadMessage);
     }
 
     // The quick filter bar gets badly lied to due to standard XUL/XBL problems,
@@ -456,6 +462,10 @@ function AutoConfigWizard(okCallback) {
     okCallback();
     return;
   }
+
+  // Collapse the Folder Pane since no account is currently present.
+  document.getElementById("folderPaneBox").collapsed = true;
+  document.getElementById("folderpane_splitter").collapsed = true;
 
   NewMailAccount(msgWindow, okCallback);
 }
@@ -572,12 +582,6 @@ function OnLoadMessenger() {
   // accountProvisionerTabType is defined in accountProvisionerTab.js
   tabmail.registerTabType(accountProvisionerTabType);
 
-  // verifyAccounts returns true if the callback won't be called
-  // We also don't want the account wizard to open if any sort of account exists
-  if (verifyAccounts(LoadPostAccountWizard, false, AutoConfigWizard)) {
-    LoadPostAccountWizard();
-  }
-
   // Set up the summary frame manager to handle loading pages in the
   // multi-message pane
   gSummaryFrameManager = new SummaryFrameManager(
@@ -591,6 +595,47 @@ function OnLoadMessenger() {
 
   // Load the periodic filter timer.
   PeriodicFilterManager.setupFiltering();
+
+  let pService = Cc["@mozilla.org/toolkit/profile-service;1"].getService(
+    Ci.nsIToolkitProfileService
+  );
+  if (pService.createdAlternateProfile) {
+    // Show on a timeout so the main window has time to open. Otherwise
+    // the dialog would be confusingly showing out of context.
+    setTimeout(() => _showNewInstallModal());
+  } else if (verifyAccounts(LoadPostAccountWizard, false, AutoConfigWizard)) {
+    // verifyAccounts returns true if the callback won't be called
+    // We also don't want the account wizard to open if any sort of account exists
+    LoadPostAccountWizard();
+  }
+}
+
+function _showNewInstallModal() {
+  Services.ww.openWindow(
+    null,
+    "chrome://messenger/content/newInstall.xhtml",
+    "_blank",
+    "chrome,modal,resizable=no,centerscreen",
+    null
+  );
+
+  let mail3PaneWindow = Services.wm.getMostRecentWindow("mail:3pane");
+  if (mail3PaneWindow) {
+    let tabmail = mail3PaneWindow.document.getElementById("tabmail");
+    let monitor = {
+      onTabTitleChanged() {},
+      onTabSwitched() {},
+      onTabClosing() {
+        AutoConfigWizard();
+        tabmail.unregisterTabMonitor(monitor);
+      },
+    };
+    tabmail.registerTabMonitor(monitor);
+    tabmail.openTab("contentTab", {
+      contentPage: "about:newinstall",
+      clickHandler: "specialTabs.aboutClickHandler(event);",
+    });
+  }
 }
 
 function LoadPostAccountWizard() {
@@ -685,7 +730,7 @@ function LoadPostAccountWizard() {
           !SearchIntegration.firstRunDone)
       ) {
         window.openDialog(
-          "chrome://messenger/content/systemIntegrationDialog.xul",
+          "chrome://messenger/content/systemIntegrationDialog.xhtml",
           "SystemIntegration",
           "modal,centerscreen,chrome,resizable=no"
         );
@@ -765,9 +810,7 @@ function HandleAppCommandEvent(evt) {
  * Look for another 3-pane window.
  */
 function FindOther3PaneWindow() {
-  let enumerator = Services.wm.getEnumerator("mail:3pane");
-  while (enumerator.hasMoreElements()) {
-    let win = enumerator.getNext();
+  for (let win of Services.wm.getEnumerator("mail:3pane")) {
     if (win != window) {
       return win;
     }
@@ -776,7 +819,7 @@ function FindOther3PaneWindow() {
 }
 
 /**
- * Called by messenger.xul:onunload, the 3-pane window inside of tabs window.
+ * Called by messenger.xhtml:onunload, the 3-pane window inside of tabs window.
  *  It's being unloaded!  Right now!
  */
 function OnUnloadMessenger() {
@@ -842,6 +885,9 @@ function getWindowStateForSessionPersistence() {
  * @return true if the restoration was successful, false otherwise.
  */
 async function atStartupRestoreTabs(aDontRestoreFirstTab) {
+  // The calendar component needs to be loaded before restoring any calendar tabs.
+  await loadCalendarComponent();
+
   let state = await SessionStoreManager.loadingWindow(window);
   if (state) {
     let tabsState = state.tabs;
@@ -1533,16 +1579,14 @@ function messageFlavorDataProvider() {}
 messageFlavorDataProvider.prototype = {
   QueryInterface: ChromeUtils.generateQI([Ci.nsIFlavorDataProvider]),
 
-  getFlavorData(aTransferable, aFlavor, aData, aDataLen) {
+  getFlavorData(aTransferable, aFlavor, aData) {
     if (aFlavor !== "application/x-moz-file-promise") {
       return;
     }
     let fileUriPrimitive = {};
-    let dataSize = {};
     aTransferable.getTransferData(
       "application/x-moz-file-promise-url",
-      fileUriPrimitive,
-      dataSize
+      fileUriPrimitive
     );
 
     let fileUriStr = fileUriPrimitive.value.QueryInterface(
@@ -1555,19 +1599,14 @@ messageFlavorDataProvider.prototype = {
     let destDirPrimitive = {};
     aTransferable.getTransferData(
       "application/x-moz-file-promise-dir",
-      destDirPrimitive,
-      dataSize
+      destDirPrimitive
     );
     let destDirectory = destDirPrimitive.value.QueryInterface(Ci.nsIFile);
     let file = destDirectory.clone();
     file.append(fileName);
 
     let messageUriPrimitive = {};
-    aTransferable.getTransferData(
-      "text/x-moz-message",
-      messageUriPrimitive,
-      dataSize
-    );
+    aTransferable.getTransferData("text/x-moz-message", messageUriPrimitive);
     let messageUri = messageUriPrimitive.value.QueryInterface(
       Ci.nsISupportsString
     );

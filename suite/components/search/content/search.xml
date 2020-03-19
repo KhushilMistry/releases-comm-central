@@ -78,15 +78,16 @@
         if (this.usePrivateBrowsing)
           this._textbox.searchParam += "|private";
 
-        this.searchService.init(this);
         Services.obs.addObserver(this, "browser-search-engine-modified");
-        this._addedObserver = true;
+        this._initialized = true;
+
+        Services.search.init(this);
       ]]></constructor>
 
       <destructor><![CDATA[
-        if (this._addedObserver) {
+        if (this._initialized) {
+          this._initialized = false;
           Services.obs.removeObserver(this, "browser-search-engine-modified");
-          this._addedObserver = false;
         }
 
         // Make sure to break the cycle from _textbox to us. Otherwise we leak
@@ -107,17 +108,13 @@
           "anonid", "searchbar-popup");</field>
       <field name="searchButton">document.getAnonymousElementByAttribute(this,
           "anonid", "searchbar-engine-button");</field>
-      <field name="_searchService">
-        Cc["@mozilla.org/browser/search-service;1"]
-          .getService(Ci.nsIBrowserSearchService);
-      </field>
       <field name="usePrivateBrowsing" readonly="true">
         window.QueryInterface(Ci.nsIInterfaceRequestor)
               .getInterface(Ci.nsIWebNavigation)
               .QueryInterface(Ci.nsILoadContext)
               .usePrivateBrowsing
       </field>
-      <field name="_addedObserver">false</field>
+      <field name="_initialized">false</field>
       <field name="_engines">null</field>
       <field name="_needToBuildPopup">true</field>
       <field name="FormHistory" readonly="true"><![CDATA[
@@ -128,21 +125,20 @@
       <property name="engines" readonly="true">
         <getter><![CDATA[
           if (!this._engines)
-            this._engines = this.searchService.getVisibleEngines();
+            this._engines = Services.search.getVisibleEngines();
           return this._engines;
         ]]></getter>
       </property>
 
       <property name="currentEngine">
         <setter><![CDATA[
-          this.searchService.currentEngine = val;
-          var os = Cc["@mozilla.org/observer-service;1"]
-                     .getService(Ci.nsIObserverService);
-          os.notifyObservers(null, "browser-search-engine-modified", "engine-current");
+          Services.search.currentEngine = val;
+          Services.obs.notifyObservers(null, "browser-search-engine-modified",
+                                       "engine-current");
           return val;
         ]]></setter>
         <getter><![CDATA[
-          var currentEngine = this.searchService.currentEngine;
+          var currentEngine = Services.search.currentEngine;
           // Return a dummy engine if there is no currentEngine
           return currentEngine || {name: "", uri: null};
         ]]></getter>
@@ -152,9 +148,6 @@
            clearing form information. -->
       <property name="textbox" readonly="true"
                 onget="return this._textbox;"/>
-
-      <property name="searchService" readonly="true"
-                onget="return this._searchService;"/>
 
       <property name="value" onget="return this._textbox.value;"
                              onset="return this._textbox.value = val;"/>
@@ -174,6 +167,8 @@
       <method name="onInitComplete">
         <parameter name="aStatus"/>
         <body><![CDATA[
+          if (!this._initialized)
+            return;
           if (Components.isSuccessCode(aStatus)) {
             // Refresh the display (updating icon, etc)
             this.updateDisplay();
@@ -450,7 +445,7 @@
             where = whereToOpenLink(aEvent, false, true);
           }
           else {
-            var newTabPref = textBox._prefBranch.getBoolPref("browser.search.openintab");
+            var newTabPref = Services.prefs.getBoolPref("browser.search.openintab");
             if ((aEvent && aEvent.altKey) ^ newTabPref)
               where = "tabfocused";
           }
@@ -492,9 +487,9 @@
           // We only detect OpenSearch files
           var type = Ci.nsISearchEngine.DATA_XML;
           // Select the installed engine if the installation succeeds
-          this.searchService.addEngine(target.getAttribute("uri"), type,
-                                       target.getAttribute("image"), false,
-                                       this);
+          Services.search.addEngine(target.getAttribute("uri"), type,
+                                    target.getAttribute("image"), false,
+                                    this);
         }
         else
           return;
@@ -527,21 +522,25 @@
             "toolbarpaletteitem")
           return;
 
-        if (this._prefBranch.getBoolPref("browser.urlbar.clickSelectsAll"))
+        if (Services.prefs.getBoolPref("browser.urlbar.clickSelectsAll"))
           this.setAttribute("clickSelectsAll", true);
 
         // Add items to context menu and attach controller to handle them
         this.controllers.appendController(this.searchbarController);
-        document.getBindingParent(this)._textboxInitialized = true;
+        // bindingParent is not set in the sidebar because there is no
+        // searchbar created in it.
+        if (bindingParent) {
+          bindingParent._textboxInitialized = true;
+        }
 
         // Add observer for suggest preference
-        this._prefBranch.addObserver("browser.search.suggest.enabled", this);
+        Services.prefs.addObserver("browser.search.suggest.enabled", this);
 
         this._inputBox.setAttribute("suggestchecked", this._suggestEnabled);
       ]]></constructor>
 
       <destructor><![CDATA[
-          this._prefBranch.removeObserver("browser.search.suggest.enabled", this);
+        Services.prefs.removeObserver("browser.search.suggest.enabled", this);
 
         // Because XBL and the customize toolbar code interacts poorly,
         // there may not be anything to remove here
@@ -549,14 +548,11 @@
           this.controllers.removeController(this.searchbarController);
         } catch (ex) { }
       ]]></destructor>
-      <field name="_prefBranch">
-        Cc["@mozilla.org/preferences-service;1"].getService(Ci.nsIPrefBranch);
-      </field>
       <field name="_inputBox">
         document.getAnonymousElementByAttribute(this, "anonid", "textbox-input-box");
       </field>
       <field name="_suggestEnabled">
-        this._prefBranch.getBoolPref("browser.search.suggest.enabled");
+        Services.prefs.getBoolPref("browser.search.suggest.enabled");
       </field>
 
       <method name="observe">
@@ -566,11 +562,17 @@
         <body><![CDATA[
           if (aTopic == "nsPref:changed") {
             this._suggestEnabled =
-              this._prefBranch.getBoolPref("browser.search.suggest.enabled");
+              Services.prefs.getBoolPref("browser.search.suggest.enabled");
             this._inputBox.setAttribute("suggestchecked", this._suggestEnabled);
           }
         ]]></body>
       </method>
+
+      <field name="FormHistory" readonly="true"><![CDATA[
+        (ChromeUtils.import("resource://gre/modules/FormHistory.jsm", {}))
+                    .FormHistory;
+        ]]>
+      </field>
 
       <!-- nsIController -->
       <field name="searchbarController" readonly="true"><![CDATA[({
@@ -613,8 +615,8 @@
             case "cmd_togglesuggest":
               // The pref observer will update _suggestEnabled and the menu
               // checkmark.
-              this._prefBranch.setBoolPref("browser.search.suggest.enabled",
-                                           !this._suggestEnabled);
+              Services.prefs.setBoolPref("browser.search.suggest.enabled",
+                                         !this._suggestEnabled);
               break;
             default:
               // do nothing with unrecognized command
@@ -692,8 +694,9 @@
                phase="capturing"
                action="return this.openSearch();"/>
 
-      <handler event="keypress" keycode="VK_F4" phase="capturing"><![CDATA[
-        return /Mac/.test(navigator.platform) || this.openSearch();
+      <handler event="keypress" keycode="VK_F4" phase="capturing">
+      <![CDATA[
+        return (AppConstants.platform == "macosx") || this.openSearch()
       ]]></handler>
     </handlers>
   </binding>

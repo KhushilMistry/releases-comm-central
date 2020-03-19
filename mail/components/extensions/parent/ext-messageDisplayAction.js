@@ -25,18 +25,21 @@ this.messageDisplayAction = class extends ToolbarButtonAPI {
   close() {
     super.close();
     messageDisplayActionMap.delete(this.extension);
+    windowTracker.removeListener("TabSelect", this);
   }
 
   constructor(extension) {
-    super(extension);
+    super(extension, global);
     this.manifest_name = "message_display_action";
     this.manifestName = "messageDisplayAction";
     this.windowURLs = [
-      "chrome://messenger/content/messenger.xul",
-      "chrome://messenger/content/messageWindow.xul",
+      "chrome://messenger/content/messenger.xhtml",
+      "chrome://messenger/content/messageWindow.xhtml",
     ];
     this.toolboxId = "header-view-toolbox";
     this.toolbarId = "header-view-toolbar";
+
+    windowTracker.addListener("TabSelect", this);
   }
 
   makeButton(window) {
@@ -44,30 +47,6 @@ this.messageDisplayAction = class extends ToolbarButtonAPI {
     button.classList.add("msgHeaderView-button");
     button.style.listStyleImage = "var(--webextension-menupanel-image)";
     return button;
-  }
-
-  getAPI(context) {
-    let { extension } = context;
-    let { windowManager } = extension;
-
-    let action = this;
-    let api = super.getAPI(context);
-    api[this.manifestName].onClicked = new EventManager({
-      context,
-      name: `${this.manifestName}.onClicked`,
-      inputHandling: true,
-      register: fire => {
-        let listener = (event, window) => {
-          let win = windowManager.wrapWindow(window);
-          fire.sync(win.activeTab.id);
-        };
-        action.on("click", listener);
-        return () => {
-          action.off("click", listener);
-        };
-      },
-    }).api();
-    return api;
   }
 };
 

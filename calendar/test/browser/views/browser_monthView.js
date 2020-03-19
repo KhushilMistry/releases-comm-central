@@ -22,7 +22,7 @@ var { helpersForEditUI, setData } = ChromeUtils.import(
   "resource://testing-common/mozmill/ItemEditingHelpers.jsm"
 );
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 var controller = mozmill.getMail3PaneController();
 var { lookup, lookupEventBox } = helpersForController(controller);
@@ -31,7 +31,7 @@ const TITLE1 = "Month View Event";
 const TITLE2 = "Month View Event Changed";
 const DESC = "Month View Event Description";
 
-add_task(function testMonthView() {
+add_task(async function testMonthView() {
   let dateFormatter = cal.getDateFormatter();
 
   createCalendar(controller, CALENDARNAME);
@@ -40,8 +40,7 @@ add_task(function testMonthView() {
 
   // Verify date.
   let day = lookup(`
-        ${MONTH_VIEW}/{"class":"mainbox"}/{"class":"monthgrid"}/
-        {"class":"monthgridrows"}/[0]/{"selected":"true"}
+        ${MONTH_VIEW}/{"class":"mainbox"}/{"class":"monthgrid"}/[0]/{"selected":"true"}/[0]
     `);
   controller.waitFor(() => day.getNode().mDate.icalString == "20090101");
 
@@ -49,7 +48,7 @@ add_task(function testMonthView() {
   // Thursday of 2009-01-01 should be the selected box in the first row with default settings.
   let hour = new Date().getHours(); // Remember time at click.
   let eventBox = lookupEventBox("month", CANVAS_BOX, 1, 5);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
     let { getDateTimePicker } = helpersForEditUI(iframe);
 
@@ -66,7 +65,7 @@ add_task(function testMonthView() {
     event.assertValue(startDateInput, dateFormatter.formatDateShort(someDate));
 
     // Fill in title, description and calendar.
-    setData(event, iframe, {
+    await setData(event, iframe, {
       title: TITLE1,
       description: DESC,
       calendar: CALENDARNAME,
@@ -78,11 +77,11 @@ add_task(function testMonthView() {
 
   // If it was created successfully, it can be opened.
   eventBox = lookupEventBox("month", CANVAS_BOX, 1, 5, null, EVENTPATH);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
     // Change title and save changes.
-    setData(event, iframe, { title: TITLE2 });
+    await setData(event, iframe, { title: TITLE2 });
     event.click(eventid("button-saveandclose"));
   });
 
@@ -93,7 +92,7 @@ add_task(function testMonthView() {
     1,
     5,
     null,
-    `${EVENTPATH}/${getEventDetails("month")}/anon({"flex":"1"})/anon({"class":"event-name-label"})`
+    `${EVENTPATH}/${getEventDetails("month")}/{"flex":"1"}/{"class":"event-name-label"}`
   );
 
   controller.waitForElement(eventName);

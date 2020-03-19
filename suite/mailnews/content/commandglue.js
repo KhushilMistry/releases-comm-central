@@ -23,24 +23,6 @@ var gPrevFolderFlags;
 var gPrevSelectedFolder;
 var gMsgFolderSelected;
 
-function OpenURL(url)
-{
-  messenger.setWindow(window, msgWindow);
-  messenger.openURL(url);
-}
-
-function GetMsgFolderFromResource(folderResource)
-{
-  if (!folderResource)
-     return null;
-
-  var msgFolder = folderResource.QueryInterface(Ci.nsIMsgFolder);
-  if (msgFolder && (msgFolder.parent || msgFolder.isServer))
-    return msgFolder;
-  else
-    return null;
-}
-
 function GetServer(uri)
 {
     if (!uri) return null;
@@ -52,29 +34,6 @@ function GetServer(uri)
         dump("GetServer("+uri+") failed, ex="+ex+"\n");
     }
     return null;
-}
-
-function LoadMessageByUri(uri)
-{
-  //dump("XXX LoadMessageByUri " + uri + " vs " + gCurrentDisplayedMessage + "\n");
-  if(uri != gCurrentDisplayedMessage)
-  {
-        dump("fix this, get the nsIMsgDBHdr and the nsIMsgFolder from the uri...\n");
-/*
-    var resource = RDF.GetResource(uri);
-    var message = resource.QueryInterface(Ci.nsIMessage);
-    if (message)
-      setTitleFromFolder(message.msgFolder, message.mimef2DecodedSubject);
-
-    if (message.msgFolder.server.downloadOnBiff)
-      message.msgFolder.biffState = Ci.nsIMsgFolder.nsMsgBiffState_NoMail;
-*/
-
-    gCurrentDisplayedMessage = uri;
-    gHaveLoadedMessage = true;
-    OpenURL(uri);
-  }
-
 }
 
 function setTitleFromFolder(msgfolder, subject)
@@ -107,8 +66,9 @@ function setTitleFromFolder(msgfolder, subject)
       }
     }
 
-    if (!/Mac/.test(navigator.platform))
+    if (AppConstants.platform != "macosx") {
       title += " - " + gBrandBundle.getString("brandShortName");
+    }
 
     document.title = title;
 
@@ -701,11 +661,6 @@ function FolderPaneSelectionChange()
     if (!folderSelection.isSelected(folderSelection.currentIndex))
       return;
 
-    if(gTimelineEnabled) {
-      gTimelineService.startTimer("FolderLoading");
-      gTimelineService.enter("FolderLoading has Started");
-    }
-
     gVirtualFolderTerms = null;
     gXFVirtualFolderTerms = null;
 
@@ -945,15 +900,12 @@ var nsMsgSearchScope = Ci.nsMsgSearchScope;
 var gFolderDatasource;
 var gFolderPicker;
 var gStatusBar = null;
-var gTimelineEnabled = false;
 var gMessengerBundle = null;
 
 // Datasource search listener -- made global as it has to be registered
 // and unregistered in different functions.
 var gDataSourceSearchListener;
 var gViewSearchListener;
-
-var gMailSession;
 
 function GetScopeForFolder(folder)
 {
@@ -966,9 +918,6 @@ function setupXFVirtualFolderSearch(folderUrisToSearch, searchTerms, searchOnlin
   var i;
 
     gSearchSession = Cc[searchSessionContractID].createInstance(Ci.nsIMsgSearchSession);
-
-    gMailSession = Cc["@mozilla.org/messenger/services/session;1"]
-                     .getService(Ci.nsIMsgMailSession);
 
   for (i in folderUrisToSearch)
     {

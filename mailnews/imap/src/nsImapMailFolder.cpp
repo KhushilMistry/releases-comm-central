@@ -12,7 +12,6 @@
 #include "nsIFile.h"
 #include "nsIUrlListener.h"
 #include "nsCOMPtr.h"
-#include "nsAutoPtr.h"
 #include "nsMsgDBCID.h"
 #include "nsMsgFolderFlags.h"
 #include "nsISeekableStream.h"
@@ -383,31 +382,28 @@ nsresult nsImapMailFolder::AddSubfolderWithPath(nsAString &name,
 
 nsresult nsImapMailFolder::CreateSubFolders(nsIFile *path) {
   nsresult rv = NS_OK;
-  nsAutoString currentFolderNameStr;    // online name
-  nsAutoString currentFolderDBNameStr;  // possibly munged name
-  nsCOMPtr<nsIMsgFolder> child;
   nsCOMPtr<nsIMsgIncomingServer> server;
   rv = GetServer(getter_AddRefs(server));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIDirectoryEnumerator> children;
-  rv = path->GetDirectoryEntries(getter_AddRefs(children));
-  bool more = false;
-  if (children) children->HasMoreElements(&more);
+  nsCOMPtr<nsIDirectoryEnumerator> directoryEnumerator;
+  rv = path->GetDirectoryEntries(getter_AddRefs(directoryEnumerator));
+  NS_ENSURE_SUCCESS(rv, rv);
 
-  while (more) {
+  bool hasMore = false;
+  while (NS_SUCCEEDED(directoryEnumerator->HasMoreElements(&hasMore)) &&
+         hasMore) {
     nsCOMPtr<nsIFile> currentFolderPath;
-    rv = children->GetNextFile(getter_AddRefs(currentFolderPath));
-    if (NS_FAILED(rv) || !currentFolderPath) break;
-    rv = children->HasMoreElements(&more);
-    if (NS_FAILED(rv)) return rv;
+    rv = directoryEnumerator->GetNextFile(getter_AddRefs(currentFolderPath));
+    if (NS_FAILED(rv) || !currentFolderPath) continue;
 
+    nsAutoString currentFolderNameStr;    // online name
+    nsAutoString currentFolderDBNameStr;  // possibly munged name
     currentFolderPath->GetLeafName(currentFolderNameStr);
     if (nsShouldIgnoreFile(currentFolderNameStr)) continue;
 
     // OK, here we need to get the online name from the folder cache if we can.
     // If we can, use that to create the sub-folder
-    nsCOMPtr<nsIMsgFolderCacheElement> cacheElement;
     nsCOMPtr<nsIFile> curFolder =
         do_CreateInstance(NS_LOCAL_FILE_CONTRACTID, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -421,6 +417,7 @@ nsresult nsImapMailFolder::CreateSubFolders(nsIFile *path) {
     nsAutoString utf7LeafName = currentFolderNameStr;
 
     if (curFolder) {
+      nsCOMPtr<nsIMsgFolderCacheElement> cacheElement;
       rv = GetFolderCacheElemFromFile(dbFile, getter_AddRefs(cacheElement));
       if (NS_SUCCEEDED(rv) && cacheElement) {
         nsCString onlineFullUtf7Name;
@@ -463,6 +460,7 @@ nsresult nsImapMailFolder::CreateSubFolders(nsIFile *path) {
       msfFilePath->SetLeafName(currentFolderDBNameStr);
     }
     // use the utf7 name as the uri for the folder.
+    nsCOMPtr<nsIMsgFolder> child;
     AddSubfolderWithPath(utf7LeafName, msfFilePath, getter_AddRefs(child));
     if (child) {
       // use the unicode name as the "pretty" name. Set it so it won't be
@@ -958,7 +956,7 @@ NS_IMETHODIMP nsImapMailFolder::RemoveSubFolder(nsIMsgFolder *which) {
   NS_ENSURE_SUCCESS(rv, rv);
   folders->AppendElement(folderSupport);
   rv = nsMsgDBFolder::DeleteSubFolders(folders, nullptr);
-  which->Delete();
+  which->DeleteStorage();
   return rv;
 }
 
@@ -1397,7 +1395,7 @@ NS_IMETHODIMP nsImapMailFolder::EmptyTrash(nsIMsgWindow *aMsgWindow,
     NS_ENSURE_SUCCESS(rv, rv);
     // Bulk-delete all the messages by deleting the msf file and storage.
     // This is a little kludgy.
-    rv = trashFolder->Delete();
+    rv = trashFolder->DeleteStorage();
     NS_ENSURE_SUCCESS(rv, rv);
     trashFolder->SetDBTransferInfo(transferInfo);
     trashFolder->SetSizeOnDisk(0);
@@ -1412,8 +1410,8 @@ NS_IMETHODIMP nsImapMailFolder::EmptyTrash(nsIMsgWindow *aMsgWindow,
   return rv;
 }
 
-NS_IMETHODIMP nsImapMailFolder::Delete() {
-  nsresult rv = nsMsgDBFolder::Delete();
+NS_IMETHODIMP nsImapMailFolder::DeleteStorage() {
+  nsresult rv = nsMsgDBFolder::DeleteStorage();
 
   // Should notify nsIMsgFolderListeners about the folder getting deleted?
   return rv;
@@ -1658,9 +1656,9 @@ nsImapMailFolder::AddMessageDispositionState(
     aMessage->GetMessageKey(&msgKey);
 
     if (aDispositionFlag == nsIMsgFolder::nsMsgDispositionState_Replied)
-      StoreImapFlags(kImapMsgAnsweredFlag, true, &msgKey, 1, nullptr);
+      StoreImapFlags(kImapMsgAnsweredFlag, true, {msgKey}, nullptr);
     else if (aDispositionFlag == nsIMsgFolder::nsMsgDispositionState_Forwarded)
-      StoreImapFlags(kImapMsgForwardedFlag, true, &msgKey, 1, nullptr);
+      StoreImapFlags(kImapMsgForwardedFlag, true, {msgKey}, nullptr);
   }
   return NS_OK;
 }
@@ -1675,8 +1673,7 @@ nsImapMailFolder::MarkMessagesRead(nsIArray *messages, bool markRead) {
     rv = BuildIdsAndKeyArray(messages, messageIds, keysToMarkRead);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    StoreImapFlags(kImapMsgSeenFlag, markRead, keysToMarkRead.Elements(),
-                   keysToMarkRead.Length(), nullptr);
+    StoreImapFlags(kImapMsgSeenFlag, markRead, keysToMarkRead, nullptr);
     rv = GetDatabase();
     if (NS_SUCCEEDED(rv)) mDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
   }
@@ -1694,8 +1691,7 @@ nsImapMailFolder::SetLabelForMessages(nsIArray *aMessages,
     nsTArray<nsMsgKey> keysToLabel;
     nsresult rv = BuildIdsAndKeyArray(aMessages, messageIds, keysToLabel);
     NS_ENSURE_SUCCESS(rv, rv);
-    StoreImapFlags((aLabel << 9), true, keysToLabel.Elements(),
-                   keysToLabel.Length(), nullptr);
+    StoreImapFlags((aLabel << 9), true, keysToLabel, nullptr);
     rv = GetDatabase();
     if (NS_SUCCEEDED(rv)) mDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
   }
@@ -1706,20 +1702,18 @@ NS_IMETHODIMP
 nsImapMailFolder::MarkAllMessagesRead(nsIMsgWindow *aMsgWindow) {
   nsresult rv = GetDatabase();
   if (NS_SUCCEEDED(rv)) {
-    nsMsgKey *thoseMarked;
-    uint32_t numMarked;
+    nsTArray<nsMsgKey> thoseMarked;
     EnableNotifications(allMessageCountNotifications, false);
-    rv = mDatabase->MarkAllRead(&numMarked, &thoseMarked);
+    rv = mDatabase->MarkAllRead(thoseMarked);
     EnableNotifications(allMessageCountNotifications, true);
-    if (NS_SUCCEEDED(rv) && numMarked) {
-      rv = StoreImapFlags(kImapMsgSeenFlag, true, thoseMarked, numMarked,
-                          nullptr);
+    if (NS_SUCCEEDED(rv) && thoseMarked.Length() > 0) {
+      rv = StoreImapFlags(kImapMsgSeenFlag, true, thoseMarked, nullptr);
       mDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
 
       // Setup a undo-state
       if (aMsgWindow)
-        rv = AddMarkAllReadUndoAction(aMsgWindow, thoseMarked, numMarked);
-      free(thoseMarked);
+        rv = AddMarkAllReadUndoAction(aMsgWindow, thoseMarked.Elements(),
+                                      thoseMarked.Length());
     }
   }
   return rv;
@@ -1728,13 +1722,11 @@ nsImapMailFolder::MarkAllMessagesRead(nsIMsgWindow *aMsgWindow) {
 NS_IMETHODIMP nsImapMailFolder::MarkThreadRead(nsIMsgThread *thread) {
   nsresult rv = GetDatabase();
   if (NS_SUCCEEDED(rv)) {
-    nsMsgKey *keys;
-    uint32_t numKeys;
-    rv = mDatabase->MarkThreadRead(thread, nullptr, &numKeys, &keys);
-    if (NS_SUCCEEDED(rv) && numKeys) {
-      rv = StoreImapFlags(kImapMsgSeenFlag, true, keys, numKeys, nullptr);
+    nsTArray<nsMsgKey> keys;
+    rv = mDatabase->MarkThreadRead(thread, nullptr, keys);
+    if (NS_SUCCEEDED(rv) && keys.Length() > 0) {
+      rv = StoreImapFlags(kImapMsgSeenFlag, true, keys, nullptr);
       mDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
-      free(keys);
     }
   }
   return rv;
@@ -1808,9 +1800,8 @@ nsImapMailFolder::MarkMessagesFlagged(nsIArray *messages, bool markFlagged) {
     nsTArray<nsMsgKey> keysToMarkFlagged;
     rv = BuildIdsAndKeyArray(messages, messageIds, keysToMarkFlagged);
     if (NS_FAILED(rv)) return rv;
-    rv = StoreImapFlags(kImapMsgFlaggedFlag, markFlagged,
-                        keysToMarkFlagged.Elements(),
-                        keysToMarkFlagged.Length(), nullptr);
+    rv = StoreImapFlags(kImapMsgFlaggedFlag, markFlagged, keysToMarkFlagged,
+                        nullptr);
     NS_ENSURE_SUCCESS(rv, rv);
     rv = GetDatabase();
     NS_ENSURE_SUCCESS(rv, rv);
@@ -1884,7 +1875,7 @@ nsImapMailFolder::GetDBFolderInfoAndDB(nsIDBFolderInfo **folderInfo,
       rv = nsImapURI2FullName(kImapRootURI, hostname.get(), uri.get(),
                               getter_Copies(onlineCName));
       if (m_hierarchyDelimiter != '/')
-        MsgReplaceChar(onlineCName, '/', m_hierarchyDelimiter);
+        onlineCName.ReplaceChar('/', m_hierarchyDelimiter);
       m_onlineFolderName.Assign(onlineCName);
       CopyASCIItoUTF16(onlineCName, autoOnlineName);
     }
@@ -1909,30 +1900,24 @@ nsImapMailFolder::GetDBFolderInfoAndDB(nsIDBFolderInfo **folderInfo,
     if (msgDBHdr) rv = msgDBHdr->GetMessageKey(&key);
     if (NS_SUCCEEDED(rv)) keyArray.AppendElement(key);
   }
-  return AllocateUidStringFromKeys(keyArray.Elements(), keyArray.Length(),
-                                   msgIds);
-}
-
-static int CompareKey(const void *v1, const void *v2, void *) {
-  // QuickSort callback to compare array values
-  nsMsgKey i1 = *(nsMsgKey *)v1;
-  nsMsgKey i2 = *(nsMsgKey *)v2;
-  return i1 - i2;
+  return AllocateUidStringFromKeys(keyArray, msgIds);
 }
 
 /* static */ nsresult nsImapMailFolder::AllocateUidStringFromKeys(
-    nsMsgKey *keys, uint32_t numKeys, nsCString &msgIds) {
-  if (!numKeys) return NS_ERROR_INVALID_ARG;
+    const nsTArray<nsMsgKey> &keys, nsCString &msgIds) {
+  if (keys.IsEmpty()) return NS_ERROR_INVALID_ARG;
   nsresult rv = NS_OK;
   uint32_t startSequence;
   startSequence = keys[0];
   uint32_t curSequenceEnd = startSequence;
-  uint32_t total = numKeys;
+  uint32_t total = keys.Length();
   // sort keys and then generate ranges instead of singletons!
-  NS_QuickSort(keys, numKeys, sizeof(nsMsgKey), CompareKey, nullptr);
+  nsTArray<nsMsgKey> sorted(keys);
+  sorted.Sort();
   for (uint32_t keyIndex = 0; keyIndex < total; keyIndex++) {
-    uint32_t curKey = keys[keyIndex];
-    uint32_t nextKey = (keyIndex + 1 < total) ? keys[keyIndex + 1] : 0xFFFFFFFF;
+    uint32_t curKey = sorted[keyIndex];
+    uint32_t nextKey =
+        (keyIndex + 1 < total) ? sorted[keyIndex + 1] : 0xFFFFFFFF;
     bool lastKey = (nextKey == 0xFFFFFFFF);
 
     if (lastKey) curSequenceEnd = curKey;
@@ -1950,7 +1935,7 @@ static int CompareKey(const void *v1, const void *v2, void *) {
     } else {
       startSequence = nextKey;
       curSequenceEnd = startSequence;
-      AppendUid(msgIds, keys[keyIndex]);
+      AppendUid(msgIds, sorted[keyIndex]);
       if (!lastKey) msgIds += ',';
     }
   }
@@ -2049,8 +2034,7 @@ NS_IMETHODIMP nsImapMailFolder::DeleteMessages(
     // url listener into StoreImapFlags.
     nsCOMPtr<nsIUrlListener> urlListener = do_QueryInterface(listener);
     if (deleteMsgs) messageFlags |= kImapMsgSeenFlag;
-    rv = StoreImapFlags(messageFlags, deleteMsgs, srcKeyArray.Elements(),
-                        srcKeyArray.Length(), urlListener);
+    rv = StoreImapFlags(messageFlags, deleteMsgs, srcKeyArray, urlListener);
 
     if (NS_SUCCEEDED(rv)) {
       if (mDatabase) {
@@ -2067,8 +2051,7 @@ NS_IMETHODIMP nsImapMailFolder::DeleteMessages(
             if (notifier) notifier->NotifyMsgsDeleted(messages);
           }
           DeleteStoreMessages(messages);
-          database->DeleteMessages(srcKeyArray.Length(), srcKeyArray.Elements(),
-                                   nullptr);
+          database->DeleteMessages(srcKeyArray, nullptr);
           EnableNotifications(allMessageCountNotifications, true);
         }
         if (listener) {
@@ -2551,8 +2534,7 @@ NS_IMETHODIMP nsImapMailFolder::UpdateImapMailboxInfo(
     }
     DeleteStoreMessages(hdrsToDelete);
     EnableNotifications(nsIMsgFolder::allMessageCountNotifications, false);
-    mDatabase->DeleteMessages(keysToDelete.Length(), keysToDelete.Elements(),
-                              nullptr);
+    mDatabase->DeleteMessages(keysToDelete, nullptr);
     EnableNotifications(nsIMsgFolder::allMessageCountNotifications, true);
   }
   int32_t numUnreadFromServer;
@@ -2844,7 +2826,7 @@ nsresult nsImapMailFolder::NormalEndHeaderParseStream(
                   nsMsgMessageFlags::Read | nsMsgMessageFlags::IMAPDeleted,
                   &newFlags);
               StoreImapFlags(kImapMsgSeenFlag | kImapMsgDeletedFlag, true,
-                             &m_curMsgUid, 1, nullptr);
+                             {m_curMsgUid}, nullptr);
               m_msgMovedByFilter = true;
             } break;
             case nsIMsgIncomingServer::moveDupsToTrash: {
@@ -2861,7 +2843,7 @@ nsresult nsImapMailFolder::NormalEndHeaderParseStream(
             case nsIMsgIncomingServer::markDupsRead: {
               uint32_t newFlags;
               newMsgHdr->OrFlags(nsMsgMessageFlags::Read, &newFlags);
-              StoreImapFlags(kImapMsgSeenFlag, true, &m_curMsgUid, 1, nullptr);
+              StoreImapFlags(kImapMsgSeenFlag, true, {m_curMsgUid}, nullptr);
             } break;
           }
           int32_t numNewMessages;
@@ -3170,13 +3152,11 @@ NS_IMETHODIMP nsImapMailFolder::ApplyFilterHit(nsIMsgFilter *filter,
 
   bool deleteToTrash = DeleteIsMoveToTrash();
 
-  nsCOMPtr<nsIArray> filterActionList;
-  rv = filter->GetSortedActionList(getter_AddRefs(filterActionList));
+  nsTArray<RefPtr<nsIMsgRuleAction>> filterActionList;
+  rv = filter->GetSortedActionList(filterActionList);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  uint32_t numActions;
-  rv = filterActionList->GetLength(&numActions);
-  NS_ENSURE_SUCCESS(rv, rv);
+  uint32_t numActions = filterActionList.Length();
 
   nsCString msgId;
   msgHdr->GetMessageId(getter_Copies(msgId));
@@ -3200,9 +3180,8 @@ NS_IMETHODIMP nsImapMailFolder::ApplyFilterHit(nsIMsgFilter *filter,
 
   nsresult finalResult = NS_OK;  // result of all actions
   for (uint32_t actionIndex = 0; actionIndex < numActions; actionIndex++) {
-    nsCOMPtr<nsIMsgRuleAction> filterAction =
-        do_QueryElementAt(filterActionList, actionIndex, &rv);
-    if (NS_FAILED(rv) || !filterAction) {
+    nsCOMPtr<nsIMsgRuleAction> filterAction(filterActionList[actionIndex]);
+    if (!filterAction) {
       MOZ_LOG(FILTERLOGMODULE, LogLevel::Warning,
               ("(Imap) Filter action at index %" PRIu32 " invalid, skipping",
                actionIndex));
@@ -3252,7 +3231,7 @@ NS_IMETHODIMP nsImapMailFolder::ApplyFilterHit(nsIMsgFilter *filter,
             mDatabase->MarkHdrRead(msgHdr, true, nullptr);
             mDatabase->MarkImapDeleted(msgKey, true, nullptr);
             rv = StoreImapFlags(kImapMsgSeenFlag | kImapMsgDeletedFlag, true,
-                                &msgKey, 1, nullptr);
+                                {msgKey}, nullptr);
             if (NS_FAILED(rv)) break;
             // this will prevent us from adding the header to the db.
             m_msgMovedByFilter = true;
@@ -3260,7 +3239,7 @@ NS_IMETHODIMP nsImapMailFolder::ApplyFilterHit(nsIMsgFilter *filter,
           msgIsNew = false;
         }
           // note that delete falls through to move.
-          MOZ_FALLTHROUGH;
+          [[fallthrough]];
         case nsMsgFilterAction::MoveToFolder: {
           // if moving to a different file, do it.
           nsCString uri;
@@ -3330,17 +3309,17 @@ NS_IMETHODIMP nsImapMailFolder::ApplyFilterHit(nsIMsgFilter *filter,
         } break;
         case nsMsgFilterAction::MarkRead: {
           mDatabase->MarkHdrRead(msgHdr, true, nullptr);
-          rv = StoreImapFlags(kImapMsgSeenFlag, true, &msgKey, 1, nullptr);
+          rv = StoreImapFlags(kImapMsgSeenFlag, true, {msgKey}, nullptr);
           msgIsNew = false;
         } break;
         case nsMsgFilterAction::MarkUnread: {
           mDatabase->MarkHdrRead(msgHdr, false, nullptr);
-          rv = StoreImapFlags(kImapMsgSeenFlag, false, &msgKey, 1, nullptr);
+          rv = StoreImapFlags(kImapMsgSeenFlag, false, {msgKey}, nullptr);
           msgIsNew = true;
         } break;
         case nsMsgFilterAction::MarkFlagged: {
           mDatabase->MarkHdrMarked(msgHdr, true, nullptr);
-          rv = StoreImapFlags(kImapMsgFlaggedFlag, true, &msgKey, 1, nullptr);
+          rv = StoreImapFlags(kImapMsgFlaggedFlag, true, {msgKey}, nullptr);
         } break;
         case nsMsgFilterAction::KillThread:
         case nsMsgFilterAction::WatchThread: {
@@ -3366,14 +3345,14 @@ NS_IMETHODIMP nsImapMailFolder::ApplyFilterHit(nsIMsgFilter *filter,
           }
           if (actionType == nsMsgFilterAction::KillThread) {
             mDatabase->MarkHdrRead(msgHdr, true, nullptr);
-            rv = StoreImapFlags(kImapMsgSeenFlag, true, &msgKey, 1, nullptr);
+            rv = StoreImapFlags(kImapMsgSeenFlag, true, {msgKey}, nullptr);
             msgIsNew = false;
           }
         } break;
         case nsMsgFilterAction::KillSubthread: {
           mDatabase->MarkHeaderKilled(msgHdr, true, nullptr);
           mDatabase->MarkHdrRead(msgHdr, true, nullptr);
-          rv = StoreImapFlags(kImapMsgSeenFlag, true, &msgKey, 1, nullptr);
+          rv = StoreImapFlags(kImapMsgSeenFlag, true, {msgKey}, nullptr);
           msgIsNew = false;
         } break;
         case nsMsgFilterAction::ChangePriority: {
@@ -3387,7 +3366,7 @@ NS_IMETHODIMP nsImapMailFolder::ApplyFilterHit(nsIMsgFilter *filter,
           filterAction->GetLabel(&filterLabel);
           mDatabase->SetUint32PropertyByHdr(msgHdr, "label",
                                             static_cast<uint32_t>(filterLabel));
-          rv = StoreImapFlags((filterLabel << 9), true, &msgKey, 1, nullptr);
+          rv = StoreImapFlags((filterLabel << 9), true, {msgKey}, nullptr);
         } break;
         case nsMsgFilterAction::AddTag: {
           nsCString keyword;
@@ -3565,7 +3544,7 @@ NS_IMETHODIMP nsImapMailFolder::PlaybackOfflineFolderCreate(
 }
 
 NS_IMETHODIMP
-nsImapMailFolder::ReplayOfflineMoveCopy(nsMsgKey *aMsgKeys, uint32_t aNumKeys,
+nsImapMailFolder::ReplayOfflineMoveCopy(const nsTArray<nsMsgKey> &aMsgKeys,
                                         bool isMove, nsIMsgFolder *aDstFolder,
                                         nsIUrlListener *aUrlListener,
                                         nsIMsgWindow *aWindow) {
@@ -3600,8 +3579,8 @@ nsImapMailFolder::ReplayOfflineMoveCopy(nsMsgKey *aMsgKeys, uint32_t aNumKeys,
             if (opSrcUri.Equals(srcFolderUri)) {
               nsMsgKey srcMessageKey;
               currentOp->GetSrcMessageKey(&srcMessageKey);
-              for (uint32_t msgIndex = 0; msgIndex < aNumKeys; msgIndex++) {
-                if (srcMessageKey == aMsgKeys[msgIndex]) {
+              for (auto key : aMsgKeys) {
+                if (srcMessageKey == key) {
                   nsCOMPtr<nsIMsgDBHdr> fakeDestHdr;
                   dstFolderDB->GetMsgHdrForKey(offlineOps[opIndex],
                                                getter_AddRefs(fakeDestHdr));
@@ -3625,7 +3604,7 @@ nsImapMailFolder::ReplayOfflineMoveCopy(nsMsgKey *aMsgKeys, uint32_t aNumKeys,
   NS_ENSURE_SUCCESS(rv, rv);
   nsCOMPtr<nsIURI> resultUrl;
   nsAutoCString uids;
-  AllocateUidStringFromKeys(aMsgKeys, aNumKeys, uids);
+  AllocateUidStringFromKeys(aMsgKeys, uids);
   rv = imapService->OnlineMessageCopy(this, uids, aDstFolder, true, isMove,
                                       aUrlListener, getter_AddRefs(resultUrl),
                                       nullptr, aWindow);
@@ -3654,7 +3633,7 @@ NS_IMETHODIMP nsImapMailFolder::AddMoveResultPseudoKey(nsMsgKey aMsgKey) {
 }
 
 NS_IMETHODIMP nsImapMailFolder::StoreImapFlags(int32_t flags, bool addFlags,
-                                               nsMsgKey *keys, uint32_t numKeys,
+                                               const nsTArray<nsMsgKey> &keys,
                                                nsIUrlListener *aUrlListener) {
   nsresult rv;
   if (!WeAreOffline()) {
@@ -3662,7 +3641,7 @@ NS_IMETHODIMP nsImapMailFolder::StoreImapFlags(int32_t flags, bool addFlags,
         do_GetService(NS_IMAPSERVICE_CONTRACTID, &rv);
     NS_ENSURE_SUCCESS(rv, rv);
     nsAutoCString msgIds;
-    AllocateUidStringFromKeys(keys, numKeys, msgIds);
+    AllocateUidStringFromKeys(keys, msgIds);
     if (addFlags)
       imapService->AddMessageFlags(this, aUrlListener ? aUrlListener : this,
                                    nullptr, msgIds, flags, true);
@@ -3673,11 +3652,9 @@ NS_IMETHODIMP nsImapMailFolder::StoreImapFlags(int32_t flags, bool addFlags,
   } else {
     rv = GetDatabase();
     if (NS_SUCCEEDED(rv) && mDatabase) {
-      uint32_t total = numKeys;
-      for (uint32_t keyIndex = 0; keyIndex < total; keyIndex++) {
+      for (auto key : keys) {
         nsCOMPtr<nsIMsgOfflineImapOperation> op;
-        rv = mDatabase->GetOfflineOpForKey(keys[keyIndex], true,
-                                           getter_AddRefs(op));
+        rv = mDatabase->GetOfflineOpForKey(key, true, getter_AddRefs(op));
         SetFlag(nsMsgFolderFlags::OfflineEvents);
         if (NS_SUCCEEDED(rv) && op) {
           imapMessageFlagsType newFlags;
@@ -4155,8 +4132,7 @@ void nsImapMailFolder::TweakHeaderFlags(nsIImapProtocol *aProtocol,
       }
       if (newFlags) tweakMe->OrFlags(newFlags, &dbHdrFlags);
       if (!customFlags.IsEmpty())
-        (void)HandleCustomFlags(m_curMsgUid, tweakMe, userFlags, customFlags,
-                                nullptr);
+        (void)HandleCustomFlags(m_curMsgUid, tweakMe, userFlags, customFlags);
     }
   }
 }
@@ -4433,9 +4409,10 @@ nsImapMailFolder::ReleaseUrlCacheEntry(nsIMsgMailNewsUrl *aUrl) {
 NS_IMETHODIMP
 nsImapMailFolder::BeginMessageUpload() { return NS_ERROR_FAILURE; }
 
-nsresult nsImapMailFolder::HandleCustomFlags(
-    nsMsgKey uidOfMessage, nsIMsgDBHdr *dbHdr, uint16_t userFlags,
-    nsCString &keywords, nsIImapFlagAndUidState *flagState) {
+nsresult nsImapMailFolder::HandleCustomFlags(nsMsgKey uidOfMessage,
+                                             nsIMsgDBHdr *dbHdr,
+                                             uint16_t userFlags,
+                                             nsCString &keywords) {
   nsresult rv = GetDatabase();
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -4467,59 +4444,59 @@ nsresult nsImapMailFolder::HandleCustomFlags(
       dbHdr->SetStringProperty("junkscoreorigin", "imapflag");
   }
 
-  if (flagState && !(userFlags & kImapMsgSupportUserFlag)) {
+  if (!(userFlags & kImapMsgSupportUserFlag)) {
     nsCString localKeywords;
-    if (!(userFlags & kImapMsgSupportUserFlag)) {
-      dbHdr->GetStringProperty("keywords", getter_Copies(localKeywords));
-      MOZ_LOG(IMAP_KW, mozilla::LogLevel::Debug,
-              ("UID=%" PRIu32 ", localKeywords=|%s| rcvdKeyword=|%s|",
-               uidOfMessage, localKeywords.get(), keywords.get()));
-    }
+    nsCString prevKeywords;
+    dbHdr->GetStringProperty("keywords", getter_Copies(localKeywords));
+    dbHdr->GetStringProperty("prevkeywords", getter_Copies(prevKeywords));
+    // localKeywords: tags currently stored in database for the message.
+    // keywords: tags stored in server and obtained when flags for the message
+    //           were last fetched. (Parameter of this function.)
+    // prevKeywords: saved keywords from previous call of this function.
+    // clang-format off
+    MOZ_LOG(IMAP_KW, mozilla::LogLevel::Debug,
+            ("UID=%" PRIu32 ", localKeywords=|%s| keywords=|%s|, prevKeywords=|%s|",
+             uidOfMessage, localKeywords.get(), keywords.get(), prevKeywords.get()));
+    // clang-format on
+
+    // Store keywords to detect changes on next call of this function.
+    dbHdr->SetStringProperty("prevkeywords", keywords.get());
+
+    // Parse the space separated strings into arrays.
     nsTArray<nsCString> localKeywordArray;
-    nsTArray<nsCString> rcvdKeywordArray;
+    nsTArray<nsCString> keywordArray;
+    nsTArray<nsCString> prevKeywordArray;
     ParseString(localKeywords, ' ', localKeywordArray);
-    ParseString(keywords, ' ', rcvdKeywordArray);
+    ParseString(keywords, ' ', keywordArray);
+    ParseString(prevKeywords, ' ', prevKeywordArray);
 
-    nsAutoCString mozLogDefinedKWs;
-    if (MOZ_LOG_TEST(IMAP_KW, mozilla::LogLevel::Debug))
-      mozLogDefinedKWs.AppendLiteral("Defined keywords = |");
-    uint32_t i = 0;
-    while (true) {
-      nsAutoCString definedKeyword;
-      flagState->GetOtherKeywords(i++, definedKeyword);
-      if (definedKeyword.IsEmpty()) {
-        if (MOZ_LOG_TEST(IMAP_KW, mozilla::LogLevel::Debug)) {
-          mozLogDefinedKWs.Append('|');
-          MOZ_LOG(IMAP_KW, mozilla::LogLevel::Debug,
-                  ("%s", mozLogDefinedKWs.get()));
-        }
-        break;
-      }
-
-      if (MOZ_LOG_TEST(IMAP_KW, mozilla::LogLevel::Debug)) {
-        mozLogDefinedKWs.Append(definedKeyword.get());
-        mozLogDefinedKWs.Append(' ');
-      }
-
-      bool inLocal = localKeywordArray.Contains(definedKeyword);
-      bool inRcvd = rcvdKeywordArray.Contains(definedKeyword);
-      if (inLocal && inRcvd) rcvdKeywordArray.RemoveElement(definedKeyword);
-      if (inLocal && !inRcvd) localKeywordArray.RemoveElement(definedKeyword);
+    // If keyword not received now but was the last time, remove it from
+    // the localKeywords. This means the keyword was removed by another user
+    // sharing the folder.
+    for (uint32_t i = 0; i < prevKeywordArray.Length(); i++) {
+      bool inRcvd = keywordArray.Contains(prevKeywordArray[i]);
+      bool inLocal = localKeywordArray.Contains(prevKeywordArray[i]);
+      if (!inRcvd && inLocal)
+        localKeywordArray.RemoveElement(prevKeywordArray[i]);
     }
+
     // Combine local and rcvd keyword arrays into a single string
     // so it can be passed to SetStringProperty(). If element of
     // local already in rcvd, avoid duplicates in combined string.
     nsAutoCString combinedKeywords;
-    for (i = 0; i < localKeywordArray.Length(); i++) {
-      if (!rcvdKeywordArray.Contains(localKeywordArray[i])) {
+    for (uint32_t i = 0; i < localKeywordArray.Length(); i++) {
+      if (!keywordArray.Contains(localKeywordArray[i])) {
         combinedKeywords.Append(localKeywordArray[i]);
         combinedKeywords.Append(' ');
       }
     }
-    for (i = 0; i < rcvdKeywordArray.Length(); i++) {
-      combinedKeywords.Append(rcvdKeywordArray[i]);
+    for (uint32_t i = 0; i < keywordArray.Length(); i++) {
+      combinedKeywords.Append(keywordArray[i]);
       combinedKeywords.Append(' ');
     }
+    MOZ_LOG(IMAP_KW, mozilla::LogLevel::Debug,
+            ("combinedKeywords stored = |%s|", combinedKeywords.get()));
+    // combinedKeywords are tags being stored in database for the message.
     return dbHdr->SetStringProperty("keywords", combinedKeywords.get());
   }
   return (userFlags & kImapMsgSupportUserFlag)
@@ -4566,8 +4543,7 @@ nsresult nsImapMailFolder::SyncFlags(nsIImapFlagAndUidState *flagState) {
     nsCString keywords;
     if (NS_SUCCEEDED(
             flagState->GetCustomFlags(uidOfMessage, getter_Copies(keywords))))
-      HandleCustomFlags(uidOfMessage, dbHdr, supportedUserFlags, keywords,
-                        flagState);
+      HandleCustomFlags(uidOfMessage, dbHdr, supportedUserFlags, keywords);
 
     NotifyMessageFlagsFromHdr(dbHdr, uidOfMessage, flags);
   }
@@ -4668,7 +4644,7 @@ nsImapMailFolder::NotifyMessageFlags(uint32_t aFlags,
       GetSupportedUserFlags(&supportedUserFlags);
       NotifyMessageFlagsFromHdr(dbHdr, aMsgKey, aFlags);
       nsCString keywords(aKeywords);
-      HandleCustomFlags(aMsgKey, dbHdr, supportedUserFlags, keywords, nullptr);
+      HandleCustomFlags(aMsgKey, dbHdr, supportedUserFlags, keywords);
     }
   }
   return NS_OK;
@@ -4692,8 +4668,7 @@ nsImapMailFolder::NotifyMessageDeleted(const char *onlineFolderName,
       if (!affectedMessages.IsEmpty())  // perhaps Search deleted these messages
       {
         DeleteStoreMessages(affectedMessages);
-        mDatabase->DeleteMessages(affectedMessages.Length(),
-                                  affectedMessages.Elements(), nullptr);
+        mDatabase->DeleteMessages(affectedMessages, nullptr);
       }
     } else  // && !imapDeleteIsMoveToTrash // TODO: can this ever be executed?
       SetIMAPDeletedFlag(mDatabase, affectedMessages, false);
@@ -4959,8 +4934,7 @@ nsImapMailFolder::OnStopRunningUrl(nsIURI *aUrl, nsresult aExitCode) {
                     // assume that the src is also imap that uses offline
                     // storage.
                     DeleteStoreMessages(srcKeyArray, srcFolder);
-                    srcDB->DeleteMessages(srcKeyArray.Length(),
-                                          srcKeyArray.Elements(), nullptr);
+                    srcDB->DeleteMessages(srcKeyArray, nullptr);
                   } else
                     MarkMessagesImapDeleted(&srcKeyArray, true, srcDB);
                 }
@@ -5083,8 +5057,7 @@ nsImapMailFolder::OnStopRunningUrl(nsIURI *aUrl, nsresult aExitCode) {
                 if (!supportsCompaction && numHdrs)
                   DeleteStoreMessages(msgHdrs);
 
-                db->DeleteMessages(keyArray.Length(), keyArray.Elements(),
-                                   nullptr);
+                db->DeleteMessages(keyArray, nullptr);
                 db->SetSummaryValid(true);
                 db->Commit(nsMsgDBCommitType::kLargeCommit);
               }
@@ -6783,8 +6756,7 @@ nsresult nsImapMailFolder::CopyMessagesOffline(
     DeleteStoreMessages(keysToDelete, srcFolder);
     srcFolder->EnableNotifications(nsIMsgFolder::allMessageCountNotifications,
                                    false);
-    sourceMailDB->DeleteMessages(keysToDelete.Length(), keysToDelete.Elements(),
-                                 nullptr);
+    sourceMailDB->DeleteMessages(keysToDelete, nullptr);
     srcFolder->EnableNotifications(nsIMsgFolder::allMessageCountNotifications,
                                    true);
   }
@@ -7028,7 +7000,7 @@ nsImapMailFolder::CopyMessages(
     }
 
     nsAutoCString messageIds;
-    rv = AllocateUidStringFromKeys(keyArray.Elements(), numMsgs, messageIds);
+    rv = AllocateUidStringFromKeys(keyArray, messageIds);
     if (NS_FAILED(rv)) goto done;
 
     nsCOMPtr<nsIUrlListener> urlListener;
@@ -7342,9 +7314,7 @@ nsImapMailFolder::CopyFolder(nsIMsgFolder *srcFolder, bool isMoveFolder,
             srcFolder, false, msgWindow);  // The files have already been moved,
                                            // so delete storage false
         oldPathFile->Remove(false);        // berkeley mailbox
-        nsCOMPtr<nsIMsgDatabase>
-            srcDB;  // we need to force closed the source db
-        srcFolder->Delete();
+        srcFolder->DeleteStorage();
 
         nsCOMPtr<nsIFile> parentPathFile;
         rv = msgParent->GetFilePath(getter_AddRefs(parentPathFile));
@@ -8265,17 +8235,17 @@ NS_IMETHODIMP
 nsImapMailFolder::StoreCustomKeywords(nsIMsgWindow *aMsgWindow,
                                       const nsACString &aFlagsToAdd,
                                       const nsACString &aFlagsToSubtract,
-                                      nsMsgKey *aKeysToStore, uint32_t aNumKeys,
+                                      const nsTArray<nsMsgKey> &aKeysToStore,
                                       nsIURI **_retval) {
-  if (aNumKeys == 0) return NS_OK;
+  if (aKeysToStore.IsEmpty()) return NS_OK;
   nsresult rv = NS_OK;
   if (WeAreOffline()) {
     GetDatabase();
     if (!mDatabase) return NS_ERROR_UNEXPECTED;
-    for (uint32_t keyIndex = 0; keyIndex < aNumKeys; keyIndex++) {
+    for (auto key : aKeysToStore) {
       nsCOMPtr<nsIMsgOfflineImapOperation> op;
-      nsresult rv2 = mDatabase->GetOfflineOpForKey(aKeysToStore[keyIndex], true,
-                                                   getter_AddRefs(op));
+      nsresult rv2 =
+          mDatabase->GetOfflineOpForKey(key, true, getter_AddRefs(op));
       if (NS_FAILED(rv2)) rv = rv2;
       SetFlag(nsMsgFolderFlags::OfflineEvents);
       if (NS_SUCCEEDED(rv2) && op) {
@@ -8293,7 +8263,7 @@ nsImapMailFolder::StoreCustomKeywords(nsIMsgWindow *aMsgWindow,
       do_GetService(NS_IMAPSERVICE_CONTRACTID, &rv));
   NS_ENSURE_SUCCESS(rv, rv);
   nsAutoCString msgIds;
-  AllocateUidStringFromKeys(aKeysToStore, aNumKeys, msgIds);
+  AllocateUidStringFromKeys(aKeysToStore, msgIds);
   return imapService->StoreCustomKeywords(this, aMsgWindow, aFlagsToAdd,
                                           aFlagsToSubtract, msgIds, _retval);
 }
@@ -8316,16 +8286,14 @@ nsresult nsImapMailFolder::PlaybackCoalescedOperations() {
     if (junkKeysToClassify && !junkKeysToClassify->IsEmpty())
       StoreCustomKeywords(m_moveCoalescer->GetMsgWindow(),
                           NS_LITERAL_CSTRING("Junk"), EmptyCString(),
-                          junkKeysToClassify->Elements(),
-                          junkKeysToClassify->Length(), nullptr);
+                          *junkKeysToClassify, nullptr);
     junkKeysToClassify->Clear();
     nsTArray<nsMsgKey> *nonJunkKeysToClassify =
         m_moveCoalescer->GetKeyBucket(1);
     if (nonJunkKeysToClassify && !nonJunkKeysToClassify->IsEmpty())
       StoreCustomKeywords(m_moveCoalescer->GetMsgWindow(),
                           NS_LITERAL_CSTRING("NonJunk"), EmptyCString(),
-                          nonJunkKeysToClassify->Elements(),
-                          nonJunkKeysToClassify->Length(), nullptr);
+                          *nonJunkKeysToClassify, nullptr);
     nonJunkKeysToClassify->Clear();
     return m_moveCoalescer->PlaybackMoves(ShowPreviewText());
   }
@@ -8347,7 +8315,9 @@ nsImapMailFolder::SetJunkScoreForMessages(nsIArray *aMessages,
         nullptr,
         aJunkScore.EqualsLiteral("0") ? NS_LITERAL_CSTRING("NonJunk")
                                       : NS_LITERAL_CSTRING("Junk"),
-        EmptyCString(), keys.Elements(), keys.Length(), nullptr);
+        aJunkScore.EqualsLiteral("0") ? NS_LITERAL_CSTRING("Junk")
+                                      : NS_LITERAL_CSTRING("NonJunk"),
+        keys, nullptr);
     if (mDatabase) mDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
   }
   return rv;
@@ -8535,9 +8505,8 @@ void nsImapMailFolder::GetTrashFolderName(nsAString &aFolderName) {
   return;
 }
 NS_IMETHODIMP nsImapMailFolder::FetchMsgPreviewText(
-    nsMsgKey *aKeysToFetch, uint32_t aNumKeys, bool aLocalOnly,
+    nsTArray<nsMsgKey> const &aKeysToFetch, bool aLocalOnly,
     nsIUrlListener *aUrlListener, bool *aAsyncResults) {
-  NS_ENSURE_ARG_POINTER(aKeysToFetch);
   NS_ENSURE_ARG_POINTER(aAsyncResults);
 
   nsTArray<nsMsgKey> keysToFetchFromServer;
@@ -8552,7 +8521,7 @@ NS_IMETHODIMP nsImapMailFolder::FetchMsgPreviewText(
       do_QueryInterface(imapService, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  for (uint32_t i = 0; i < aNumKeys; i++) {
+  for (uint32_t i = 0; i < aKeysToFetch.Length(); i++) {
     nsCOMPtr<nsIMsgDBHdr> msgHdr;
     nsCString prevBody;
     rv = GetMessageHeader(aKeysToFetch[i], getter_AddRefs(msgHdr));
@@ -8606,8 +8575,7 @@ NS_IMETHODIMP nsImapMailFolder::AddKeywordsToMessages(
     nsTArray<nsMsgKey> keys;
     rv = BuildIdsAndKeyArray(aMessages, messageIds, keys);
     NS_ENSURE_SUCCESS(rv, rv);
-    rv = StoreCustomKeywords(nullptr, aKeywords, EmptyCString(),
-                             keys.Elements(), keys.Length(), nullptr);
+    rv = StoreCustomKeywords(nullptr, aKeywords, EmptyCString(), keys, nullptr);
     if (mDatabase) mDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
   }
   return rv;
@@ -8621,8 +8589,7 @@ NS_IMETHODIMP nsImapMailFolder::RemoveKeywordsFromMessages(
     nsTArray<nsMsgKey> keys;
     nsresult rv = BuildIdsAndKeyArray(aMessages, messageIds, keys);
     NS_ENSURE_SUCCESS(rv, rv);
-    rv = StoreCustomKeywords(nullptr, EmptyCString(), aKeywords,
-                             keys.Elements(), keys.Length(), nullptr);
+    rv = StoreCustomKeywords(nullptr, EmptyCString(), aKeywords, keys, nullptr);
     if (mDatabase) mDatabase->Commit(nsMsgDBCommitType::kLargeCommit);
   }
   return rv;
@@ -8923,7 +8890,7 @@ NS_IMETHODIMP nsImapMailFolder::GetOfflineMsgFolder(nsMsgKey msgKey,
                                                 getter_AddRefs(subMsgFolder));
           if (labelNames[i].Find("[Imap]/", /* ignoreCase = */ true) !=
               kNotFound) {
-            MsgReplaceSubstring(labelNames[i], "[Imap]/", "");
+            labelNames[i].ReplaceSubstring("[Imap]/", "");
             imapRootFolder->FindOnlineSubFolder(labelNames[i],
                                                 getter_AddRefs(subFolder));
             subMsgFolder = do_QueryInterface(subFolder);

@@ -10,6 +10,10 @@ var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
 
+var { OAuth2Providers } = ChromeUtils.import(
+  "resource:///modules/OAuth2Providers.jsm"
+);
+
 var gSmtpServerListWindow = {
   mBundle: null,
   mServerList: null,
@@ -19,7 +23,7 @@ var gSmtpServerListWindow = {
   mSetDefaultServerButton: null,
 
   onLoad() {
-    parent.onPanelLoaded("am-smtp.xul");
+    parent.onPanelLoaded("am-smtp.xhtml");
 
     this.mBundle = document.getElementById("bundle_messenger");
     this.mServerList = document.getElementById("smtpList");
@@ -174,6 +178,16 @@ var gSmtpServerListWindow = {
         );
     }
     if (authStr) {
+      // This is causing a mochitest failure. Mochitest will not move
+      // ahead and it will get stuck. We don't have any element with id
+      // "authMethod-oauth2" so this needs inspection.
+      //
+      // let details = OAuth2Providers.getHostnameDetails(aServer.hostname);
+      // if (!details) {
+      //   document
+      //     .getElementById("authMethod-oauth2")
+      //     .toggleAttribute("disabled", true);
+      // }
       document.getElementById("authMethodValue").value = this.mBundle.getString(
         authStr
       );
@@ -213,9 +227,7 @@ var gSmtpServerListWindow = {
       return;
     }
 
-    while (aServers.hasMoreElements()) {
-      var server = aServers.getNext();
-
+    for (let server of aServers) {
       if (server instanceof Ci.nsISmtpServer) {
         var isDefault = aDefaultServer.key == server.key;
 

@@ -16,7 +16,10 @@ function run_test() {
     },
     {
       displayString: "test@foo.invalid, test2@foo.invalid",
-      addresses: [["", "test@foo.invalid"], ["", "test2@foo.invalid"]],
+      addresses: [
+        ["", "test@foo.invalid"],
+        ["", "test2@foo.invalid"],
+      ],
     },
     {
       displayString: "John Doe <test@foo.invalid>",
@@ -108,15 +111,22 @@ function run_test() {
         ["Marge", "marge@example.com"],
       ],
     },
+    {
+      displayString: "<attacker@example.com>friend@example.com",
+      addresses: [["", "attacker@example.com"]],
+    },
+    {
+      displayString:
+        'me "you" (via foo@example.com) <attacker2@example.com> friend@example.com,',
+      addresses: [['me "you" (via foo@example.com)', "attacker2@example.com"]],
+    },
   ];
 
   // Test -  strings
 
   for (let i = 0; i < checks.length; ++i) {
-    dump("Test " + i + "\n");
     let addrs = MailServices.headerParser.makeFromDisplayAddress(
-      checks[i].displayString,
-      {}
+      checks[i].displayString
     );
     let checkaddrs = checks[i].addresses;
     Assert.equal(addrs.length, checkaddrs.length);

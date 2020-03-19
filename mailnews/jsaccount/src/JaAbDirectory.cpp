@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -26,7 +26,7 @@ NS_IMPL_ISUPPORTS_INHERITED(JaCppAbDirectoryDelegator, JaBaseCppAbDirectory,
 
 // Delegator object to bypass JS method override.
 NS_IMPL_ISUPPORTS(JaCppAbDirectoryDelegator::Super, nsIAbDirectory,
-                  nsIAbCollection, nsIAbItem, nsIInterfaceRequestor)
+                  nsIInterfaceRequestor)
 
 JaCppAbDirectoryDelegator::JaCppAbDirectoryDelegator()
     : mCppBase(new Super(this)), mMethods(nullptr) {}
@@ -56,8 +56,6 @@ NS_IMETHODIMP JaCppAbDirectoryDelegator::SetJsDelegate(
   // interface, which is OK.
   mJsISupports = aJsDelegate;
   mJsIAbDirectory = do_QueryInterface(aJsDelegate);
-  mJsIAbCollection = do_QueryInterface(aJsDelegate);
-  mJsIAbItem = do_QueryInterface(aJsDelegate);
   mJsIInterfaceRequestor = do_QueryInterface(aJsDelegate);
   return NS_OK;
 }

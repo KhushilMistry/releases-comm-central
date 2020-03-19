@@ -6,9 +6,6 @@
 // SpaceHit() function: whether spacebar advances to next unread message.
 pref("mail.advance_on_spacebar", true);
 
-//mailnews.timeline_is_enabled should be set to true ONLY for perf measurement-timeline builds.
-pref("mailnews.timeline_is_enabled", false);
-
 pref("mailnews.logComposePerformance", false);
 
 pref("mail.wrap_long_lines",                true);
@@ -23,6 +20,14 @@ pref("mail.reply_quote_inline",             false);
 // (which is called "Reply-To Munging") we override the Reply-To header with
 // the From header.
 pref("mail.override_list_reply_to", true);
+// hidden pref for controlling if the Content-Language header
+// should be set.
+pref("mail.suppress_content_language", false);
+// Pref for controlling if the Date header is sanitized, by:
+// 1. Converting the date to UTC, to prevent leaking the local time zone.
+// 2. Rounding the date down to the most recent whole minute, to prevent
+//    fingerprinting of small clock offsets.
+pref("mail.sanitize_date_header", false);
 
 // hidden pref for controlling if the user agent string
 // is displayed in the message pane or not...
@@ -155,6 +160,7 @@ pref("mail.quoted_graphical",               true); // use HTML-style quoting for
 pref("mail.quoteasblock",                   true); // use HTML-style quoting for quoting plain text
 pref("mail.strictly_mime",                  false);
 pref("mail.strictly_mime_headers",          true);
+pref("mail.folder_widget.max_recent",       25); // The maximum number of entries in the "Recent" menu of the folder picker.
 // 0/1 (name param is encoded in a legacy way), 2(RFC 2231 only)
 // 0 the name param is never separated to multiple lines.
 pref("mail.strictly_mime.parm_folding",     1);
@@ -162,7 +168,6 @@ pref("mail.label_ascii_only_mail_as_us_ascii", false);
 pref("mail.file_attach_binary",             false);
 pref("mail.show_headers",                   1); // some
 pref("mailnews.p7m_external", false);          // S/MIME parts are not external (but inline decrypted).
-pref("mailnews.p7m_subparts_external", true);  // S/MIME child parts are external. Protect against efail.
 pref("mail.pane_config.dynamic",            0);
 pref("mail.addr_book.mapit_url.format", "chrome://messenger-region/locale/region.properties");
 pref("mail.addr_book.mapit_url.1.name", "chrome://messenger-region/locale/region.properties");
@@ -399,8 +404,6 @@ pref("mailnews.scroll_to_new_message", true);
 // if true, any click on a column header other than the thread column will unthread the view
 pref("mailnews.thread_pane_column_unthreads", false);
 
-pref("mailnews.account_central_page.url", "chrome://messenger/locale/messenger.properties");
-
 /* default prefs for Mozilla 5.0 */
 pref("mail.identity.default.compose_html", true);
 pref("mail.identity.default.valid", true);
@@ -454,6 +457,15 @@ pref("mail.collect_email_address_outgoing", true);
 pref("mail.collect_addressbook", "jsaddrbook://history.sqlite");
 
 pref("mail.default_sendlater_uri", "mailbox://nobody@Local%20Folders/Unsent%20Messages");
+
+pref("mail.server.default.clientid", "");
+pref("mail.smtpserver.default.clientid", "");
+
+// This is not to be enabled by default until the prerequisite
+// changes are completed. See here for details:
+//  https://bugzilla.mozilla.org/show_bug.cgi?id=1565379
+pref("mail.server.default.clientidEnabled", false);
+pref("mail.smtpserver.default.clientidEnabled", false);
 
 pref("mail.smtpservers", "");
 pref("mail.accountmanager.accounts", "");
@@ -630,6 +642,9 @@ pref("mail.smtpserver.default.try_ssl", 0); // @see nsISmtpServer.socketType
 
 // If true, SMTP LOGIN auth and POP3 USER/PASS auth, the last of the methods to try, will use Latin1.
 pref("mail.smtp_login_pop3_user_pass_auth_is_latin1", true);
+
+// Strip CSS conditional rules in received and sent mail
+pref("mail.html_sanitize.drop_conditional_css", true);
 
 // For the next 3 prefs, see <http://www.bucksch.org/1/projects/mozilla/16507>
 pref("mail.display_glyph", true);   // TXT->HTML :-) etc. in viewer

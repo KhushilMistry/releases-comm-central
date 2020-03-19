@@ -10,7 +10,7 @@
  *
  * We want to test that the behavior of the tokenizer is as expected (namely,
  * that it drops two-letter tokens unless they're CJK bigrams), and that
- * msg_search.js properly drops two-letter tokens (unless CJK) from the search
+ * GlodaMsgSearcher.jsm properly drops two-letter tokens (unless CJK) from the search
  * terms to avoid issuing a query that will definitely return no results.
  */
 
@@ -54,7 +54,10 @@ var intlPhrases = [
     encodings: {
       "utf-8": ["=?utf-8?q?aa_bbb?=", "aa bbb"],
     },
-    searchPhrases: [{ body: "aa", match: false }, { body: "bbb", match: true }],
+    searchPhrases: [
+      { body: "aa", match: false },
+      { body: "bbb", match: true },
+    ],
   },
 ];
 
@@ -155,10 +158,10 @@ function* test_fulltextsearch(aPhrase) {
 }
 
 var { GlodaMsgSearcher } = ChromeUtils.import(
-  "resource:///modules/gloda/msg_search.js"
+  "resource:///modules/gloda/GlodaMsgSearcher.jsm"
 );
 var { GlodaDatastore } = ChromeUtils.import(
-  "resource:///modules/gloda/datastore.js"
+  "resource:///modules/gloda/GlodaDatastore.jsm"
 );
 
 /**

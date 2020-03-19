@@ -553,9 +553,10 @@ NS_IMETHODIMP nsParseMailMessageState::Clear() {
   m_envelope.ResetWritePos();
   m_receivedTime = 0;
   m_receivedValue.Truncate();
-  for (uint32_t i = 0; i < m_customDBHeaders.Length(); i++)
+  for (uint32_t i = 0; i < m_customDBHeaders.Length(); i++) {
     m_customDBHeaderValues[i].length = 0;
-
+  }
+  m_headerstartpos = 0;
   return NS_OK;
 }
 
@@ -1168,7 +1169,7 @@ nsresult nsParseMailMessageState::FinalizeHeaders() {
   char md5_data[50];
 
   uint32_t flags = 0;
-  uint32_t delta = 0;
+  uint32_t deltaToMozStatus = 0;
   nsMsgPriorityValue priorityFlags = nsMsgPriority::notSet;
   uint32_t labelFlags = 0;
 
@@ -1220,8 +1221,10 @@ nsresult nsParseMailMessageState::FinalizeHeaders() {
           (nsMsgPriorityValue)((flags & nsMsgMessageFlags::Priorities) >> 13);
       flags &= ~nsMsgMessageFlags::Priorities;
     }
-    delta = m_headerstartpos + (mozstatus->value - m_headers.GetBuffer()) -
-            (X_MOZILLA_STATUS_LEN + 2 /* for ": " */) - m_envelope_pos;
+
+    deltaToMozStatus =
+        m_headerstartpos + (mozstatus->value - m_headers.GetBuffer()) -
+        (X_MOZILLA_STATUS_LEN + 2 /* for ": " */) - m_envelope_pos;
   }
 
   if (mozstatus2) {
@@ -1307,10 +1310,17 @@ nsresult nsParseMailMessageState::FinalizeHeaders() {
         labelFlags = ((flags & nsMsgMessageFlags::Labels) >> 25);
         m_newMsgHdr->SetLabel(labelFlags);
       }
-      if (delta < 0xffff) { /* Only use if fits in 16 bits. */
-        m_newMsgHdr->SetStatusOffset((uint16_t)delta);
+      NS_ASSERTION(!mozstatus || deltaToMozStatus < 0xffff,
+                   "unexpected deltaToMozStatus");
+      if (mozstatus &&
+          deltaToMozStatus < 0xffff) { /* Only use if fits in 16 bits. */
+        m_newMsgHdr->SetStatusOffset((uint16_t)deltaToMozStatus);
         if (!m_IgnoreXMozillaStatus) {  // imap doesn't care about
                                         // X-MozillaStatus
+          // TODO: Clarify, why is it necessary to query the value we've just
+          // set? Does querying trigger some kind of side effect? Or is the
+          // following assertion check the only need for querying? If it seems
+          // unnecessary, the following lines should be removed.
           uint32_t offset;
           (void)m_newMsgHdr->GetStatusOffset(&offset);
           NS_ASSERTION(offset < 10000,
@@ -1359,7 +1369,7 @@ nsresult nsParseMailMessageState::FinalizeHeaders() {
             if (NS_SUCCEEDED(hasher->Init(nsICryptoHash::MD5)) &&
                 NS_SUCCEEDED(
                     hasher->Update((const uint8_t *)m_headers.GetBuffer(),
-                                   m_headers.GetSize())) &&
+                                   m_headers.GetBufferPos())) &&
                 NS_SUCCEEDED(hasher->Finish(true, hash)))
               md5_b64 = hash.get();
           }
@@ -1824,13 +1834,11 @@ NS_IMETHODIMP nsParseNewMailState::ApplyFilterHit(nsIMsgFilter *filter,
 
   nsCOMPtr<nsIMsgDBHdr> msgHdr = m_newMsgHdr;
 
-  nsCOMPtr<nsIArray> filterActionList;
-  rv = filter->GetSortedActionList(getter_AddRefs(filterActionList));
+  nsTArray<RefPtr<nsIMsgRuleAction>> filterActionList;
+  rv = filter->GetSortedActionList(filterActionList);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  uint32_t numActions;
-  rv = filterActionList->GetLength(&numActions);
-  NS_ENSURE_SUCCESS(rv, rv);
+  uint32_t numActions = filterActionList.Length();
 
   nsCString msgId;
   msgHdr->GetMessageId(getter_Copies(msgId));
@@ -1851,9 +1859,8 @@ NS_IMETHODIMP nsParseNewMailState::ApplyFilterHit(nsIMsgFilter *filter,
   nsresult finalResult = NS_OK;  // result of all actions
   for (uint32_t actionIndex = 0; actionIndex < numActions && *applyMore;
        actionIndex++) {
-    nsCOMPtr<nsIMsgRuleAction> filterAction =
-        do_QueryElementAt(filterActionList, actionIndex, &rv);
-    if (NS_FAILED(rv) || !filterAction) {
+    nsCOMPtr<nsIMsgRuleAction> filterAction(filterActionList[actionIndex]);
+    if (!filterAction) {
       MOZ_LOG(FILTERLOGMODULE, LogLevel::Warning,
               ("(Local) Filter action at index %" PRIu32 " invalid, skipping",
                actionIndex));
@@ -1898,7 +1905,7 @@ NS_IMETHODIMP nsParseNewMailState::ApplyFilterHit(nsIMsgFilter *filter,
           msgIsNew = false;
         }
           // FALLTHROUGH
-          MOZ_FALLTHROUGH;
+          [[fallthrough]];
         case nsMsgFilterAction::MoveToFolder: {
           // if moving to a different file, do it.
           if (!actionTargetFolderUri.IsEmpty() &&

@@ -7,9 +7,6 @@
 @AB_CD@.jar:
 % locale branding @AB_CD@ %locale/@AB_CD@/branding/
 % locale communicator @AB_CD@ %locale/@AB_CD@/communicator/
-% locale communicator-platform @AB_CD@ %locale/@AB_CD@/communicator-platform/gtk/ os=LikeUnix
-% locale communicator-platform @AB_CD@ %locale/@AB_CD@/communicator-platform/mac/ os=Darwin
-% locale communicator-platform @AB_CD@ %locale/@AB_CD@/communicator-platform/win/ os=WINNT
 % locale communicator-region @AB_CD@ %locale/@AB_CD@/communicator-region/
 % locale help @AB_CD@ %locale/@AB_CD@/helpviewer/
 % locale messenger @AB_CD@ %locale/@AB_CD@/messenger/
@@ -19,9 +16,6 @@
 % locale messenger-newsblog @AB_CD@ %locale/@AB_CD@/messenger-newsblog/
 % locale mozldap @AB_CD@ %locale/@AB_CD@/mozldap/
 % locale navigator @AB_CD@ %locale/@AB_CD@/navigator/
-% locale navigator-platform @AB_CD@ %locale/@AB_CD@/navigator-platform/gtk/ os=LikeUnix
-% locale navigator-platform @AB_CD@ %locale/@AB_CD@/navigator-platform/mac/ os=Darwin
-% locale navigator-platform @AB_CD@ %locale/@AB_CD@/navigator-platform/win/ os=WINNT
 % locale navigator-region @AB_CD@ %locale/@AB_CD@/navigator-region/
   locale/@AB_CD@/branding/aboutRights.dtd                                   (%chrome/branding/aboutRights.dtd)
   locale/@AB_CD@/branding/aboutRights.properties                            (%chrome/branding/aboutRights.properties)
@@ -197,9 +191,6 @@
   locale/@AB_CD@/communicator/pref/pref-smartupdate.dtd                     (%chrome/common/pref/pref-smartupdate.dtd)
   locale/@AB_CD@/communicator/pref/pref-spelling.dtd                        (%chrome/common/pref/pref-spelling.dtd)
   locale/@AB_CD@/communicator/pref/pref-tabs.dtd                            (%chrome/common/pref/pref-tabs.dtd)
-  locale/@AB_CD@/communicator-platform/mac/pref/platformPrefOverlay.dtd     (%chrome/common/pref/mac/platformPrefOverlay.dtd)
-  locale/@AB_CD@/communicator-platform/gtk/pref/platformPrefOverlay.dtd     (%chrome/common/pref/unix/platformPrefOverlay.dtd)
-  locale/@AB_CD@/communicator-platform/win/pref/platformPrefOverlay.dtd     (%chrome/common/pref/win/platformPrefOverlay.dtd)
   locale/@AB_CD@/communicator/profile/profileSelection.dtd                  (%chrome/common/profile/profileSelection.dtd)
   locale/@AB_CD@/communicator/profile/profileSelection.properties           (%chrome/common/profile/profileSelection.properties)
   locale/@AB_CD@/communicator/safeMode.dtd                                  (%chrome/common/safeMode.dtd)
@@ -214,9 +205,6 @@
   locale/@AB_CD@/communicator/sidebar/preview.dtd                           (%chrome/common/sidebar/preview.dtd)
   locale/@AB_CD@/communicator/sidebar/sidebar.properties                    (%chrome/common/sidebar/sidebar.properties)
   locale/@AB_CD@/communicator/sidebar/sidebarOverlay.dtd                    (%chrome/common/sidebar/sidebarOverlay.dtd)
-  locale/@AB_CD@/communicator-platform/win/platformCommunicatorOverlay.dtd  (%chrome/common/win/platformCommunicatorOverlay.dtd)
-  locale/@AB_CD@/communicator-platform/gtk/platformCommunicatorOverlay.dtd  (%chrome/common/unix/platformCommunicatorOverlay.dtd)
-  locale/@AB_CD@/communicator-platform/mac/platformCommunicatorOverlay.dtd  (%chrome/common/mac/platformCommunicatorOverlay.dtd)
   locale/@AB_CD@/communicator-region/region.properties                      (%chrome/common/region.properties)
   locale/@AB_CD@/messenger/AccountManager.dtd                               (%chrome/mailnews/pref/AccountManager.dtd)
   locale/@AB_CD@/messenger/AccountWizard.dtd                                (%chrome/mailnews/pref/AccountWizard.dtd)
@@ -292,7 +280,6 @@
   locale/@AB_CD@/messenger/mime.properties                                  (%chrome/mailnews/mime.properties)
   locale/@AB_CD@/messenger/mimeheader.properties                            (%chrome/mailnews/mimeheader.properties)
   locale/@AB_CD@/messenger/msgAccountCentral.dtd                            (%chrome/mailnews/msgAccountCentral.dtd)
-  locale/@AB_CD@/messenger/msgFolderPickerOverlay.dtd                       (%chrome/mailnews/msgFolderPickerOverlay.dtd)
   locale/@AB_CD@/messenger/msgHdrViewOverlay.dtd                            (%chrome/mailnews/msgHdrViewOverlay.dtd)
   locale/@AB_CD@/messenger/msgHdrViewPopup.dtd                              (%chrome/mailnews/msgHdrViewPopup.dtd)
   locale/@AB_CD@/messenger/msgmdn.properties                                (%chrome/mailnews/msgmdn.properties)
@@ -328,6 +315,7 @@
   locale/@AB_CD@/messenger/start.dtd                                        (%chrome/mailnews/start.dtd)
   locale/@AB_CD@/messenger/subscribe.dtd                                    (%chrome/mailnews/subscribe.dtd)
   locale/@AB_CD@/messenger/subscribe.properties                             (%chrome/mailnews/subscribe.properties)
+  locale/@AB_CD@/messenger/tabmail.properties                               (%chrome/mailnews/tabmail.properties)
   locale/@AB_CD@/messenger/textImportMsgs.properties                        (%chrome/mailnews/textImportMsgs.properties)
   locale/@AB_CD@/messenger/threadpane.dtd                                   (%chrome/mailnews/threadpane.dtd)
   locale/@AB_CD@/messenger/vCardImportMsgs.properties                       (%chrome/mailnews/vCardImportMsgs.properties)
@@ -365,9 +353,6 @@
   locale/@AB_CD@/navigator/tabbrowser.properties                            (%chrome/browser/tabbrowser.properties)
   locale/@AB_CD@/navigator/taskbar.properties                               (%chrome/browser/taskbar.properties)
   locale/@AB_CD@/navigator/webDeveloper.dtd                                 (%chrome/browser/webDeveloper.dtd)
-  locale/@AB_CD@/navigator-platform/mac/platformNavigationBindings.dtd      (%chrome/browser/mac/platformNavigationBindings.dtd)
-  locale/@AB_CD@/navigator-platform/gtk/platformNavigationBindings.dtd      (%chrome/browser/unix/platformNavigationBindings.dtd)
-  locale/@AB_CD@/navigator-platform/win/platformNavigationBindings.dtd      (%chrome/browser/win/platformNavigationBindings.dtd)
   locale/@AB_CD@/navigator-region/region.properties                         (%chrome/browser/region.properties)
   locale/@AB_CD@/pippki/pref-certs.dtd                                      (%chrome/common/pref/pref-certs.dtd)
   locale/@AB_CD@/pippki/pref-masterpass.dtd                                 (%chrome/common/pref/pref-masterpass.dtd)

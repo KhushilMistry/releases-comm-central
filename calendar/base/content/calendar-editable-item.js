@@ -9,7 +9,7 @@
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+  var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
   var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
   /**
    * The MozCalendarEditableItem widget is used as a full day event item in the
@@ -139,8 +139,8 @@
                      flex="1">
                   <stack class="calendar-event-box-container"
                          flex="1">
-                    <hbox class="calendar-event-details" align="center">
-                      <vbox align="left"
+                    <hbox class="calendar-event-details">
+                      <vbox align="start"
                             flex="1">
                         <label class="event-name-label"
                                crop="end"
@@ -190,7 +190,7 @@
         true
       );
 
-      this.setAttribute("mousethrough", "never");
+      this.style.pointerEvents = "auto";
       this.setAttribute("tooltip", "itemTooltip");
       this.setAttribute("tabindex", "-1");
       this.addEventNameTextboxListener();
@@ -298,7 +298,7 @@
       let cssSafeId = cal.view.formatStringForCSSRule(item.calendar.id);
       this.style.setProperty("--item-backcolor", `var(--calendar-${cssSafeId}-backcolor)`);
       this.style.setProperty("--item-forecolor", `var(--calendar-${cssSafeId}-forecolor)`);
-      let categoriesArray = item.getCategories({});
+      let categoriesArray = item.getCategories();
       if (categoriesArray.length > 0) {
         let cssClassesArray = categoriesArray.map(cal.view.formatStringForCSSRule);
         this.setAttribute("categories", cssClassesArray.join(" "));
@@ -307,7 +307,7 @@
       }
 
       // Add alarm icons as needed.
-      let alarms = item.getAlarms({});
+      let alarms = item.getAlarms();
       if (alarms.length && Services.prefs.getBoolPref("calendar.alarms.indicator.show", true)) {
         let iconsBox = this.querySelector(".alarm-icons-box");
         cal.alarms.addReminderImages(iconsBox, alarms);
@@ -416,7 +416,7 @@
       } else {
         items = [this.mOccurrence];
       }
-      this.calendarView.setSelectedItems(items.length, items);
+      this.calendarView.setSelectedItems(items);
     }
 
     stopEditing(saveChanges) {

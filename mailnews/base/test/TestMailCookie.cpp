@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -14,8 +14,8 @@
 #include "nsNetUtil.h"
 #include "nsNetCID.h"
 #include "nsIPrefBranch.h"
-#include "nsIPrefService.h"
 #include "nsServiceManagerUtils.h"
+#include "mozilla/Preferences.h"
 #include "mozilla/Unused.h"
 #include "nsIURI.h"
 
@@ -41,7 +41,7 @@ void SetACookieMail(nsICookieService *aCookieService, const char *aSpec1,
   if (aSpec2) NS_NewURI(getter_AddRefs(uri2), aSpec2);
 
   nsresult rv = aCookieService->SetCookieStringFromHttp(
-      uri1, uri2, nullptr, nsDependentCString(aCookieString),
+      uri1, uri2, nsDependentCString(aCookieString),
       aServerTime ? nsDependentCString(aServerTime) : VoidCString(), nullptr);
   EXPECT_TRUE(NS_SUCCEEDED(rv));
 }
@@ -103,6 +103,9 @@ void InitPrefsMail(nsIPrefBranch *aPrefBranch) {
   aPrefBranch->SetBoolPref(kCookiesAskPermission, false);
   // Set the base domain limit to 50 so we have a known value.
   aPrefBranch->SetIntPref(kCookiesMaxPerHost, 50);
+
+  // XXX TODO: We need to follow bug 1617611 for the real fix.
+  mozilla::Preferences::SetBool("network.cookie.sameSite.laxByDefault", false);
 }
 
 TEST(TestMailCookie, TestMailCookieMain)

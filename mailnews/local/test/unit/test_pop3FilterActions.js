@@ -84,19 +84,12 @@ var gTestArray = [
   function verifyMessages() {
     let hdrs = [];
     let keys = [];
-    let enumerator = localAccountUtils.inboxFolder.msgDatabase.EnumerateMessages();
-    while (enumerator.hasMoreElements()) {
-      let hdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+    for (let hdr of localAccountUtils.inboxFolder.msgDatabase.EnumerateMessages()) {
       keys.push(hdr.messageKey);
       hdrs.push(hdr);
     }
     Assert.ok(
-      !localAccountUtils.inboxFolder.fetchMsgPreviewText(
-        keys,
-        keys.length,
-        false,
-        null
-      )
+      !localAccountUtils.inboxFolder.fetchMsgPreviewText(keys, false, null)
     );
     let preview1 = hdrs[0].getStringProperty("preview");
     let preview2 = hdrs[1].getStringProperty("preview");
@@ -116,13 +109,7 @@ var gTestArray = [
 ];
 
 function folderCount(folder) {
-  let enumerator = folder.msgDatabase.EnumerateMessages();
-  let count = 0;
-  while (enumerator.hasMoreElements()) {
-    count++;
-    enumerator.getNext();
-  }
-  return count;
+  return [...folder.msgDatabase.EnumerateMessages()].length;
 }
 
 function setup_store(storeID) {

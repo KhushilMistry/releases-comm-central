@@ -49,8 +49,8 @@ var Sanitizer = {
     }
     if (this._prefs.getBoolPref("promptOnSanitize")) {
       // make this an app-modal window on Mac.
-      var win = "nsILocalFileMac" in Ci ? null
-                                                           : aParentWindow;
+      let win = AppConstants.platform == "macosx" ? null : aParentWindow;
+
       Services.ww.openWindow(win,
                              "chrome://communicator/content/sanitize.xul",
                              "Sanitize",
@@ -186,17 +186,13 @@ var Sanitizer = {
 
     history: {
       clear: function() {
-        const {PlacesUtils} = ChromeUtils.import("resource://gre/modules/PlacesUtils.jsm");
-
         // use try/catch for everything but the last task so we clear as much as possible
         try {
           PlacesUtils.history.clear();
         } catch(ex) {}
 
         try {
-          var os = Cc["@mozilla.org/observer-service;1"]
-                     .getService(Ci.nsIObserverService);
-          os.notifyObservers(null, "browser:purge-session-history");
+          Services.obs.notifyObservers(null, "browser:purge-session-history");
         } catch(ex) {}
       },
 
@@ -213,9 +209,7 @@ var Sanitizer = {
         } catch(ex) {}
 
         // Clear URLbar history (see also pref-history.js)
-        var file = Cc["@mozilla.org/file/directory_service;1"]
-                     .getService(Ci.nsIProperties)
-                     .get("ProfD", Ci.nsIFile);
+        var file = Services.dirsvc.get("ProfD", Ci.nsIFile);
         file.append("urlbarhistory.sqlite");
         if (file.exists())
           file.remove(false);
@@ -226,9 +220,7 @@ var Sanitizer = {
             Services.prefs.prefHasUserValue("general.open_location.last_url"))
           return true;
 
-        var file = Cc["@mozilla.org/file/directory_service;1"]
-                     .getService(Ci.nsIProperties)
-                     .get("ProfD", Ci.nsIFile);
+        var file = Services.dirsvc.get("ProfD", Ci.nsIFile);
         file.append("urlbarhistory.sqlite");
         return file.exists();
       }

@@ -23,11 +23,11 @@
 
 /* import-globals-from ../../../test/resources/asyncTestUtils.js */
 /* import-globals-from ../../../test/resources/alertTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 /* import-globals-from ../../../test/resources/POP3pump.js */
 load("../../../resources/asyncTestUtils.js");
 load("../../../resources/alertTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 load("../../../resources/POP3pump.js");
 
 Services.prefs.setCharPref(
@@ -375,11 +375,10 @@ function downloadOver4GiB_success_check() {
   // Bug 1183490
   // Check that the message keys are below 4GB (thus no offset),
   // actually just incrementing by 1 for each message.
-  let msgs = gInbox.messages;
   let key = 0;
-  while (msgs.hasMoreElements()) {
+  for (let hdr of gInbox.messages) {
     key++;
-    Assert.equal(msgs.getNext().QueryInterface(Ci.nsIMsgDBHdr).messageKey, key);
+    Assert.equal(hdr.messageKey, key);
   }
 
   copyIntoOver4GiB_fail();
@@ -487,8 +486,7 @@ function compactOver4GiB() {
   let enumerator = gInbox.messages;
   let messages = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
   let sizeToExpunge = 0;
-  while (enumerator.hasMoreElements()) {
-    let header = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+  for (let header of enumerator) {
     if (!enumerator.hasMoreElements()) {
       messages.appendElement(header);
       sizeToExpunge = header.messageSize;
@@ -540,8 +538,7 @@ function compactUnder4GiB() {
   let enumerator = gInbox.messages;
   let messages = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
   let sizeToExpunge = gInbox.expungedBytes; // If compact in compactOver4GB was skipped, this is not 0.
-  while (enumerator.hasMoreElements()) {
-    let header = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+  for (let header of enumerator) {
     if (enumerator.hasMoreElements()) {
       messages.appendElement(header);
       sizeToExpunge += header.messageSize;

@@ -6,7 +6,7 @@
 
 /* import-globals-from ../calendar-ui-utils.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 /**
  * Sets up the timezone dialog from the window arguments, also setting up all
@@ -31,11 +31,10 @@ function onLoad() {
     addMenuItem(tzMenuPopup, cal.dtz.UTC.displayName, cal.dtz.UTC.tzid);
   }
 
-  let enumerator = tzProvider.timezoneIds;
   let tzids = {};
   let displayNames = [];
-  while (enumerator.hasMore()) {
-    let timezone = tzProvider.getTimezone(enumerator.getNext());
+  for (let timezoneId of tzProvider.timezoneIds) {
+    let timezone = tzProvider.getTimezone(timezoneId);
     if (timezone && !timezone.isFloating && !timezone.isUTC) {
       let displayName = timezone.displayName;
       displayNames.push(displayName);
@@ -74,9 +73,9 @@ function onLoad() {
 function findTimezone(timezone) {
   let tzid = timezone.tzid;
   let menulist = document.getElementById("timezone-menulist");
-  let numChilds = menulist.childNodes[0].childNodes.length;
+  let numChilds = menulist.children[0].children.length;
   for (let i = 0; i < numChilds; i++) {
-    let menuitem = menulist.childNodes[0].childNodes[i];
+    let menuitem = menulist.children[0].children[i];
     if (menuitem.getAttribute("value") == tzid) {
       return i;
     }

@@ -8,10 +8,7 @@ var { Services } = ChromeUtils.import("resource:///modules/imServices.jsm");
 const { OS } = ChromeUtils.import("resource://gre/modules/osfile.jsm");
 
 var gLogger = {};
-Services.scriptloader.loadSubScript(
-  "resource:///components/logger.js",
-  gLogger
-);
+Services.scriptloader.loadSubScript("resource:///modules/logger.jsm", gLogger);
 
 var logDirPath = OS.Path.join(OS.Constants.Path.profileDir, "logs");
 
@@ -198,7 +195,10 @@ var test_queueFileOperation = async function() {
   let p2 = qFO("path2", dummyRejectedOperation);
   equal(gFP.get("path2"), p2);
   // This should throw since p2 rejected. Drop the error.
-  await p2.then(() => do_throw(), () => {});
+  await p2.then(
+    () => do_throw(),
+    () => {}
+  );
   ok(!gFP.has("path2"));
 
   let onPromiseComplete = (aPromise, aHandler) => {
@@ -417,8 +417,8 @@ var test_logging = async function() {
 
   let logs = await logger.getLogsForConversation(dummyConv);
   let allLogMsgs = [];
-  while (logs.hasMoreElements()) {
-    let conv = await logs.getNext().getConversation();
+  for (let log of logs) {
+    let conv = await log.getConversation();
     if (!conv) {
       continue;
     }
@@ -442,8 +442,7 @@ var test_logging = async function() {
   messagesByDay.set(reduceTimeToDate(secondDayMsgs[0].time), secondDayMsgs);
 
   logs = await logger.getLogsForConversation(dummyConv, true);
-  while (logs.hasMoreElements()) {
-    let log = logs.getNext();
+  for (let log of logs) {
     let conv = await log.getConversation();
     let date = reduceTimeToDate(log.time);
     // 3 session messages - for daily logs, bad files are included.

@@ -113,7 +113,7 @@ function run_test() {
 
 var listener = {
   // nsIMsgTraitClassificationListener implementation
-  onMessageTraitsClassified(aMsgURI, aTraitCount, aTraits, aPercents) {
+  onMessageTraitsClassified(aMsgURI, aTraits, aPercents) {
     // print("Message URI is " + aMsgURI);
     if (!aMsgURI) {
       // Ignore end-of-batch signal.
@@ -142,8 +142,8 @@ function startCommand() {
   var proArray = [kProTrait];
 
   // remove any existing aliases
-  let proAliases = traitService.getAliases(kProTrait, {});
-  let antiAliases = traitService.getAliases(kAntiTrait, {});
+  let proAliases = traitService.getAliases(kProTrait);
+  let antiAliases = traitService.getAliases(kAntiTrait);
   let proAlias;
   let antiAlias;
   while ((proAlias = proAliases.pop())) {
@@ -163,7 +163,6 @@ function startCommand() {
 
   MailServices.junk.classifyTraitsInMessage(
     getSpec(gTest.fileName), // in string aMsgURI
-    proArray.length, // length of traits arrays
     proArray, // in array aProTraits,
     antiArray, // in array aAntiTraits
     listener

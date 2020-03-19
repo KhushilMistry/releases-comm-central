@@ -14,7 +14,7 @@
 
 /* import-globals-from ../../../../toolkit/content/globalOverlay.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { PluralForm } = ChromeUtils.import("resource://gre/modules/PluralForm.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
@@ -177,7 +177,7 @@ function removeChildren(aElement) {
     aElement = document.getElementById(aElement);
   }
 
-  while (aElement.firstChild) {
+  while (aElement.lastChild) {
     aElement.lastChild.remove();
   }
 }
@@ -213,7 +213,7 @@ function sortCalendarArray(calendars) {
   let wantedOrderString = ret.map(calendar => calendar.id).join(" ");
   if (
     wantedOrderString != sortOrderString &&
-    cal.getCalendarManager().getCalendars({}).length == ret.length
+    cal.getCalendarManager().getCalendars().length == ret.length
   ) {
     Services.prefs.setStringPref("calendar.list.sortOrder", wantedOrderString);
   }
@@ -236,7 +236,7 @@ function sortCalendarArray(calendars) {
  */
 function appendCalendarItems(aItem, aCalendarMenuParent, aCalendarToUse, aOnCommand) {
   let calendarToUse = aCalendarToUse || aItem.calendar;
-  let calendars = sortCalendarArray(cal.getCalendarManager().getCalendars({}));
+  let calendars = sortCalendarArray(cal.getCalendarManager().getCalendars());
   let indexToSelect = 0;
   let index = -1;
   for (let i = 0; i < calendars.length; ++i) {
@@ -307,8 +307,8 @@ function addMenuItem(aParent, aLabel, aValue, aCommand) {
  *                            'aFilterValue' set.
  */
 function setAttributeToChildren(aParent, aAttribute, aValue, aFilterAttribute, aFilterValue) {
-  for (let i = 0; i < aParent.childNodes.length; i++) {
-    let element = aParent.childNodes[i];
+  for (let i = 0; i < aParent.children.length; i++) {
+    let element = aParent.children[i];
     if (aFilterAttribute == null) {
       setElementValue(element, aValue, aAttribute);
     } else if (element.hasAttribute(aFilterAttribute)) {
@@ -406,7 +406,7 @@ function menuListSelectItem(menuListId, value) {
  * @return              The child index of the node that matches, or -1.
  */
 function menuListIndexOf(menuList, value) {
-  let items = menuList.menupopup.childNodes;
+  let items = menuList.menupopup.children;
   let index = -1;
   for (let i = 0; i < items.length; i++) {
     let element = items[i];
@@ -674,7 +674,7 @@ function setupAttendanceMenu(aMenu, aItems) {
     let party = null;
     if (cal.itip.isInvitation(aItem)) {
       party = cal.itip.getInvitedAttendee(aItem);
-    } else if (aItem.organizer && aItem.getAttendees({}).length) {
+    } else if (aItem.organizer && aItem.getAttendees().length) {
       let calOrgId = aItem.calendar.getProperty("organizerId");
       if (calOrgId && calOrgId.toLowerCase() == aItem.organizer.id.toLowerCase()) {
         party = aItem.organizer;

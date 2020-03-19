@@ -157,9 +157,9 @@ function OnLoadNewCard() {
     if ("escapedVCardStr" in window.arguments[0]) {
       // hide non vcard values
       HideNonVcardFields();
-      gEditCard.card = MailServices.ab.escapedVCardToAbCard(
-        window.arguments[0].escapedVCardStr
-      );
+      gEditCard.card = Cc["@mozilla.org/addressbook/msgvcardservice;1"]
+        .getService(Ci.nsIMsgVCardService)
+        .escapedVCardToAbCard(window.arguments[0].escapedVCardStr);
     }
 
     if ("titleProperty" in window.arguments[0]) {
@@ -353,7 +353,7 @@ function OnLoadEditCard() {
         // And the "prefer display name" checkbox
         document.getElementById("preferDisplayName").disabled = true;
 
-        document.documentElement.buttons = "accept";
+        document.querySelector("dialog").buttons = "accept";
         return;
       }
     }
@@ -583,8 +583,8 @@ function GetCardValues(cardproperty, doc) {
   // set the year in the datepicker to the stored year
   birthYear.value = year;
 
-  var month = cardproperty.getProperty("BirthMonth", null);
-  var day = cardproperty.getProperty("BirthDay", null);
+  var month = parseInt(cardproperty.getProperty("BirthMonth", null), 10);
+  var day = parseInt(cardproperty.getProperty("BirthDay", null), 10);
   var birthMonth = doc.getElementById("BirthMonth");
   var birthDay = doc.getElementById("BirthDay");
   birthDay.value = -1;
@@ -849,6 +849,7 @@ function calculateAge() {
     return;
   }
 
+  birthMonth--; // Date object months are 0-indexed.
   let today = new Date();
   let age = today.getFullYear() - birthYear;
   if (birthMonth > today.getMonth()) {
@@ -856,7 +857,9 @@ function calculateAge() {
   } else if (birthMonth == today.getMonth() && birthDay > today.getDate()) {
     age--;
   }
-  document.getElementById("Age").value = age;
+  if (age >= 0) {
+    document.getElementById("Age").value = age;
+  }
 }
 
 function calculateYear() {
@@ -869,6 +872,7 @@ function calculateYear() {
   let year = today.getFullYear() - age;
 
   let birthMonth = document.getElementById("BirthMonth").value;
+  birthMonth--; // Date object months are 0-indexed.
   let birthDay = document.getElementById("BirthDay").value;
   if (birthMonth > today.getMonth()) {
     year--;

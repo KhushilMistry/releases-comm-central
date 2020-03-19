@@ -5,12 +5,6 @@
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 @namespace html url("http://www.w3.org/1999/xhtml");
 
-html|input.input-inline {
-  margin: 2px 4px;
-  padding: 2px 2px 3px;
-  padding-inline-start: 4px;
-}
-
 html|input.plain {
   background-color: transparent;
 }
@@ -47,6 +41,10 @@ html|input.input-inline-color {
   align-items: stretch;
 }
 
+.input-container.wrap-container {
+  flex-wrap: wrap;
+}
+
 .input-container html|input:not([type="number"]):not([type="color"]),
 .input-container .label-inline,
 .input-container .spacer-inline {
@@ -57,4 +55,8 @@ html|input[type="number"].input-number-inline {
   flex: 1 !important;
   padding: 2px 2px 3px;
   margin-inline-start: 2px;
+}
+
+html|input[type="number"]::-moz-number-spin-box {
+  margin-inline-start: 4px;
 }

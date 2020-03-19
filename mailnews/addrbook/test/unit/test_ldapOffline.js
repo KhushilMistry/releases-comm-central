@@ -28,10 +28,10 @@ function run_test() {
     .getDirectory(kLDAPUriPrefix + abUri)
     .QueryInterface(Ci.nsIAbLDAPDirectory);
 
-  const kLDAPFileName = "ldap-1.mab";
+  const kLDAPFileName = "ldap-1.sqlite";
 
   // Test setup - copy the data file into place
-  do_get_file("data/cardForEmail.mab").copyTo(do_get_profile(), kLDAPFileName);
+  loadABFile("data/cardForEmail", kLDAPFileName);
 
   // And tell the ldap directory we want this file.
   abDir.replicationFileName = kLDAPFileName;
@@ -39,20 +39,12 @@ function run_test() {
   // Now go offline
   Services.io.offline = true;
 
-  // Now try and get the card that has been replicated for offline use.
-  let childCards = abDir.childCards;
-  let count = 0;
-
   // Make sure we clear any memory that is now loose, so that the crash would
   // be triggered.
   gc();
 
-  while (childCards.hasMoreElements()) {
-    // Make sure everything is an nsIAbCard.
-    childCards.getNext().QueryInterface(Ci.nsIAbCard);
-
-    ++count;
-  }
+  // Now try and get the card that has been replicated for offline use.
+  let count = [...abDir.childCards].length;
 
   Assert.equal(count, 4);
 }

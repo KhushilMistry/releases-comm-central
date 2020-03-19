@@ -4,7 +4,7 @@
 
 /* exported onLoad, onUnload, onKeyPress, onInputKeyPress, onSubscribe, onUnsubscribe */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 /**
  * Cancels any pending search operations.
@@ -95,12 +95,12 @@ function onSearch() {
   }
 
   let registeredCals = {};
-  for (let calendar of cal.getCalendarManager().getCalendars({})) {
+  for (let calendar of cal.getCalendarManager().getCalendars()) {
     registeredCals[calendar.id] = true;
   }
 
   let opListener = {
-    onResult: function(operation, result) {
+    onResult(operation, result) {
       if (result) {
         for (let calendar of result) {
           let newNode = document.createXULElement("richlistitem", {

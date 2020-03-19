@@ -625,11 +625,13 @@ var snapshotFormatters = {
       apzInfo.length
         ? [
             new Text(
-              (await document.l10n.formatValues(
-                apzInfo.map(id => {
-                  return { id };
-                })
-              )).join("; ")
+              (
+                await document.l10n.formatValues(
+                  apzInfo.map(id => {
+                    return { id };
+                  })
+                )
+              ).join("; ")
             ),
           ]
         : "apz-none"
@@ -648,6 +650,7 @@ var snapshotFormatters = {
       ["supportsHardwareH264", "hardware-h264"],
       ["direct2DEnabled", "#Direct2D"],
       ["windowProtocol", "graphics-window-protocol"],
+      ["desktopEnvironment", "graphics-desktop-environment"],
       "usesTiling",
       "contentUsesTiling",
       "offMainThreadPaintEnabled",
@@ -923,6 +926,12 @@ var snapshotFormatters = {
     }
 
     function insertEnumerateDatabase() {
+      if (
+        !Services.prefs.getBoolPref("media.mediacapabilities.from-database")
+      ) {
+        $("media-capabilities-tbody").style.display = "none";
+        return;
+      }
       let button = $("enumerate-database-button");
       if (button) {
         button.addEventListener("click", function(event) {
@@ -941,8 +950,7 @@ var snapshotFormatters = {
               .then(enumerator => {
                 var logs = [];
                 logs.push(`${name}:`);
-                while (enumerator.hasMoreElements()) {
-                  const { key, value } = enumerator.getNext();
+                for (let { key, value } of enumerator) {
                   logs.push(`${key}: ${value}`);
                 }
                 $("enumerate-database-result").textContent +=
@@ -983,6 +991,14 @@ var snapshotFormatters = {
 
   javaScript(data) {
     $("javascript-incremental-gc").textContent = data.incrementalGCEnabled;
+  },
+
+  remoteAgent(data) {
+    if (!AppConstants.ENABLE_REMOTE_AGENT) {
+      return;
+    }
+    $("remote-debugging-accepting-connections").textContent = data.listening;
+    $("remote-debugging-url").textContent = data.url;
   },
 
   accessibility(data) {
@@ -1199,22 +1215,12 @@ function copyRawDataToClipboard(button) {
       ].createInstance(Ci.nsITransferable);
       transferable.init(getLoadContext());
       transferable.addDataFlavor("text/unicode");
-      transferable.setTransferData("text/unicode", str, str.data.length * 2);
+      transferable.setTransferData("text/unicode", str);
       Services.clipboard.setData(
         transferable,
         null,
         Ci.nsIClipboard.kGlobalClipboard
       );
-      if (AppConstants.platform == "android") {
-        // Present a snackbar notification.
-        var { Snackbars } = ChromeUtils.import(
-          "resource://gre/modules/Snackbars.jsm"
-        );
-        let rawDataCopiedString = await document.l10n.formatValue(
-          "raw-data-copied"
-        );
-        Snackbars.show(rawDataCopiedString, Snackbars.LENGTH_SHORT);
-      }
     });
   } catch (err) {
     if (button) {
@@ -1249,12 +1255,12 @@ async function copyContentsToClipboard() {
   // Add the HTML flavor.
   transferable.addDataFlavor("text/html");
   ssHtml.data = dataHtml;
-  transferable.setTransferData("text/html", ssHtml, dataHtml.length * 2);
+  transferable.setTransferData("text/html", ssHtml);
 
   // Add the plain text flavor.
   transferable.addDataFlavor("text/unicode");
   ssText.data = dataText;
-  transferable.setTransferData("text/unicode", ssText, dataText.length * 2);
+  transferable.setTransferData("text/unicode", ssText);
 
   // Store the data into the clipboard.
   Services.clipboard.setData(
@@ -1262,15 +1268,6 @@ async function copyContentsToClipboard() {
     null,
     Services.clipboard.kGlobalClipboard
   );
-
-  if (AppConstants.platform == "android") {
-    // Present a snackbar notification.
-    var { Snackbars } = ChromeUtils.import(
-      "resource://gre/modules/Snackbars.jsm"
-    );
-    let textCopiedString = await document.l10n.formatValue("text-copied");
-    Snackbars.show(textCopiedString, Snackbars.LENGTH_SHORT);
-  }
 }
 
 // Return the plain text representation of an element.  Do a little bit
@@ -1559,11 +1556,11 @@ function setupEventListeners() {
     button = $("show-update-history-button");
     if (button) {
       button.addEventListener("click", function(event) {
-        let uri = "chrome://mozapps/content/update/history.xul";
-        let features =
-          "chrome,centerscreen,resizable=no,titlebar,toolbar=no," +
-          "dialog=yes,modal";
-        Services.ww.openWindow(window, uri, "Update:History", features, null);
+        window.docShell.rootTreeItem.domWindow.openDialog(
+          "chrome://mozapps/content/update/history.xhtml",
+          "Update:History",
+          "centerscreen,resizable=no,titlebar,modal"
+        );
       });
     }
   }

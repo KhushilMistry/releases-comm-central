@@ -15,7 +15,7 @@
     "resource://gre/modules/Services.jsm"
   );
   const { GlodaMsgSearcher } = ChromeUtils.import(
-    "resource:///modules/gloda/msg_search.js"
+    "resource:///modules/gloda/GlodaMsgSearcher.jsm"
   );
 
   /**
@@ -70,7 +70,7 @@
       this.addEventListener("popuphiding", event => {
         // Clear out the menu popup and remove the listeners.
         while (this.hasChildNodes()) {
-          let menuItem = this.lastChild;
+          let menuItem = this.lastElementChild;
           menuItem.removeEventListener("command", this);
           menuItem.tab.removeEventListener("TabClose", this);
           menuItem.tab.mCorrespondingMenuitem = null;
@@ -127,16 +127,16 @@
 
       let tabStripBox = tabStrip.getBoundingClientRect();
 
-      for (let i = 0; i < this.childNodes.length; i++) {
-        let currentTabBox = this.childNodes[i].tab.getBoundingClientRect();
+      for (let i = 0; i < this.children.length; i++) {
+        let currentTabBox = this.children[i].tab.getBoundingClientRect();
 
         if (
           currentTabBox.left >= tabStripBox.left &&
           currentTabBox.right <= tabStripBox.right
         ) {
-          this.childNodes[i].setAttribute("tabIsVisible", "true");
+          this.children[i].setAttribute("tabIsVisible", "true");
         } else {
-          this.childNodes[i].removeAttribute("tabIsVisible");
+          this.children[i].removeAttribute("tabIsVisible");
         }
       }
     }
@@ -692,7 +692,7 @@
       event.target.setAttribute(
         "label",
         tab.mOverCloseButton
-          ? tab.firstChild.getAttribute("closetabtext")
+          ? tab.firstElementChild.getAttribute("closetabtext")
           : tab.getAttribute("label")
       );
     }
@@ -839,7 +839,7 @@
               // doesn't keep the window alive.
               browser.permanentKey = new (Cu.getGlobalForObject(
                 Services
-              )).Object();
+              ).Object)();
             }
             return browser;
           },
@@ -1304,7 +1304,7 @@
 
       return window
         .openDialog(
-          "chrome://messenger/content/",
+          "chrome://messenger/content/messenger.xhtml",
           "_blank",
           features.join(","),
           null,

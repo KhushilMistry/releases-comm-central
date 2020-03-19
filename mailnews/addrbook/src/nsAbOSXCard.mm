@@ -6,7 +6,6 @@
 #include "nsAbOSXCard.h"
 #include "nsAbOSXDirectory.h"
 #include "nsAbOSXUtils.h"
-#include "nsAutoPtr.h"
 #include "nsIAbManager.h"
 #include "nsObjCExceptions.h"
 #include "nsServiceManagerUtils.h"
@@ -39,7 +38,7 @@ static void SetStringProperty(nsAbOSXCard *aCard, const nsString &aValue, const 
 
     nsISupports *supports = NS_ISUPPORTS_CAST(nsAbCardProperty *, aCard);
 
-    aAbManager->NotifyItemPropertyChanged(supports, aMemberName, oldValue.get(), aValue.get());
+    aAbManager->NotifyItemPropertyChanged(supports, aMemberName, oldValue, aValue);
   }
 }
 

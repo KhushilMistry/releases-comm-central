@@ -2,19 +2,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = [];
+const EXPORTED_SYMBOLS = [];
 
 var CC = Components.Constructor;
 
-const { Gloda } = ChromeUtils.import("resource:///modules/gloda/public.js");
+const { Gloda } = ChromeUtils.import(
+  "resource:///modules/gloda/GlodaPublic.jsm"
+);
 const { GlodaAccount } = ChromeUtils.import(
-  "resource:///modules/gloda/datamodel.js"
+  "resource:///modules/gloda/GlodaDataModel.jsm"
 );
 const { GlodaIndexer, IndexingJob } = ChromeUtils.import(
-  "resource:///modules/gloda/indexer.js"
-);
-const { fixIterator } = ChromeUtils.import(
-  "resource:///modules/iteratorUtils.jsm"
+  "resource:///modules/gloda/GlodaIndexer.jsm"
 );
 const { Services } = ChromeUtils.import("resource:///modules/imServices.jsm");
 const { MailServices } = ChromeUtils.import(
@@ -39,7 +38,7 @@ ChromeUtils.defineModuleGetter(
 ChromeUtils.defineModuleGetter(
   this,
   "GlodaDatastore",
-  "resource:///modules/gloda/datastore.js"
+  "resource:///modules/gloda/GlodaDatastore.jsm"
 );
 
 var kCacheFileName = "indexedFiles.json";
@@ -68,7 +67,7 @@ XPCOMUtils.defineLazyGetter(this, "MailFolder", () =>
 var gIMAccounts = {};
 
 function GlodaIMConversation(aTitle, aTime, aPath, aContent) {
-  // grokNounItem from gloda.js puts automatically the values of all
+  // grokNounItem from Gloda.jsm puts automatically the values of all
   // JS properties in the jsonAttributes magic attribute, except if
   // they start with _, so we put the values in _-prefixed properties,
   // and have getters in the prototype.
@@ -101,8 +100,7 @@ GlodaIMConversation.prototype = {
     }
 
     // Find the nsIIncomingServer for the current imIAccount.
-    let mgr = MailServices.accounts;
-    for (let account of fixIterator(mgr.accounts, Ci.nsIMsgAccount)) {
+    for (let account of MailServices.accounts.accounts) {
       let incomingServer = account.incomingServer;
       if (!incomingServer || incomingServer.type != "im") {
         continue;
@@ -198,7 +196,7 @@ var IMConversationNoun = {
 Gloda.defineNoun(IMConversationNoun);
 
 // Needs to be set after calling defineNoun, otherwise it's replaced
-// by databind.js' implementation.
+// by GlodaDatabind.jsm' implementation.
 IMConversationNoun.objFromRow = function(aRow) {
   // Row columns are:
   // 0 id
@@ -276,7 +274,7 @@ Gloda.defineAttribute({
 // -- fulltext search helper
 // fulltextMatches.  Match over message subject, body, and attachments
 // @testpoint gloda.noun.message.attr.fulltextMatches
-this._attrFulltext = Gloda.defineAttribute({
+Gloda.defineAttribute({
   provider: WidgetProvider,
   extensionName: EXT_NAME,
   attributeType: Gloda.kAttrDerived,
@@ -287,7 +285,7 @@ this._attrFulltext = Gloda.defineAttribute({
   subjectNouns: [IMConversationNoun.id],
   objectNoun: Gloda.NOUN_FULLTEXT,
 });
-// For facet.js DateFaceter
+// For Facet.jsm DateFaceter
 Gloda.defineAttribute({
   provider: WidgetProvider,
   extensionName: EXT_NAME,
@@ -523,9 +521,9 @@ var GlodaIMIndexer = {
           : logFiles;
       for (let logFile of currentLogFiles) {
         let fileName = OS.Path.basename(logFile);
-        let lastModifiedTime = (await OS.File.stat(
-          logFile
-        )).lastModificationDate.valueOf();
+        let lastModifiedTime = (
+          await OS.File.stat(logFile)
+        ).lastModificationDate.valueOf();
         if (
           Object.prototype.hasOwnProperty.call(conv.convObj, fileName) &&
           conv.convObj[fileName] == lastModifiedTime
@@ -782,9 +780,7 @@ var GlodaIMIndexer = {
 
     // Sweep the logs directory for log files, adding any new entries to the
     // _knownFiles tree as we traverse.
-    let children = dir.directoryEntries;
-    while (children.hasMoreElements()) {
-      let proto = children.nextFile;
+    for (let proto of dir.directoryEntries) {
       if (!proto.isDirectory()) {
         continue;
       }
@@ -794,8 +790,7 @@ var GlodaIMIndexer = {
       }
       let protoObj = this._knownFiles[protoName];
       let accounts = proto.directoryEntries;
-      while (accounts.hasMoreElements()) {
-        let account = accounts.nextFile;
+      for (let account of accounts) {
         if (!account.isDirectory()) {
           continue;
         }
@@ -804,9 +799,7 @@ var GlodaIMIndexer = {
           protoObj[accountName] = {};
         }
         let accountObj = protoObj[accountName];
-        let convs = account.directoryEntries;
-        while (convs.hasMoreElements()) {
-          let conv = convs.nextFile;
+        for (let conv of account.directoryEntries) {
           let convName = conv.leafName;
           if (!conv.isDirectory() || convName == ".system") {
             continue;
@@ -828,9 +821,7 @@ var GlodaIMIndexer = {
   *_worker_convFolderSweep(aJob, aCallbackHandle) {
     let folder = aJob.folder;
 
-    let sessions = folder.directoryEntries;
-    while (sessions.hasMoreElements()) {
-      let file = sessions.nextFile;
+    for (let file of folder.directoryEntries) {
       let fileName = file.leafName;
       if (
         !file.isFile() ||

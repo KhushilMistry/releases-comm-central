@@ -2,14 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* import-globals-from ../../../mail/base/content/nsDragAndDrop.js */
 /* import-globals-from calendar-item-editing.js */
 /* import-globals-from calendar-management.js */
 /* import-globals-from import-export.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { AppConstants } = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
+var { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
 
 /* exported invokeEventDragSession, calendarViewDNDObserver,
  *          calendarMailButtonDNDObserver, calendarCalendarButtonDNDObserver,
@@ -20,10 +20,10 @@ var itemConversion = {
   /**
    * Converts an email message to a calendar item.
    *
-   * @param aItem     The target calIItemBase.
-   * @param aMessage  The nsIMsgHdr to convert from.
+   * @param {Object} aItem - The target calIItemBase.
+   * @param {Object} aMsgHdr - The nsIMsgHdr to convert from.
    */
-  calendarItemFromMessage: function(aItem, aMsgHdr) {
+  calendarItemFromMessage(aItem, aMsgHdr) {
     let msgFolder = aMsgHdr.folder;
     let msgUri = msgFolder.getUriForMsg(aMsgHdr);
 
@@ -59,10 +59,10 @@ var itemConversion = {
    * like title, location, description, priority, transparency,
    * attendees, categories, calendar, recurrence and possibly more.
    *
-   * @param aItem     The item to copy from.
-   * @param aTarget   the item to copy to.
+   * @param {Object} aItem - The item to copy from.
+   * @param {Object} aTarget - The item to copy to.
    */
-  copyItemBase: function(aItem, aTarget) {
+  copyItemBase(aItem, aTarget) {
     const copyProps = ["SUMMARY", "LOCATION", "DESCRIPTION", "URL", "CLASS", "PRIORITY"];
 
     for (let prop of copyProps) {
@@ -70,14 +70,14 @@ var itemConversion = {
     }
 
     // Attendees
-    let attendees = aItem.getAttendees({});
+    let attendees = aItem.getAttendees();
     for (let attendee of attendees) {
       aTarget.addAttendee(attendee.clone());
     }
 
     // Categories
-    let categories = aItem.getCategories({});
-    aTarget.setCategories(categories.length, categories);
+    let categories = aItem.getCategories();
+    aTarget.setCategories(categories);
 
     // Organizer
     aTarget.organizer = aItem.organizer ? aItem.organizer.clone() : null;
@@ -96,10 +96,10 @@ var itemConversion = {
    * Creates a task from the passed event. This function copies the base item
    * and a few event specific properties (dates, alarms, ...).
    *
-   * @param aEvent    The event to copy from.
-   * @return          The resulting task.
+   * @param {Object} aEvent - The event to copy from.
+   * @return {Object} The resulting task.
    */
-  taskFromEvent: function(aEvent) {
+  taskFromEvent(aEvent) {
     let item = cal.createTodo();
 
     this.copyItemBase(aEvent, item);
@@ -111,7 +111,7 @@ var itemConversion = {
       item.dueDate = aEvent.endDate.clone();
 
       // Alarms
-      for (let alarm of aEvent.getAlarms({})) {
+      for (let alarm of aEvent.getAlarms()) {
         item.addAlarm(alarm.clone());
       }
       item.alarmLastAck = aEvent.alarmLastAck ? aEvent.alarmLastAck.clone() : null;
@@ -134,10 +134,10 @@ var itemConversion = {
    * and a few task specific properties (dates, alarms, ...). If the task has
    * no due date, the default event length is used.
    *
-   * @param aTask     The task to copy from.
-   * @return          The resulting event.
+   * @param {Object} aTask - The task to copy from.
+   * @return {Object} The resulting event.
    */
-  eventFromTask: function(aTask) {
+  eventFromTask(aTask) {
     let item = cal.createEvent();
 
     this.copyItemBase(aTask, item);
@@ -162,7 +162,7 @@ var itemConversion = {
     }
 
     // Alarms
-    for (let alarm of aTask.getAlarms({})) {
+    for (let alarm of aTask.getAlarms()) {
       item.addAlarm(alarm.clone());
     }
     item.alarmLastAck = aTask.alarmLastAck ? aTask.alarmLastAck.clone() : null;
@@ -190,48 +190,39 @@ function calDNDBaseObserver() {
 }
 
 calDNDBaseObserver.prototype = {
-  // initialize this class's members
-  initBase: function() {},
-
-  getSupportedFlavours: function() {
-    let flavourSet = new FlavourSet();
-    flavourSet.appendFlavour("text/calendar");
-    flavourSet.appendFlavour("text/x-moz-url");
-    flavourSet.appendFlavour("text/x-moz-message");
-    flavourSet.appendFlavour("text/unicode");
-    flavourSet.appendFlavour("application/x-moz-file");
-    return flavourSet;
-  },
-
   /**
    * Action to take when dropping the event.
    */
 
-  onDrop: function(aEvent, aTransferData, aDragSession) {
+  onDrop(event) {
+    let dragSession = Cc["@mozilla.org/widget/dragservice;1"]
+      .getService(Ci.nsIDragService)
+      .getCurrentSession();
+    // Handles text/x-moz-message, text/x-moz-address and text/x-moz-url flavours.
+    if (this.onDropEventData(event.dataTransfer)) {
+      return;
+    }
+
     let transferable = Cc["@mozilla.org/widget/transferable;1"].createInstance(Ci.nsITransferable);
     transferable.init(null);
     transferable.addDataFlavor("text/calendar");
-    transferable.addDataFlavor("text/x-moz-url");
-    transferable.addDataFlavor("text/x-moz-message");
     transferable.addDataFlavor("text/unicode");
-    transferable.addDataFlavor("application/x-moz-file");
 
-    aDragSession.getData(transferable, 0);
+    dragSession.getData(transferable, 0);
 
-    let data = {};
+    let transData = {};
     let bestFlavor = {};
-    let length = {};
-    transferable.getAnyTransferData(bestFlavor, data, length);
+    transferable.getAnyTransferData(bestFlavor, transData);
 
     try {
-      data = data.value.QueryInterface(Ci.nsISupportsString);
+      transData = transData.value.QueryInterface(Ci.nsISupportsString);
     } catch (exc) {
       // we currently only supports strings:
       return;
     }
 
     // Treat unicode data with VEVENT in it as text/calendar
-    if (bestFlavor.value == "text/unicode" && data.toString().includes("VEVENT")) {
+    if (bestFlavor.value == "text/unicode" && transData.toString().includes("VEVENT")) {
       bestFlavor.value = "text/calendar";
     }
 
@@ -239,15 +230,15 @@ calDNDBaseObserver.prototype = {
       case "text/calendar": {
         if (AppConstants.platform == "macosx") {
           // Mac likes to convert all \r to \n, we need to reverse this.
-          data = data.data.replace(/\n\n/g, "\r\n");
+          transData = transData.data.replace(/\n\n/g, "\r\n");
         }
         let parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
-        parser.parseString(data);
-        this.onDropItems(parser.getItems({}).concat(parser.getParentlessItems({})));
+        parser.parseString(transData);
+        this.onDropItems(parser.getItems().concat(parser.getParentlessItems()));
         break;
       }
       case "text/unicode": {
-        let droppedUrl = this.retrieveURLFromData(data, bestFlavor.value);
+        let droppedUrl = transData.toString().split("\n")[0];
         if (!droppedUrl) {
           return;
         }
@@ -265,83 +256,77 @@ calDNDBaseObserver.prototype = {
         try {
           // XXX support csv
           let importer = Cc["@mozilla.org/calendar/import;1?type=ics"].getService(Ci.calIImporter);
-          let items = importer.importFromStream(inputStream, {});
+          let items = importer.importFromStream(inputStream);
           this.onDropItems(items);
         } finally {
           inputStream.close();
         }
-
         break;
       }
-      case "application/x-moz-file-promise":
-      case "text/x-moz-url": {
-        let uri = Services.io.newURI(data.toString());
-        let loader = cal.provider.createStreamLoader();
-        let channel = Services.io.newChannelFromURI(
-          uri,
-          null,
-          Services.scriptSecurityManager.getSystemPrincipal(),
-          null,
-          Ci.nsILoadInfo.SEC_ALLOW_CROSS_ORIGIN_DATA_IS_NULL,
-          Ci.nsIContentPolicy.TYPE_OTHER
-        );
-        channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE;
-
-        let self = this;
-
-        let listener = {
-          onStreamComplete: function(aLoader, aContext, aStatus, aResultLength, aResult) {
-            let parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
-            let encoding = channel.contentCharset || "utf-8";
-            let result = aResultLength
-              ? new TextDecoder(encoding).decode(Uint8Array.from(aResult))
-              : "";
-            parser.parseString(result);
-            self.onDropItems(parser.getItems({}).concat(parser.getParentlessItems({})));
-          },
-        };
-
-        try {
-          loader.init(listener);
-          channel.asyncOpen(loader);
-        } catch (e) {
-          cal.ERROR(e);
-        }
-        break;
-      }
-      case "text/x-moz-message": {
-        let messenger = Cc["@mozilla.org/messenger;1"].createInstance(Ci.nsIMessenger);
-        this.onDropMessage(messenger.msgHdrFromURI(data));
-        break;
-      }
-      default:
-        cal.ASSERT(false, "unknown data flavour:" + bestFlavor.value + "\n");
-        break;
     }
   },
 
-  onDragStart: function(aEvent, aTransferData, aDragAction) {},
-  onDragOver: function(aEvent, aFlavor, aDragSession) {},
-  onDragExit: function(aEvent, aDragSession) {},
+  onDragStart(event) {},
+  onDragOver(event) {
+    event.preventDefault();
+  },
+  onDragExit(event) {},
 
-  onDropItems: function(aItems) {},
-  onDropMessage: function(aMessage) {},
+  onDropItems(items) {},
+  onDropMessage(message) {},
 
-  retrieveURLFromData: function(aData, aFlavor) {
-    switch (aFlavor) {
-      case "text/unicode": {
-        let data = aData.toString();
-        let separator = data.indexOf("\n");
-        if (separator != -1) {
-          data = data.substr(0, separator);
+  /**
+   * Extract the data of dataTransfer object in the drop event if presents. It will
+   * extract data of following flavours: text/x-moz-message, text/x-moz-address and
+   * text/x-moz-url.
+   *
+   * @param {Object} dataTransfer - The dataTransfer object from the drop event.
+   * @return {boolean} Returns true if we have data from the given flavours.
+   */
+  onDropEventData(dataTransfer) {
+    let flavours = ["text/x-moz-message", "text/x-moz-address", "text/x-moz-url"];
+
+    let dataFlavor, data;
+    const MAX = 8; // Let's say we want to handle max 8 items.
+    for (let i = 0; i < dataTransfer.mozItemCount && i < MAX; i++) {
+      let types = Array.from(dataTransfer.mozTypesAt(i));
+      for (let flavour of flavours) {
+        if (types.includes(flavour)) {
+          let flavorData = dataTransfer.mozGetDataAt(flavour, i);
+          if (flavorData) {
+            data = flavorData;
+            dataFlavor = flavour;
+          }
+          break;
         }
-        return data;
       }
-      case "application/x-moz-file":
-        return aData.URL;
-      default:
-        return null;
+
+      switch (dataFlavor) {
+        case "text/x-moz-address":
+          if ("onAddressDrop" in this) {
+            this.onAddressDrop(data);
+          }
+          break;
+        case "text/x-moz-url": {
+          data = data.toString().split("\n")[0];
+          if (!data) {
+            return false;
+          }
+          let url = Services.io.newURI(data);
+          this.onDropURL(url);
+          break;
+        }
+        case "text/x-moz-message": {
+          let messenger = Cc["@mozilla.org/messenger;1"].createInstance(Ci.nsIMessenger);
+          this.onDropMessage(messenger.msgHdrFromURI(data));
+          break;
+        }
+        default:
+          cal.ASSERT(false, "unknown data flavour:" + dataFlavor + "\n");
+          break;
+      }
     }
+    return !!dataFlavor;
   },
 };
 
@@ -353,7 +338,6 @@ calDNDBaseObserver.prototype = {
  */
 function calViewDNDObserver() {
   this.wrappedJSObject = this;
-  this.initBase();
 }
 
 calViewDNDObserver.prototype = {
@@ -366,7 +350,7 @@ calViewDNDObserver.prototype = {
    * on one of the calendar views. In this case we just
    * try to add these items to the currently selected calendar.
    */
-  onDropItems: function(aItems) {
+  onDropItems(aItems) {
     let destCal = getSelectedCalendar();
     startBatchTransaction();
     // we fall back explicitly to the popup to ask whether to send a
@@ -390,7 +374,6 @@ calViewDNDObserver.prototype = {
  */
 function calMailButtonDNDObserver() {
   this.wrappedJSObject = this;
-  this.initBase();
 }
 
 calMailButtonDNDObserver.prototype = {
@@ -402,13 +385,13 @@ calMailButtonDNDObserver.prototype = {
    * Gets called in case we're dropping an array of items
    * on the 'mail mode'-button.
    *
-   * @param aItems        An array of items to handle.
+   * @param {Object} aItems - An array of items to handle.
    */
-  onDropItems: function(aItems) {
+  onDropItems(aItems) {
     if (aItems && aItems.length > 0) {
       let item = aItems[0];
       let identity = item.calendar.getProperty("imip.identity");
-      let parties = item.getAttendees({});
+      let parties = item.getAttendees();
       if (item.organizer) {
         parties.push(item.organizer);
       }
@@ -432,20 +415,19 @@ calMailButtonDNDObserver.prototype = {
    * Gets called in case we're dropping a message
    * on the 'mail mode'-button.
    *
-   * @param aMessage     The message to handle.
+   * @param {Object} aMessage - The message to handle.
    */
-  onDropMessage: function(aMessage) {},
+  onDropMessage(aMessage) {},
 };
 
 /**
  * calCalendarButtonDNDObserver::calCalendarButtonDNDObserver
  *
- * Drag'n'drop handler for the 'calendar mode'-button. This handler is
+ * Drag'n'drop handler for the 'open calendar tab'-button. This handler is
  * derived from the base handler and just implements specific actions.
  */
 function calCalendarButtonDNDObserver() {
   this.wrappedJSObject = this;
-  this.initBase();
 }
 
 calCalendarButtonDNDObserver.prototype = {
@@ -455,11 +437,11 @@ calCalendarButtonDNDObserver.prototype = {
    * calCalendarButtonDNDObserver::onDropItems
    *
    * Gets called in case we're dropping an array of items
-   * on the 'calendar mode'-button.
+   * on the 'open calendar tab'-button.
    *
-   * @param aItems        An array of items to handle.
+   * @param {Object} aItems - An array of items to handle.
    */
-  onDropItems: function(aItems) {
+  onDropItems(aItems) {
     for (let item of aItems) {
       let newItem = item;
       if (cal.item.isToDo(item)) {
@@ -473,15 +455,76 @@ calCalendarButtonDNDObserver.prototype = {
    * calCalendarButtonDNDObserver::onDropMessage
    *
    * Gets called in case we're dropping a message on the
-   * 'calendar mode'-button. In this case we create a new
+   * 'open calendar tab'-button. In this case we create a new
    * event from the mail. We open the default event dialog
    * and just use the subject of the message as the event title.
    *
-   * @param aMessage     The message to handle.
+   * @param {Object} aMessage - The message to handle.
    */
-  onDropMessage: function(aMessage) {
+  onDropMessage(aMessage) {
     let newItem = cal.createEvent();
     itemConversion.calendarItemFromMessage(newItem, aMessage);
+    createEventWithDialog(null, null, null, null, newItem);
+  },
+
+  /**
+   * calCalendarButtonDNDObserver::onDropURL
+   *
+   * Gets called in case we're dropping a uri on the 'open calendar tab'-button.
+   *
+   * @param {string} uri - The uri to handle.
+   */
+  onDropURL(uri) {
+    let newItem = cal.createEvent();
+    newItem.calendar = getSelectedCalendar();
+    cal.dtz.setDefaultStartEndHour(newItem);
+    cal.alarms.setDefaultValues(newItem);
+    let attachment = cal.createAttachment();
+    attachment.uri = uri;
+    newItem.addAttachment(attachment);
+    createEventWithDialog(null, null, null, null, newItem);
+  },
+
+  /**
+   * calCalendarButtonDNDObserver::onAddressDrop
+   *
+   * Gets called in case we're dropping addresses on the 'open calendar tab'-button.
+   *
+   * @param {string} addresses - The addresses to handle.
+   */
+  onAddressDrop(addresses) {
+    let parsedInput = MailServices.headerParser.makeFromDisplayAddress(addresses);
+    let attendee = cal.createAttendee();
+    attendee.id = "";
+    attendee.rsvp = "TRUE";
+    attendee.role = "REQ-PARTICIPANT";
+    attendee.participationStatus = "NEEDS-ACTION";
+    let attendees = parsedInput
+      .filter(address => address.name.length > 0)
+      .map((address, index) => {
+        // Convert address to attendee.
+        if (index > 0) {
+          attendee = attendee.clone();
+        }
+        attendee.id = cal.email.prependMailTo(address.email);
+        let commonName = null;
+        if (address.name.length > 0) {
+          // We remove any double quotes within CN due to bug 1209399.
+          let name = address.name.replace(/(?:(?:[\\]")|(?:"))/g, "");
+          if (address.email != name) {
+            commonName = name;
+          }
+        }
+        attendee.commonName = commonName;
+        return attendee;
+      });
+    let newItem = cal.createEvent();
+    newItem.calendar = getSelectedCalendar();
+    cal.dtz.setDefaultStartEndHour(newItem);
+    cal.alarms.setDefaultValues(newItem);
+    for (let attendee of attendees) {
+      newItem.addAttendee(attendee);
+    }
     createEventWithDialog(null, null, null, null, newItem);
   },
 };
@@ -489,12 +532,11 @@ calCalendarButtonDNDObserver.prototype = {
 /**
  * calTaskButtonDNDObserver::calTaskButtonDNDObserver
  *
- * Drag'n'drop handler for the 'task mode'-button. This handler is
+ * Drag'n'drop handler for the 'open tasks tab'-button. This handler is
  * derived from the base handler and just implements specific actions.
  */
 function calTaskButtonDNDObserver() {
   this.wrappedJSObject = this;
-  this.initBase();
 }
 
 calTaskButtonDNDObserver.prototype = {
@@ -504,11 +546,11 @@ calTaskButtonDNDObserver.prototype = {
    * calTaskButtonDNDObserver::onDropItems
    *
    * Gets called in case we're dropping an array of items
-   * on the 'task mode'-button.
+   * on the 'open tasks tab'-button.
    *
-   * @param aItems        An array of items to handle.
+   * @param {Object} aItems - An array of items to handle.
    */
-  onDropItems: function(aItems) {
+  onDropItems(aItems) {
     for (let item of aItems) {
       let newItem = item;
       if (cal.item.isEvent(item)) {
@@ -522,13 +564,31 @@ calTaskButtonDNDObserver.prototype = {
    * calTaskButtonDNDObserver::onDropMessage
    *
    * Gets called in case we're dropping a message
-   * on the 'task mode'-button.
+   * on the 'open tasks tab'-button.
    *
-   * @param aMessage     The message to handle.
+   * @param {Object} aMessage - The message to handle.
    */
-  onDropMessage: function(aMessage) {
+  onDropMessage(aMessage) {
     let todo = cal.createTodo();
     itemConversion.calendarItemFromMessage(todo, aMessage);
+    createTodoWithDialog(null, null, null, todo);
+  },
+
+  /**
+   * calTaskButtonDNDObserver::onDropURL
+   *
+   * Gets called in case we're dropping a uri on the 'open tasks tab'-button.
+   *
+   * @param {string} uri - The uri to handle.
+   */
+  onDropURL(uri) {
+    let todo = cal.createTodo();
+    todo.calendar = getSelectedCalendar();
+    cal.dtz.setDefaultStartEndHour(todo);
+    cal.alarms.setDefaultValues(todo);
+    let attachment = cal.createAttachment();
+    attachment.uri = uri;
+    todo.addAttachment(attachment);
     createTodoWithDialog(null, null, null, todo);
   },
 };
@@ -537,8 +597,8 @@ calTaskButtonDNDObserver.prototype = {
  * Invoke a drag session for the passed item. The passed box will be used as a
  * source.
  *
- * @param aItem     The item to drag.
- * @param aXULBox   The XUL box to invoke the drag session from.
+ * @param {Object} aItem - The item to drag.
+ * @param {Object} aXULBox - The XUL box to invoke the drag session from.
  */
 function invokeEventDragSession(aItem, aXULBox) {
   let transfer = Cc["@mozilla.org/widget/transferable;1"].createInstance(Ci.nsITransferable);
@@ -549,13 +609,12 @@ function invokeEventDragSession(aItem, aXULBox) {
     QueryInterface: ChromeUtils.generateQI([Ci.nsIFlavorDataProvider]),
 
     item: aItem,
-    getFlavorData: function(aInTransferable, aInFlavor, aOutData, aOutDataLen) {
+    getFlavorData(aInTransferable, aInFlavor, aOutData) {
       if (
         aInFlavor == "application/vnd.x-moz-cal-event" ||
         aInFlavor == "application/vnd.x-moz-cal-task"
       ) {
         aOutData.value = aItem;
-        aOutDataLen.value = 1;
       } else {
         cal.ASSERT(false, "error:" + aInFlavor);
       }
@@ -564,29 +623,29 @@ function invokeEventDragSession(aItem, aXULBox) {
 
   if (cal.item.isEvent(aItem)) {
     transfer.addDataFlavor("application/vnd.x-moz-cal-event");
-    transfer.setTransferData("application/vnd.x-moz-cal-event", flavourProvider, 0);
+    transfer.setTransferData("application/vnd.x-moz-cal-event", flavourProvider);
   } else if (cal.item.isToDo(aItem)) {
     transfer.addDataFlavor("application/vnd.x-moz-cal-task");
-    transfer.setTransferData("application/vnd.x-moz-cal-task", flavourProvider, 0);
+    transfer.setTransferData("application/vnd.x-moz-cal-task", flavourProvider);
   }
 
   // Also set some normal data-types, in case we drag into another app
   let serializer = Cc["@mozilla.org/calendar/ics-serializer;1"].createInstance(
     Ci.calIIcsSerializer
   );
-  serializer.addItems([aItem], 1);
+  serializer.addItems([aItem]);
 
   let supportsString = Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);
   supportsString.data = serializer.serializeToString();
-  transfer.setTransferData("text/calendar", supportsString, supportsString.data.length * 2);
-  transfer.setTransferData("text/unicode", supportsString, supportsString.data.length * 2);
+  transfer.setTransferData("text/calendar", supportsString);
+  transfer.setTransferData("text/unicode", supportsString);
 
   let action = Ci.nsIDragService.DRAGDROP_ACTION_MOVE;
   let mutArray = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
   mutArray.appendElement(transfer);
   aXULBox.sourceObject = aItem;
   try {
-    cal.getDragService().invokeDragSession(aXULBox, null, mutArray, action);
+    cal.getDragService().invokeDragSession(aXULBox, null, null, mutArray, action);
   } catch (e) {
     if (e.result != Cr.NS_ERROR_FAILURE) {
       // Pressing Escape on some platforms results in NS_ERROR_FAILURE

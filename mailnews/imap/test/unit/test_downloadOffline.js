@@ -5,9 +5,9 @@
  */
 
 /* import-globals-from ../../../test/resources/logHelper.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 load("../../../resources/logHelper.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 
 var gFileName = "bug460636";
 var gMsgFile = do_get_file("../../../data/" + gFileName);
@@ -53,11 +53,9 @@ async function downloadAllForOffline() {
 
 function verifyDownloaded() {
   // verify that the message headers have the offline flag set.
-  let msgEnumerator = IMAPPump.inbox.msgDatabase.EnumerateMessages();
   let offset = {};
   let size = {};
-  while (msgEnumerator.hasMoreElements()) {
-    let header = msgEnumerator.getNext();
+  for (let header of IMAPPump.inbox.msgDatabase.EnumerateMessages()) {
     // Verify that each message has been downloaded and looks OK.
     if (
       header instanceof Ci.nsIMsgDBHdr &&

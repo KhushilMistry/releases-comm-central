@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 const activityManager = Cc["@mozilla.org/activity-manager;1"].getService(
   Ci.nsIActivityManager
 );
@@ -55,12 +55,12 @@ var activityObject = {
     if (element.isGroup || element.isProcess) {
       this._activitiesView.insertBefore(
         element,
-        this._activitiesView.firstChild
+        this._activitiesView.firstElementChild
       );
     } else {
-      let next = this._activitiesView.firstChild;
+      let next = this._activitiesView.firstElementChild;
       while (next && (next.isWarning || next.isProcess || next.isGroup)) {
-        next = next.nextSibling;
+        next = next.nextElementSibling;
       }
       if (next) {
         this._activitiesView.insertBefore(element, next);
@@ -74,9 +74,9 @@ var activityObject = {
         element
       );
     }
-    while (this._activitiesView.childNodes.length > ACTIVITY_LIMIT) {
+    while (this._activitiesView.children.length > ACTIVITY_LIMIT) {
       this.removeActivityElement(
-        this._activitiesView.lastChild.getAttribute("actID")
+        this._activitiesView.lastElementChild.getAttribute("actID")
       );
     }
   },
@@ -106,7 +106,7 @@ var activityObject = {
         // create a group if it's not already created.
         if (!group) {
           group = document.createXULElement("richlistitem", {
-            is: "activity-group",
+            is: "activity-group-richlistitem",
           });
           this._activityLogger.info("created group element");
           // Set the context type and object of the newly created group
@@ -142,9 +142,8 @@ var activityObject = {
    * is removed from the activity manager's internal list.
    */
   removeActivityElement(aID) {
-    // Note: document.getAnonymousNodes(_activitiesView); didn't work
     this._activityLogger.info("removing Activity ID: " + aID);
-    let activities = this._activitiesView.childNodes;
+    let activities = this._activitiesView.children;
     for (let i = 0; i < activities.length; i++) {
       let item = activities[i];
       if (!item) {
@@ -230,7 +229,7 @@ var activityObject = {
     // everything.
     activityManager.cleanUp();
 
-    let activities = this._activitiesView.childNodes;
+    let activities = this._activitiesView.children;
     for (let i = activities.length - 1; i >= 0; i--) {
       let item = activities[i];
       if (!item.isGroup) {
@@ -265,7 +264,10 @@ var activityObject = {
         }
         break;
       case event.DOM_VK_LEFT:
-        if (event.target.tagName == "activity-group") {
+        if (
+          event.target.tagName == "richlistitem" &&
+          event.target.getAttribute("is") === "activity-group-richlistitem"
+        ) {
           var parent = event.target.parentNode;
           if (parent.tagName == "richlistbox") {
             event.target.processes.clearSelection();

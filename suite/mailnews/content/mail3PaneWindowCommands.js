@@ -3,6 +3,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/**
+ * Functionality for the main application window (aka the 3pane) usually
+ * consisting of folder pane, thread pane and message pane.
+ */
+
+const { MailServices } =
+  ChromeUtils.import("resource:///modules/MailServices.jsm");
+
 // Controller object for folder pane
 var FolderPaneController =
 {
@@ -14,6 +22,13 @@ var FolderPaneController =
       case "cmd_shiftDelete":
       case "button_delete":
       case "button_shiftDelete":
+        // Even if the folder pane has focus, don't do a folder delete if
+        // we have a selected message, but do a message delete instead.
+        // Return false here supportsCommand and let the command fall back
+        // to the DefaultController.
+        if (Services.prefs.getBoolPref("mailnews.ui.deleteAlwaysSelectedMessages") && (gFolderDisplay.selectedCount != 0))
+          return false;
+        // else fall through
       //case "cmd_selectAll": the folder pane currently only handles single selection
       case "cmd_cut":
       case "cmd_copy":
@@ -45,33 +60,18 @@ var FolderPaneController =
         let folders = GetSelectedMsgFolders();
 
         if (folders.length) {
-          var canDeleteThisFolder;
-        var specialFolder = null;
-        var isServer = null;
-        try {
           let folder = folders[0];
-          specialFolder = getSpecialFolderString(folder);
-          isServer = folder.isServer;
+          let canDeleteThisFolder = CanDeleteFolder(folder);
           if (folder.server.type == "nntp") {
              if ( command == "cmd_delete" ) {
                 goSetMenuValue(command, 'valueNewsgroup');
                 goSetAccessKey(command, 'valueNewsgroupAccessKey');
             }
           }
+          return canDeleteThisFolder && isCommandEnabled(command);
         }
-        catch (ex) {
-          //dump("specialFolder failure: " + ex + "\n");
-        }
-        if (specialFolder == "Inbox" || specialFolder == "Trash" || specialFolder == "Drafts" ||
-            specialFolder == "Sent" || specialFolder == "Templates" || specialFolder == "Outbox" ||
-            (specialFolder == "Junk" && !CanRenameDeleteJunkMail(GetSelectedFolderURI())) || isServer)
-          canDeleteThisFolder = false;
         else
-          canDeleteThisFolder = true;
-        return canDeleteThisFolder && isCommandEnabled(command);
-      }
-      else
-        return false;
+          return false;
 
       default:
         return false;
@@ -90,7 +90,7 @@ var FolderPaneController =
       case "cmd_shiftDelete":
       case "button_delete":
       case "button_shiftDelete":
-        MsgDeleteFolder();
+        gFolderTreeController.deleteFolder();
         break;
     }
   },
@@ -196,7 +196,6 @@ var DefaultController =
       case "cmd_emptyTrash":
       case "cmd_compactFolder":
       case "cmd_settingsOffline":
-      case "cmd_close":
       case "cmd_selectAll":
       case "cmd_selectThread":
       case "cmd_selectFlagged":
@@ -383,10 +382,10 @@ var DefaultController =
         break;
       case "button_search":
       case "cmd_search":
-        return IsCanSearchMessagesEnabled();
+        return MailServices.accounts.accounts.length > 0;
       case "cmd_selectAll":
       case "cmd_selectFlagged":
-        return gDBView != null;
+        return !!gDBView;
       // these are enabled on when we are in threaded mode
       case "cmd_selectThread":
         if (GetNumSelectedMessages() <= 0) return false;
@@ -425,13 +424,15 @@ var DefaultController =
       case "cmd_getNextNMessages":
         return IsGetNextNMessagesEnabled();
       case "cmd_emptyTrash":
-        return IsEmptyTrashEnabled();
+      {
+        let folder = GetSelectedMsgFolders()[0];
+        return folder && folder.server.canEmptyTrashOnExit ?
+                         IsMailFolderSelected() : false;
+      }
       case "cmd_compactFolder":
         return IsCompactFolderEnabled();
       case "cmd_setFolderCharset":
         return IsFolderCharsetEnabled();
-      case "cmd_close":
-        return true;
       case "cmd_downloadFlagged":
         return !Services.io.offline;
       case "cmd_downloadSelected":
@@ -456,9 +457,6 @@ var DefaultController =
 
     switch (command)
     {
-      case "cmd_close":
-        MsgCloseCurrentTab();
-        break;
       case "button_getNewMessages":
       case "cmd_getNewMessages":
         MsgGetMessage();
@@ -538,33 +536,33 @@ var DefaultController =
         break;
       case "button_next":
       case "cmd_nextUnreadMsg":
-        MsgNextUnreadMessage();
+        GoNextMessage(nsMsgNavigationType.nextUnreadMessage, true);
         break;
       case "cmd_nextUnreadThread":
-        MsgNextUnreadThread();
+        GoNextMessage(nsMsgNavigationType.nextUnreadThread, true);
         break;
       case "cmd_nextMsg":
-        MsgNextMessage();
+        GoNextMessage(nsMsgNavigationType.nextMessage, false);
         break;
       case "cmd_nextFlaggedMsg":
-        MsgNextFlaggedMessage();
+        GoNextMessage(nsMsgNavigationType.nextFlagged, true);
         break;
       case "cmd_previousMsg":
-        MsgPreviousMessage();
+        GoNextMessage(nsMsgNavigationType.previousMessage, false);
         break;
       case "cmd_previousUnreadMsg":
-        MsgPreviousUnreadMessage();
+        GoNextMessage(nsMsgNavigationType.previousUnreadMessage, true);
         break;
       case "cmd_previousFlaggedMsg":
-        MsgPreviousFlaggedMessage();
+        GoNextMessage(nsMsgNavigationType.previousFlagged, true);
+        break;
+      case "button_goForward":
+      case "cmd_goForward":
+        GoNextMessage(nsMsgNavigationType.forward, true);
         break;
       case "button_goBack":
       case "cmd_goBack":
-        MsgGoBack();
-        break;
-       case "button_goForward":
-       case "cmd_goForward":
-        MsgGoForward();
+        GoNextMessage(nsMsgNavigationType.back, true);
         break;
       case "cmd_goStartPage":
         HideMessageHeaderPane();
@@ -590,7 +588,7 @@ var DefaultController =
                 gDBView.doCommand(nsMsgViewCommandType.collapseAll);
         break;
       case "cmd_renameFolder":
-        MsgRenameFolder();
+        gFolderTreeController.renameFolder();
         return;
       case "cmd_sendUnsentMsgs":
         MsgSendUnsentMsgs();
@@ -620,7 +618,7 @@ var DefaultController =
         MsgViewPageSource();
         return;
       case "cmd_setFolderCharset":
-        MsgFolderProperties();
+        gFolderTreeController.editFolder();
         return;
       case "cmd_reload":
         ReloadMessage();
@@ -635,7 +633,7 @@ var DefaultController =
         MsgFindAgain(true);
         return;
       case "cmd_properties":
-        MsgFolderProperties();
+        gFolderTreeController.editFolder();
         return;
       case "button_search":
       case "cmd_search":
@@ -658,7 +656,7 @@ var DefaultController =
         MsgJunk();
         return;
       case "cmd_stop":
-        MsgStop();
+        msgWindow.StopUrls();
         return;
       case "cmd_markAsFlagged":
         MsgMarkAsFlagged(null);
@@ -694,10 +692,10 @@ var DefaultController =
         deleteJunkInFolder();
         return;
       case "cmd_emptyTrash":
-        MsgEmptyTrash();
+        gFolderTreeController.emptyTrash();
         return;
       case "cmd_compactFolder":
-        MsgCompactFolder(true);
+        gFolderTreeController.compactFolder(true);
         return;
       case "cmd_downloadFlagged":
         MsgDownloadFlagged();
@@ -741,6 +739,15 @@ var DefaultController =
   }
 };
 
+function MsgCloseTabOrWindow()
+{
+  var tabmail = GetTabMail();
+  if (tabmail.tabInfo.length > 1)
+    tabmail.removeCurrentTab();
+  else
+    window.close();
+}
+
 function GetNumSelectedMessages()
 {
   try {
@@ -755,14 +762,12 @@ var gLastFocusedElement=null;
 
 function FocusRingUpdate_Mail()
 {
-  // WhichPaneHasFocus() uses on top.document.commandDispatcher.focusedElement
-  // to determine which pane has focus
-  // if the focusedElement is null, we're here on a blur.
+  // If the focusedElement is null, we're here on a blur.
   // nsFocusController::Blur() calls nsFocusController::SetFocusedElement(null),
   // which will update any commands listening for "focus".
   // we really only care about nsFocusController::Focus() happens,
   // which calls nsFocusController::SetFocusedElement(element)
-  var currentFocusedElement = WhichPaneHasFocus();
+  var currentFocusedElement = gFolderDisplay.focusedPane;
 
   if (currentFocusedElement != gLastFocusedElement) {
     if (currentFocusedElement)
@@ -779,28 +784,6 @@ function FocusRingUpdate_Mail()
     // and just update cmd_delete and button_delete?
     UpdateMailToolbar("focus");
   }
-}
-
-function WhichPaneHasFocus()
-{
-  var threadTree = GetThreadTree();
-  var folderTree = GetFolderTree();
-  var messagePane = GetMessagePane();
-
-  if (top.document.commandDispatcher.focusedWindow == GetMessagePaneFrame())
-    return messagePane;
-
-  var currentNode = top.document.commandDispatcher.focusedElement;
-  while (currentNode) {
-    if (currentNode === threadTree ||
-        currentNode === folderTree ||
-        currentNode === messagePane)
-      return currentNode;
-
-    currentNode = currentNode.parentNode;
-  }
-
-  return null;
 }
 
 function SetupCommandUpdateHandlers()
@@ -887,17 +870,6 @@ function IsRenameFolderEnabled()
          isCommandEnabled("cmd_renameFolder");
 }
 
-function IsCanSearchMessagesEnabled()
-{
-  var folderURI = GetSelectedFolderURI();
-  if (!folderURI)
-    return false;
-
-  var folder = GetMsgFolderFromUri(folderURI, false);
-  return folder.server.canSearchMessages &&
-         !(folder.flags & Ci.nsMsgFolderFlags.Virtual);
-}
-
 function IsFolderCharsetEnabled()
 {
   return IsFolderSelected();
@@ -934,118 +906,13 @@ function IsMessageDisplayedInMessagePane()
   return (!IsMessagePaneCollapsed() && (GetNumSelectedMessages() > 0));
 }
 
-function MsgDeleteFolder()
-{
-  const NS_MSG_ERROR_COPY_FOLDER_ABORTED = 0x8055001a;
-  var folderTree = GetFolderTree();
-  var selectedFolders = GetSelectedMsgFolders();
-  var prompt = Services.prompt;
-  for (var i = 0; i < selectedFolders.length; i++)
-  {
-    var selectedFolder = selectedFolders[i];
-    let specialFolder = getSpecialFolderString(selectedFolder);
-    if (specialFolder != "Inbox" && specialFolder != "Trash")
-    {
-      var folder = selectedFolder.QueryInterface(Ci.nsIMsgFolder);
-      if (folder.flags & Ci.nsMsgFolderFlags.Virtual)
-      {
-        var confirmation = gMessengerBundle.getString("confirmSavedSearchDeleteMessage");
-        var title = gMessengerBundle.getString("confirmSavedSearchDeleteTitle");
-        var buttonTitle = gMessengerBundle.getString("confirmSavedSearchDeleteButton");
-        var buttonFlags = prompt.BUTTON_TITLE_IS_STRING * prompt.BUTTON_POS_0 +
-                          prompt.BUTTON_TITLE_CANCEL * prompt.BUTTON_POS_1;
-        if (prompt.confirmEx(window, title, confirmation, buttonFlags, buttonTitle,
-                             "", "", "", {}) != 0) /* the yes button is in position 0 */
-          continue;
-        if (gCurrentVirtualFolderUri == selectedFolder.URI)
-          gCurrentVirtualFolderUri = null;
-        var array = Cc["@mozilla.org/array;1"]
-                      .createInstance(Ci.nsIMutableArray);
-        array.appendElement(folder);
-        folder.parent.deleteSubFolders(array, msgWindow);
-        continue;
-      }
-
-      if (isNewsURI(selectedFolder.URI))
-      {
-        var unsubscribe = ConfirmUnsubscribe(selectedFolder);
-        if (unsubscribe)
-          UnSubscribe(selectedFolder);
-      }
-      else if (specialFolder == "Junk" ?
-             CanRenameDeleteJunkMail(folder.URI) : folder.deletable)
-      {
-        // We can delete this folder.
-        var array = Cc["@mozilla.org/array;1"]
-                      .createInstance(Ci.nsIMutableArray);
-        array.appendElement(selectedFolder);
-        try
-        {
-          selectedFolder.parent.deleteSubFolders(array, msgWindow);
-        }
-        // Ignore known errors from canceled warning dialogs.
-        catch (ex) {
-          if (ex.result != NS_MSG_ERROR_COPY_FOLDER_ABORTED) {
-            throw ex;
-          }
-        }
-      }
-    }
-  }
-}
-
 function SetFocusThreadPaneIfNotOnMessagePane()
 {
-  var focusedElement = WhichPaneHasFocus();
+  var focusedElement = gFolderDisplay.focusedPane;
 
   if((focusedElement != GetThreadTree()) &&
      (focusedElement != GetMessagePane()))
      SetFocusThreadPane();
-}
-
-// 3pane related commands.  Need to go in own file.  Putting here for the moment.
-function MsgNextMessage()
-{
-  GoNextMessage(nsMsgNavigationType.nextMessage, false);
-}
-
-function MsgNextUnreadMessage()
-{
-  GoNextMessage(nsMsgNavigationType.nextUnreadMessage, true);
-}
-function MsgNextFlaggedMessage()
-{
-  GoNextMessage(nsMsgNavigationType.nextFlagged, true);
-}
-
-function MsgNextUnreadThread()
-{
-  GoNextMessage(nsMsgNavigationType.nextUnreadThread, true);
-}
-
-function MsgPreviousMessage()
-{
-  GoNextMessage(nsMsgNavigationType.previousMessage, false);
-}
-
-function MsgPreviousUnreadMessage()
-{
-  GoNextMessage(nsMsgNavigationType.previousUnreadMessage, true);
-}
-
-function MsgPreviousFlaggedMessage()
-{
-  GoNextMessage(nsMsgNavigationType.previousFlagged, true);
-}
-
-function MsgGoBack()
-{
-  GoNextMessage(nsMsgNavigationType.back, true);
-}
-
-function MsgGoForward()
-{
-  GoNextMessage(nsMsgNavigationType.forward, true);
 }
 
 function SwitchPaneFocus(event)
@@ -1058,7 +925,7 @@ function SwitchPaneFocus(event)
   // a three-pane -- the search pane is more of a toolbar.  So, shift among the
   // three main panes.
 
-  var focusedElement = WhichPaneHasFocus();
+  var focusedElement = gFolderDisplay.focusedPane;
   if (focusedElement == null)       // focus not on one of the main three panes?
     focusedElement = threadTree;    // treat as if on thread tree
 
@@ -1143,5 +1010,21 @@ function CanRenameDeleteJunkMail(aFolderUri)
   {
       dump("Can't get all servers\n");
   }
+  return true;
+}
+
+/** Check if this is a folder the user is allowed to delete. */
+function CanDeleteFolder(folder) {
+  if (folder.isServer)
+    return false;
+
+  var specialFolder = getSpecialFolderString(folder);
+
+  if (specialFolder == "Inbox" || specialFolder == "Trash" ||
+      specialFolder == "Drafts" || specialFolder == "Sent" ||
+      specialFolder == "Templates" || specialFolder == "Outbox" ||
+      (specialFolder == "Junk" && !CanRenameDeleteJunkMail(folder.URI)))
+    return false;
+
   return true;
 }

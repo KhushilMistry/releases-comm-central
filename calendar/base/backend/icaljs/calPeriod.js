@@ -4,7 +4,9 @@
 
 /* import-globals-from calICALJSComponents.js */
 
-var { ICAL, unwrapSetter, wrapGetter } = ChromeUtils.import("resource://calendar/modules/ical.js");
+var { ICAL, unwrapSetter, wrapGetter } = ChromeUtils.import(
+  "resource:///modules/calendar/Ical.jsm"
+);
 
 function calPeriod(innerObject) {
   this.innerObject = innerObject || new ICAL.Period({});
@@ -25,10 +27,10 @@ calPeriod.prototype = {
     this.innerObject = val;
   },
 
-  makeImmutable: function() {
+  makeImmutable() {
     this.isMutable = false;
   },
-  clone: function() {
+  clone() {
     return new calPeriod(this.innerObject.clone());
   },
 
@@ -76,7 +78,7 @@ calPeriod.prototype = {
     return val;
   },
 
-  toString: function() {
+  toString() {
     return this.innerObject.toString();
   },
 };

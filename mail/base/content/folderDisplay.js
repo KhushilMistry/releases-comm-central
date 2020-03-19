@@ -10,7 +10,7 @@ var { DBViewWrapper } = ChromeUtils.import(
   "resource:///modules/DBViewWrapper.jsm"
 );
 var { JSTreeSelection } = ChromeUtils.import(
-  "resource:///modules/jsTreeSelection.js"
+  "resource:///modules/JsTreeSelection.jsm"
 );
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MailUtils } = ChromeUtils.import("resource:///modules/MailUtils.jsm");
@@ -1768,7 +1768,7 @@ FolderDisplayWidget.prototype = {
       this._restoreColumnStates();
 
       // the tab mode knows whether we are folder or message display, which
-      //  impacts the legal modes
+      // impacts the legal modes
       if (this._tabInfo) {
         mailTabType._setPaneStates(this._tabInfo.mode.legalPanes, {
           folder: folderPaneVisible,
@@ -1816,13 +1816,10 @@ FolderDisplayWidget.prototype = {
     }
     var accountBox = document.getElementById("accountCentralBox");
     document.getElementById("displayDeck").selectedPanel = accountBox;
-    var acctCentralPage = Services.prefs.getComplexValue(
-      "mailnews.account_central_page.url",
-      Ci.nsIPrefLocalizedString
-    ).data;
+
     // Prevent a second load if necessary.
     let loadURL =
-      acctCentralPage +
+      "chrome://messenger/content/msgAccountCentral.xhtml" +
       (this.displayedFolder ? "?folderURI=" + this.displayedFolder.URI : "");
     if (window.frames.accountCentralPane.location.href != loadURL) {
       window.frames.accountCentralPane.location.href = loadURL;

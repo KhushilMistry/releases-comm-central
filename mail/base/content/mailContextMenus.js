@@ -46,6 +46,18 @@ function RestoreSelectionWithoutContentLoad(tree) {
 }
 
 /**
+ * Used when mailContext opens for elements in a <browser> to keep a reference
+ * to the event's target. This target is preferred over document.popupNode
+ * because it could be an element in a shadow DOM, whereas document.popupNode
+ * would not be.
+ * @param event the oncontextmenu event
+ */
+function mailContextOnContextMenu(event) {
+  document.getElementById("mailContext").target =
+    event.composedTarget || event.originalTarget;
+}
+
+/**
  * Function to clear out the global nsContextMenu, and in the case when we
  * were a threadpane context menu, restore the selection so that a right-click
  * on a non-selected row doesn't move the selection.
@@ -244,7 +256,7 @@ function OpenMessageByHeader(messageHeader, openInNewWindow) {
 
   if (openInNewWindow) {
     window.openDialog(
-      "chrome://messenger/content/messageWindow.xul",
+      "chrome://messenger/content/messageWindow.xhtml",
       "_blank",
       "all,chrome,dialog=no,status,toolbar",
       messageHeader
@@ -288,7 +300,6 @@ function OpenMessageByHeader(messageHeader, openInNewWindow) {
 // return message header if message was found
 function SearchForMessageIdInSubFolder(folder, messageId) {
   var messageHeader;
-  var subFolders = folder.subFolders;
 
   // search in folder
   if (!folder.isServer) {
@@ -296,9 +307,8 @@ function SearchForMessageIdInSubFolder(folder, messageId) {
   }
 
   // search subfolders recursively
-  while (subFolders.hasMoreElements() && !messageHeader) {
+  for (let currentFolder of folder.subFolders && !messageHeader) {
     // search in current folder
-    var currentFolder = subFolders.getNext().QueryInterface(Ci.nsIMsgFolder);
     messageHeader = CheckForMessageIdInFolder(currentFolder, messageId);
 
     // search in its subfolder
@@ -641,7 +651,7 @@ function fillFolderPaneContextMenu(aEvent) {
   // handle our separators
   function hideIfAppropriate(aID) {
     var separator = document.getElementById(aID);
-    var sibling = separator.previousSibling;
+    var sibling = separator.previousElementSibling;
     while (sibling) {
       if (sibling.getAttribute("hidden") != "true") {
         ShowMenuItem(
@@ -651,7 +661,7 @@ function fillFolderPaneContextMenu(aEvent) {
         );
         return;
       }
-      sibling = sibling.previousSibling;
+      sibling = sibling.previousElementSibling;
     }
     ShowMenuItem(aID, false);
   }
@@ -681,7 +691,7 @@ function SetMenuItemLabel(id, label) {
 
 // helper function used by shouldShowSeparator
 function hasAVisibleNextSibling(aNode) {
-  var sibling = aNode.nextSibling;
+  var sibling = aNode.nextElementSibling;
   while (sibling) {
     if (
       sibling.getAttribute("hidden") != "true" &&
@@ -689,7 +699,7 @@ function hasAVisibleNextSibling(aNode) {
     ) {
       return true;
     }
-    sibling = sibling.nextSibling;
+    sibling = sibling.nextElementSibling;
   }
   return false;
 }
@@ -707,7 +717,7 @@ function addEmail() {
   var url = gContextMenu.linkURL;
   var addresses = getEmail(url);
   window.openDialog(
-    "chrome://messenger/content/addressbook/abNewCardDialog.xul",
+    "chrome://messenger/content/addressbook/abNewCardDialog.xhtml",
     "",
     "chrome,resizable=no,titlebar,modal,centerscreen",
     { primaryEmail: addresses }

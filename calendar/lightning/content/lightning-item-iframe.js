@@ -21,14 +21,14 @@
 /* import-globals-from html-item-editing/react-code.js */
 /* globals gTimezonesEnabled, gShowLink */ // Set by lightning-item-panel.js.
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var {
   recurrenceRule2String,
   splitRecurrenceRules,
   checkRecurrenceRule,
   countOccurrences,
-} = ChromeUtils.import("resource://calendar/modules/calRecurrenceUtils.jsm");
+} = ChromeUtils.import("resource:///modules/calendar/calRecurrenceUtils.jsm");
 var { PluralForm } = ChromeUtils.import("resource://gre/modules/PluralForm.jsm");
 var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 
@@ -81,7 +81,7 @@ XPCOMUtils.defineLazyGetter(gNotification, "notificationbox", () => {
 });
 
 var eventDialogQuitObserver = {
-  observe: function(aSubject, aTopic, aData) {
+  observe(aSubject, aTopic, aData) {
     // Check whether or not we want to veto the quit request (unless another
     // observer already did.
     if (
@@ -98,7 +98,7 @@ var eventDialogCalendarObserver = {
   target: null,
   isObserving: false,
 
-  onModifyItem: function(aNewItem, aOldItem) {
+  onModifyItem(aNewItem, aOldItem) {
     if (
       this.isObserving &&
       "calendarItem" in window &&
@@ -147,7 +147,7 @@ var eventDialogCalendarObserver = {
     }
   },
 
-  onDeleteItem: function(aDeletedItem) {
+  onDeleteItem(aDeletedItem) {
     if (
       this.isObserving &&
       "calendarItem" in window &&
@@ -158,15 +158,15 @@ var eventDialogCalendarObserver = {
     }
   },
 
-  onStartBatch: function() {},
-  onEndBatch: function() {},
-  onLoad: function() {},
-  onAddItem: function() {},
-  onError: function() {},
-  onPropertyChanged: function() {},
-  onPropertyDeleting: function() {},
+  onStartBatch() {},
+  onEndBatch() {},
+  onLoad() {},
+  onAddItem() {},
+  onError() {},
+  onPropertyChanged() {},
+  onPropertyDeleting() {},
 
-  observe: function(aCalendar) {
+  observe(aCalendar) {
     // use the new calendar if one was passed, otherwise use the last one
     this.target = aCalendar || this.target;
     if (this.target) {
@@ -176,7 +176,7 @@ var eventDialogCalendarObserver = {
     }
   },
 
-  cancel: function() {
+  cancel() {
     if (this.isObserving && this.target) {
       this.target.removeObserver(this);
       this.isObserving = false;
@@ -295,7 +295,7 @@ function receiveMessage(aEvent) {
       let response = onCancel(aEvent.data.id, true);
       sendMessage({
         command: "replyToClosingWindowWithTabs",
-        response: response,
+        response,
       });
       break;
     }
@@ -345,7 +345,7 @@ function onLoad() {
       let item = window.calendarItem;
 
       // ...and close the window.
-      sendMessage({ command: "closeWindowOrTab", iframeId: iframeId });
+      sendMessage({ command: "closeWindowOrTab", iframeId });
 
       return item;
     };
@@ -387,7 +387,7 @@ function onLoad() {
   // clone each existing attendee since we still suffer
   // from the 'lost x-properties'-bug.
   window.attendees = [];
-  let attendees = item.getAttendees({});
+  let attendees = item.getAttendees();
   if (attendees && attendees.length) {
     for (let attendee of attendees) {
       window.attendees.push(attendee.clone());
@@ -397,7 +397,7 @@ function onLoad() {
   window.organizer = null;
   if (item.organizer) {
     window.organizer = item.organizer.clone();
-  } else if (item.getAttendees({}).length > 0) {
+  } else if (item.getAttendees().length > 0) {
     // previous versions of calendar may have filled ORGANIZER correctly on overridden instances:
     let orgId = item.calendar.getProperty("organizerId");
     if (orgId) {
@@ -427,9 +427,6 @@ function onLoad() {
 
   // Set initial values for datepickers in New Tasks dialog
   if (cal.item.isToDo(item)) {
-    document.getElementById("event-grid-startdate-th").classList.add("below-separator-task");
-    document.getElementById("event-grid-startdate-td").classList.add("below-separator-task");
-
     let initialDatesValue = cal.dtz.dateTimeToJsDate(args.initialStartDateValue);
     if (!gNewItemUI) {
       setElementValue("completed-date-picker", initialDatesValue);
@@ -629,7 +626,7 @@ function loadDialog(aItem) {
   // add calendars to the calendar menulist
   if (gNewItemUI) {
     let calendarToUse = aItem.calendar || window.arguments[0].calendar;
-    let unfilteredList = sortCalendarArray(cal.getCalendarManager().getCalendars({}));
+    let unfilteredList = sortCalendarArray(cal.getCalendarManager().getCalendars());
 
     // filter out calendars that should not be included
     let calendarList = unfilteredList.filter(
@@ -666,7 +663,7 @@ function loadDialog(aItem) {
   if (gNewItemUI) {
     // XXX more to do here with localization, see loadCategories.
     itemProps.initialCategoriesList = cal.l10n.sortArrayByLocaleCollator(cal.category.fromPrefs());
-    itemProps.initialCategories = aItem.getCategories({});
+    itemProps.initialCategories = aItem.getCategories();
 
     // just to demo capsules component
     itemProps.initialCategories = ["Some", "Demo", "Categories"];
@@ -679,7 +676,7 @@ function loadDialog(aItem) {
     loadCloudProviders();
   }
   let hasAttachments = capSupported("attachments");
-  let attachments = aItem.getAttachments({});
+  let attachments = aItem.getAttachments();
   if (gNewItemUI) {
     itemProps.initialAttachments = {};
   }
@@ -772,8 +769,8 @@ function loadDialog(aItem) {
     let accessKey = cal.l10n.getString("calendar-event-dialog", accessKeyString);
     sendMessage({
       command: "initializeItemMenu",
-      label: label,
-      accessKey: accessKey,
+      label,
+      accessKey,
     });
   }
 
@@ -789,7 +786,7 @@ function loadDialog(aItem) {
 
   if (!gNewItemUI) {
     // load reminders details
-    loadReminders(aItem.getAlarms({}));
+    loadReminders(aItem.getAlarms());
 
     // Synchronize link-top-image with keep-duration-button status
     let keepAttribute =
@@ -824,7 +821,7 @@ function loadDialog(aItem) {
       let undiscloseProp = aItem.getProperty("X-MOZ-SEND-INVITATIONS-UNDISCLOSED");
       undiscloseCheckbox.checked =
         undiscloseProp === null
-          ? false // default value as most common within organizations
+          ? Services.prefs.getBoolPref("calendar.itip.separateInvitationPerAttendee")
           : undiscloseProp == "TRUE";
       // disable checkbox, if notifyCheckbox is not checked
       undiscloseCheckbox.disabled = !notifyCheckbox.checked;
@@ -912,7 +909,7 @@ function changeUndiscloseCheckboxStatus() {
  * @param aItem     The item to load into the category panel
  */
 function loadCategories(aItem) {
-  let itemCategories = aItem.getCategories({});
+  let itemCategories = aItem.getCategories();
   let categoryList = cal.category.fromPrefs();
   for (let cat of itemCategories) {
     if (!categoryList.includes(cat)) {
@@ -1079,7 +1076,7 @@ function saveCategories(aItem) {
     categoryPopup.querySelectorAll("menuitem.calendar-category[checked]"),
     cat => cat.getAttribute("label")
   );
-  aItem.setCategories(categoryList.length, categoryList);
+  aItem.setCategories(categoryList);
 }
 
 /**
@@ -1332,10 +1329,10 @@ function dateTimeControls2State(aStartDatepicker) {
  */
 function updateEntryDate() {
   updateDateCheckboxes("todo-entrydate", "todo-has-entrydate", {
-    isValid: function() {
+    isValid() {
       return gStartTime != null;
     },
-    setDateTime: function(date) {
+    setDateTime(date) {
       gStartTime = date;
     },
   });
@@ -1346,10 +1343,10 @@ function updateEntryDate() {
  */
 function updateDueDate() {
   updateDateCheckboxes("todo-duedate", "todo-has-duedate", {
-    isValid: function() {
+    isValid() {
       return gEndTime != null;
     },
-    setDateTime: function(date) {
+    setDateTime(date) {
       gEndTime = date;
     },
   });
@@ -1432,7 +1429,7 @@ function getRepeatTypeAndUntilDate(aItem) {
 
   if (recurrenceInfo) {
     repeatType = "custom";
-    let ritems = recurrenceInfo.getRecurrenceItems({});
+    let ritems = recurrenceInfo.getRecurrenceItems();
     let rules = [];
     let exceptions = [];
     for (let ritem of ritems) {
@@ -1458,7 +1455,7 @@ function getRepeatTypeAndUntilDate(aItem) {
               "BYSETPOS",
             ];
             if (!checkRecurrenceRule(rule, byparts)) {
-              let ruleComp = rule.getComponent("BYDAY", {});
+              let ruleComp = rule.getComponent("BYDAY");
               if (rule.interval == 1) {
                 if (ruleComp.length > 0) {
                   if (ruleComp.length == 5) {
@@ -2049,7 +2046,7 @@ function editAttendees() {
 
   // open the dialog modally
   openDialog(
-    "chrome://calendar/content/calendar-event-dialog-attendees.xul",
+    "chrome://calendar/content/calendar-event-dialog-attendees.xhtml",
     "_blank",
     "chrome,titlebar,modal,resizable",
     args
@@ -2238,12 +2235,9 @@ function attachFile(cloudProvider) {
     if (rv != Ci.nsIFilePicker.returnOK || !filePicker.files) {
       return;
     }
-    let files = filePicker.files;
 
     // Create the attachment
-    while (files.hasMoreElements()) {
-      let file = files.getNext().QueryInterface(Ci.nsIFile);
-
+    for (let file of filePicker.files) {
       let fileHandler = Services.io
         .getProtocolHandler("file")
         .QueryInterface(Ci.nsIFileProtocolHandler);
@@ -2487,11 +2481,9 @@ function deleteAllAttachments() {
   }
 
   if (canRemove) {
-    let child;
-    while (documentLink.hasChildNodes()) {
-      child = documentLink.lastChild;
-      child.attachment = null;
-      child.remove();
+    while (documentLink.lastChild) {
+      documentLink.lastChild.attachment = null;
+      documentLink.lastChild.remove();
     }
     gAttachMap = {};
   }
@@ -2716,9 +2708,9 @@ function updateCalendar() {
       document.getElementById("item-repeat").setAttribute("disabled", "true");
       document.getElementById("repeat-until-datepicker").setAttribute("disabled", "true");
       let repeatDetails = document.getElementById("repeat-details");
-      let numChilds = repeatDetails.childNodes.length;
+      let numChilds = repeatDetails.children.length;
       for (let i = 0; i < numChilds; i++) {
-        let node = repeatDetails.childNodes[i];
+        let node = repeatDetails.children[i];
         node.setAttribute("disabled", "true");
         node.removeAttribute("class");
         node.removeAttribute("onclick");
@@ -2765,7 +2757,7 @@ function editRepeat() {
 
   // open the dialog modally
   openDialog(
-    "chrome://calendar/content/calendar-event-dialog-recurrence.xul",
+    "chrome://calendar/content/calendar-event-dialog-recurrence.xhtml",
     "_blank",
     "chrome,titlebar,modal,resizable",
     args
@@ -2909,7 +2901,7 @@ function updateRepeat(aSuppressDialogs, aItemRepeatCall) {
           let endDate = gStartTime.clone();
           endDate.year += 10;
           let lastOccurrenceDate = null;
-          let dates = recurrenceInfo.getOccurrenceDates(gStartTime, endDate, 0, {});
+          let dates = recurrenceInfo.getOccurrenceDates(gStartTime, endDate, 0);
           if (dates) {
             lastOccurrenceDate = dates[dates.length - 1];
           }
@@ -2940,7 +2932,7 @@ function updateRepeat(aSuppressDialogs, aItemRepeatCall) {
         break;
       case "every.weekday":
         recRule.type = "DAILY";
-        recRule.setComponent("BYDAY", 5, [2, 3, 4, 5, 6]);
+        recRule.setComponent("BYDAY", [2, 3, 4, 5, 6]);
         break;
       case "bi.weekly":
         recRule.type = "WEEKLY";
@@ -3185,7 +3177,7 @@ function saveItem() {
   // If it's different, that is because someone is acting on behalf of
   // the organizer.
   if (item.organizer && item.calendar.aclEntry) {
-    let userAddresses = item.calendar.aclEntry.getUserAddresses({});
+    let userAddresses = item.calendar.aclEntry.getUserAddresses();
     if (
       userAddresses.length > 0 &&
       !cal.email.attendeeMatchesAddresses(item.organizer, userAddresses)
@@ -3241,7 +3233,7 @@ function onCommandSave(aIsClosing) {
   // the ability to cancel the operation though.
   let listener = {
     QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-    onOperationComplete: function(aCalendar, aStatus, aOpType, aId, aItem) {
+    onOperationComplete(aCalendar, aStatus, aOpType, aId, aItem) {
       // Check if the current window has a calendarItem first, because in case of undo
       // window refers to the main window and we would get a 'calendarItem is undefined' warning.
       if (!aIsClosing && "calendarItem" in window) {
@@ -3274,7 +3266,7 @@ function onCommandSave(aIsClosing) {
         window.counterProposal.onReschedule();
       }
     },
-    onGetResult: function() {},
+    onGetResult(calendarItem, status, itemType, detail, items) {},
   };
   let resp = document.getElementById("notify-attendees-checkbox").checked
     ? Ci.calIItipItem.AUTO
@@ -3313,7 +3305,7 @@ function onCommandDeleteItem() {
   } else {
     let deleteListener = {
       // when deletion of item is complete, close the dialog
-      onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+      onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
         // Check if the current window has a calendarItem first, because in case of undo
         // window refers to the main window and we would get a 'calendarItem is undefined' warning.
         if ("calendarItem" in window) {
@@ -3464,8 +3456,8 @@ function showTimezonePopup(event, dateTime, editFunc) {
   timezoneDefaultItem.label = defaultTimezone.displayName;
 
   // Clear out any old recent timezones
-  while (timezoneDefaultItem.nextSibling != timezoneSeparator) {
-    timezoneDefaultItem.nextSibling.remove();
+  while (timezoneDefaultItem.nextElementSibling != timezoneSeparator) {
+    timezoneDefaultItem.nextElementSibling.remove();
   }
 
   // Fill in the new recent timezones
@@ -3473,7 +3465,7 @@ function showTimezonePopup(event, dateTime, editFunc) {
     let menuItem = document.createXULElement("menuitem");
     menuItem.setAttribute("value", timezone.tzid);
     menuItem.setAttribute("label", timezone.displayName);
-    timezonePopup.insertBefore(menuItem, timezoneDefaultItem.nextSibling);
+    timezonePopup.insertBefore(menuItem, timezoneDefaultItem.nextElementSibling);
   }
 
   // Show the popup
@@ -3504,7 +3496,7 @@ function editTimezone(aElementId, aDateTime, aCallback) {
 
   // open the dialog modally
   openDialog(
-    "chrome://calendar/content/calendar-event-dialog-timezone.xul",
+    "chrome://calendar/content/calendar-event-dialog-timezone.xhtml",
     "_blank",
     "chrome,titlebar,modal,resizable",
     args
@@ -3771,11 +3763,10 @@ function showOrHideItemURL(aShow, aUrl) {
     // and there is an external app for the scheme
     handler = cal.wrapInstance(handler, Ci.nsIExternalProtocolHandler);
     return !handler || handler.externalAppExistsForScheme(uri.scheme);
-  } else {
-    // Hide if there is no url, or the menuitem was chosen so that the url
-    // should be hidden.
-    return false;
   }
+  // Hide if there is no url, or the menuitem was chosen so that the url
+  // should be hidden.
+  return false;
 }
 
 /**
@@ -3923,17 +3914,17 @@ function updateRepeatDetails() {
     // Now display the string...
     let lines = detailsString.split("\n");
     repeatDetails.removeAttribute("collapsed");
-    while (repeatDetails.childNodes.length > lines.length) {
+    while (repeatDetails.children.length > lines.length) {
       repeatDetails.lastChild.remove();
     }
-    let numChilds = repeatDetails.childNodes.length;
+    let numChilds = repeatDetails.children.length;
     for (let i = 0; i < lines.length; i++) {
       if (i >= numChilds) {
-        let newNode = repeatDetails.childNodes[0].cloneNode(true);
+        let newNode = repeatDetails.children[0].cloneNode(true);
         repeatDetails.appendChild(newNode);
       }
-      repeatDetails.childNodes[i].value = lines[i];
-      repeatDetails.childNodes[i].setAttribute("tooltiptext", detailsString);
+      repeatDetails.children[i].value = lines[i];
+      repeatDetails.children[i].setAttribute("tooltiptext", detailsString);
     }
   } else {
     let repeatDetails = document.getElementById("repeat-details");
@@ -3978,7 +3969,7 @@ function setAttendeeContext(aEvent) {
     // we just need the option to open the attendee dialog in this case
     let popup = document.getElementById("attendee-popup");
     let invite = document.getElementById("attendee-popup-invite-menuitem");
-    for (let node of popup.childNodes) {
+    for (let node of popup.children) {
       if (node == invite) {
         node.removeAttribute("hidden");
       } else {
@@ -3998,7 +3989,9 @@ function setAttendeeContext(aEvent) {
     let mailto = document.getElementById("attendee-popup-emailattendee-menuitem");
     let remove = document.getElementById("attendee-popup-removeattendee-menuitem");
     let secondSeparator = document.getElementById("attendee-popup-second-separator");
-    let attId = aEvent.target.parentNode.getAttribute("attendeeid");
+    let attId =
+      aEvent.target.getAttribute("attendeeid") ||
+      aEvent.target.parentNode.getAttribute("attendeeid");
     let attendee = window.attendees.find(aAtt => aAtt.id == attId);
     if (attendee) {
       mailto.removeAttribute("hidden");
@@ -4196,13 +4189,13 @@ function displayCounterProposal() {
       let value = formatCounterValue(proposal);
       if (label && value) {
         // setup label node
-        let propLabel = propLabels.firstChild.cloneNode(false);
+        let propLabel = propLabels.firstElementChild.cloneNode(false);
         propLabel.id = propLabel.id + "-" + idCounter;
         propLabel.control = propLabel.control + "-" + idCounter;
         propLabel.removeAttribute("collapsed");
         propLabel.value = label;
         // setup value node
-        let propValue = propValues.firstChild.cloneNode(false);
+        let propValue = propValues.firstElementChild.cloneNode(false);
         propValue.id = propLabel.control;
         propValue.removeAttribute("collapsed");
         propValue.value = value;
@@ -4237,11 +4230,9 @@ function displayCounterProposal() {
 
   if (idCounter > 0) {
     if (partStat && attendeeId.length) {
-      document.getElementById("counter-proposal-summary").value = cal.l10n.getString(
-        "calendar-event-dialog",
-        partStat,
-        [attendeeId]
-      );
+      document.getElementById(
+        "counter-proposal-summary"
+      ).value = cal.l10n.getString("calendar-event-dialog", partStat, [attendeeId]);
       document.getElementById("counter-proposal-summary").removeAttribute("collapsed");
     }
     if (comment) {

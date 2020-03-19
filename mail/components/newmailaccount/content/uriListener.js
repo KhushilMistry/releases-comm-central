@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// mailnews/base/prefs/content/accountUtils.js
 /* globals NewMailAccountProvisioner */
 
 /**
@@ -16,7 +15,7 @@ var { XPCOMUtils } = ChromeUtils.import(
   "resource://gre/modules/XPCOMUtils.jsm"
 );
 var { NetUtil } = ChromeUtils.import("resource://gre/modules/NetUtil.jsm");
-var { JXON } = ChromeUtils.import("resource:///modules/JXON.js");
+var { JXON } = ChromeUtils.import("resource:///modules/JXON.jsm");
 
 /**
  * This is an observer that watches all HTTP requests for one where the
@@ -179,10 +178,6 @@ TracingListener.prototype = {
     );
     Services.scriptloader.loadSubScript(
       "chrome://messenger/content/accountcreation/createInBackend.js",
-      accountCreationFuncs
-    );
-    Services.scriptloader.loadSubScript(
-      "chrome://messenger/content/accountcreation/MyBadCertHandler.js",
       accountCreationFuncs
     );
 

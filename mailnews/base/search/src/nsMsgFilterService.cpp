@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -43,7 +43,6 @@
 #include "nsIMsgSearchCustomTerm.h"
 #include "nsIMsgSearchTerm.h"
 #include "nsIMsgThread.h"
-#include "nsAutoPtr.h"
 #include "nsIMsgFilter.h"
 #include "nsIMsgOperationListener.h"
 #include "mozilla/Attributes.h"
@@ -654,12 +653,11 @@ nsresult nsMsgFilterAfterTheFact::ApplyFilter() {
     bool loggingEnabled = false;
     if (m_filters) (void)m_filters->GetLoggingEnabled(&loggingEnabled);
 
-    nsCOMPtr<nsIArray> actionList;
-    rv = m_curFilter->GetSortedActionList(getter_AddRefs(actionList));
+    nsTArray<RefPtr<nsIMsgRuleAction>> actionList;
+    rv = m_curFilter->GetSortedActionList(actionList);
     BREAK_IF_FAILURE(rv, "Could not get action list for filter");
 
-    uint32_t numActions;
-    actionList->GetLength(&numActions);
+    uint32_t numActions = actionList.Length();
 
     if (m_nextAction == 0) {
       MOZ_LOG(FILTERLOGMODULE, LogLevel::Info,
@@ -678,9 +676,8 @@ nsresult nsMsgFilterAfterTheFact::ApplyFilter() {
     // after the return from an async copy.
     while (m_nextAction < numActions) {
       nsresult finalResult = NS_OK;
-      nsCOMPtr<nsIMsgRuleAction> filterAction(
-          do_QueryElementAt(actionList, m_nextAction++, &rv));
-      CONTINUE_IF_FAILURE(rv, "actionList cannot QI element");
+      nsCOMPtr<nsIMsgRuleAction> filterAction(actionList[m_nextAction]);
+      ++m_nextAction;
 
       nsMsgRuleActionType actionType;
       rv = filterAction->GetType(&actionType);
@@ -743,7 +740,7 @@ nsresult nsMsgFilterAfterTheFact::ApplyFilter() {
           // would not have run if move succeeded.
           m_nextAction = numActions;
           // Fall through to the copy case.
-          MOZ_FALLTHROUGH;
+          [[fallthrough]];
         case nsMsgFilterAction::CopyToFolder: {
           nsCString uri;
           curFolder->GetURI(uri);
@@ -1021,7 +1018,7 @@ nsresult nsMsgFilterAfterTheFact::ApplyFilter() {
 
           nsAutoCString value;
           rv = filterAction->GetStrValue(value);
-          BREAK_ACTION_IF_FAILURE(rv, "Cound not get custom action value");
+          BREAK_ACTION_IF_FAILURE(rv, "Could not get custom action value");
           bool isAsync = false;
           customAction->GetIsAsync(&isAsync);
           rv = customAction->Apply(m_searchHitHdrs, value, this, filterType,

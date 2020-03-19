@@ -9,8 +9,16 @@
 (() => {
   var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
+  // If toolkit customElements weren't already loaded, do it now.
+  if (!window.MozXULElement) {
+    Services.scriptloader.loadSubScript(
+      "chrome://global/content/customElements.js",
+      window
+    );
+  }
+
   const isDummyDocument =
-    document.documentURI == "chrome://extensions/content/dummy.xul";
+    document.documentURI == "chrome://extensions/content/dummy.xhtml";
   if (!isDummyDocument) {
     for (let script of [
       "chrome://chat/content/conversation-browser.js",

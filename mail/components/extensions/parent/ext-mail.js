@@ -22,6 +22,7 @@ var { ExtensionError, getInnerWindowID } = ExtensionUtils;
 var { defineLazyGetter } = ExtensionCommon;
 
 XPCOMUtils.defineLazyModuleGetters(this, {
+  AppConstants: "resource://gre/modules/AppConstants.jsm",
   ExtensionPageChild: "resource://gre/modules/ExtensionPageChild.jsm",
   ExtensionProcessScript: "resource://gre/modules/ExtensionProcessScript.jsm",
   ExtensionContent: "resource://gre/modules/ExtensionContent.jsm",
@@ -59,7 +60,7 @@ XPCOMUtils.defineLazyModuleGetters(this, {
     return initExtensionContext.apply(ExtensionContent, arguments);
   };
 
-  // This patches priviledged pages such as the background script
+  // This patches privileged pages such as the background script
   ExtensionPageChild.initExtensionContext = function(extension, window) {
     let retval = initPageChildExtensionContext.apply(
       ExtensionPageChild,
@@ -110,6 +111,24 @@ const getSender = (extension, target, sender) => {
 // Used by Extension.jsm.
 global.tabGetSender = getSender;
 
+global.clickModifiersFromEvent = event => {
+  const map = {
+    shiftKey: "Shift",
+    altKey: "Alt",
+    metaKey: "Command",
+    ctrlKey: "Ctrl",
+  };
+  let modifiers = Object.keys(map)
+    .filter(key => event[key])
+    .map(key => map[key]);
+
+  if (event.ctrlKey && AppConstants.platform === "macosx") {
+    modifiers.push("MacCtrl");
+  }
+
+  return modifiers;
+};
+
 global.makeWidgetId = id => {
   id = id.toLowerCase();
   // FIXME: This allows for collisions.
@@ -145,6 +164,50 @@ function getTabBrowser(nativeTabInfo) {
 }
 global.getTabBrowser = getTabBrowser;
 
+/**
+ * Manages tab-specific and window-specific context data, and dispatches
+ * tab select events across all windows.
+ */
+global.TabContext = class extends EventEmitter {
+  /**
+   * @param {Function} getDefaultPrototype
+   *        Provides the prototype of the context value for a tab or window when there is none.
+   *        Called with a XULElement or ChromeWindow argument.
+   *        Should return an object or null.
+   */
+  constructor(getDefaultPrototype) {
+    super();
+    this.getDefaultPrototype = getDefaultPrototype;
+    this.tabData = new WeakMap();
+  }
+
+  /**
+   * Returns the context data associated with `keyObject`.
+   *
+   * @param {XULElement|ChromeWindow} keyObject
+   *        Browser tab or browser chrome window.
+   * @returns {Object}
+   */
+  get(keyObject) {
+    if (!this.tabData.has(keyObject)) {
+      let data = Object.create(this.getDefaultPrototype(keyObject));
+      this.tabData.set(keyObject, data);
+    }
+
+    return this.tabData.get(keyObject);
+  }
+
+  /**
+   * Clears the context data associated with `keyObject`.
+   *
+   * @param {XULElement|ChromeWindow} keyObject
+   *        Browser tab or browser chrome window.
+   */
+  clear(keyObject) {
+    this.tabData.delete(keyObject);
+  }
+};
+
 /* global searchInitialized */
 // This promise is used to wait for the search service to be initialized.
 // None of the code in the WebExtension modules requests that initialization.
@@ -173,7 +236,9 @@ class WindowTracker extends WindowTrackerBase {
    */
   addProgressListener(window, listener) {
     let tabmail = window.document.getElementById("tabmail");
-    tabmail.addTabsProgressListener(listener);
+    if (tabmail) {
+      tabmail.addTabsProgressListener(listener);
+    }
   }
 
   /**
@@ -184,7 +249,9 @@ class WindowTracker extends WindowTrackerBase {
    */
   removeProgressListener(window, listener) {
     let tabmail = window.document.getElementById("tabmail");
-    tabmail.removeTabsProgressListener(listener);
+    if (tabmail) {
+      tabmail.removeTabsProgressListener(listener);
+    }
   }
 
   /**
@@ -240,10 +307,8 @@ class WindowTracker extends WindowTrackerBase {
     // If we're lucky, this isn't a popup, and we can just return this.
     if (win && win.document.documentElement.getAttribute("chromehidden")) {
       win = null;
-      let windowList = Services.wm.getEnumerator("mail:3pane", true);
       // This is oldest to newest, so this gets a bit ugly.
-      while (windowList.hasMoreElements()) {
-        let nextWin = windowList.getNext();
+      for (let nextWin of Services.wm.getEnumerator("mail:3pane", true)) {
         if (!nextWin.document.documentElement.getAttribute("chromehidden")) {
           win = nextWin;
         }
@@ -656,6 +721,19 @@ class Tab extends TabBase {
     return super.frameLoader || { lazyWidth: 0, lazyHeight: 0 };
   }
 
+  /** Returns the current URL of this tab, without permission checks. */
+  get _url() {
+    return this.browser ? this.browser.currentURI.spec : null;
+  }
+
+  /** Returns the current title of this tab, without permission checks. */
+  get _title() {
+    if (this.browser && this.browser.contentTitle) {
+      return this.browser.contentTitle;
+    }
+    return this.nativeTab.label;
+  }
+
   /** Returns the favIcon, without permission checks. */
   get _favIconUrl() {
     return null;
@@ -731,11 +809,6 @@ class Tab extends TabBase {
     return "complete";
   }
 
-  /** Returns the title of the tab, without permission checks. */
-  get _title() {
-    return this.nativeTab.ownerDocument.title;
-  }
-
   /** Returns the width of the tab. */
   get width() {
     return this.frameLoader.lazyWidth;
@@ -798,7 +871,7 @@ class TabmailTab extends Tab {
 
   /** Returns true if this tab is a 3-pane tab. */
   get mailTab() {
-    return this.nativeTab.mode.type == "folder";
+    return ["folder", "glodaList"].includes(this.nativeTab.mode.name);
   }
 
   /** Returns the tab index. */
@@ -951,7 +1024,7 @@ class Window extends WindowBase {
 
   /** Checks if the window is considered always on top. */
   get alwaysOnTop() {
-    return this.xulWindow.zLevel >= Ci.nsIXULWindow.raisedZ;
+    return this.appWindow.zLevel >= Ci.nsIAppWindow.raisedZ;
   }
 
   /** Checks if the window was the last one focused. */
@@ -1250,16 +1323,26 @@ function folderURIToPath(uri) {
  * @return {String}
  */
 function folderPathToURI(accountId, path) {
-  let rootURI = MailServices.accounts.getAccount(accountId).incomingServer
-    .rootFolder.URI;
+  let server = MailServices.accounts.getAccount(accountId).incomingServer;
+  let rootURI = server.rootFolder.URI;
   if (path == "/") {
     return rootURI;
+  }
+  // The .URI property of an IMAP folder doesn't have %-encoded characters.
+  // If encoded here, the folder lookup service won't find the folder.
+  if (server.type == "imap") {
+    return rootURI + path;
   }
   return (
     rootURI +
     path
       .split("/")
-      .map(encodeURIComponent)
+      .map(p =>
+        encodeURIComponent(p).replace(
+          /[!'()*]/g,
+          c => "%" + c.charCodeAt(0).toString(16)
+        )
+      )
       .join("/")
   );
 }
@@ -1333,6 +1416,10 @@ function convertMessage(msgHdr, extension) {
   let composeFields = Cc[
     "@mozilla.org/messengercompose/composefields;1"
   ].createInstance(Ci.nsIMsgCompFields);
+  let junkScore = parseInt(msgHdr.getProperty("junkscore"), 10) || 0;
+  let junkThreshold = Services.prefs.getIntPref(
+    "mail.adaptivefilters.junk_threshold"
+  );
 
   let messageObject = {
     id: messageTracker.getId(msgHdr),
@@ -1340,20 +1427,22 @@ function convertMessage(msgHdr, extension) {
     author: msgHdr.mime2DecodedAuthor,
     recipients: composeFields.splitRecipients(
       msgHdr.mime2DecodedRecipients,
-      false,
-      {}
+      false
     ),
-    ccList: composeFields.splitRecipients(msgHdr.ccList, false, {}),
-    bccList: composeFields.splitRecipients(msgHdr.bccList, false, {}),
+    ccList: composeFields.splitRecipients(msgHdr.ccList, false),
+    bccList: composeFields.splitRecipients(msgHdr.bccList, false),
     subject: msgHdr.mime2DecodedSubject,
     read: msgHdr.isRead,
     flagged: msgHdr.isFlagged,
+    junk: junkScore >= junkThreshold,
+    junkScore,
   };
   if (extension.hasPermission("accountsRead")) {
     messageObject.folder = convertFolder(msgHdr.folder, msgHdr.accountKey);
   }
   let tags = msgHdr.getProperty("keywords");
-  messageObject.tags = tags ? tags.split(" ") : [];
+  tags = tags ? tags.split(" ") : [];
+  messageObject.tags = tags.filter(MailServices.tags.isValidKey);
   return messageObject;
 }
 
@@ -1363,22 +1452,26 @@ function convertMessage(msgHdr, extension) {
 var messageTracker = {
   _nextId: 1,
   _messages: new Map(),
+  _messageIds: new Map(),
 
   /**
    * Finds a message in the map or adds it to the map.
    * @return {int} The identifier of the message
    */
   getId(msgHdr) {
-    for (let [key, value] of this._messages.entries()) {
-      if (
-        value.folderURI == msgHdr.folder.URI &&
-        value.messageId == msgHdr.messageId
-      ) {
-        return key;
-      }
+    // Using stringify avoids potential issues with unexpected characters.
+    // This hash could be anything as long as it is unique for each
+    // [folder, message] combination.
+    let hash = JSON.stringify([msgHdr.folder.URI, msgHdr.messageId]);
+    if (this._messageIds.has(hash)) {
+      return this._messageIds.get(hash);
     }
     let id = this._nextId++;
-    this.setId(msgHdr, id);
+    this._messages.set(id, {
+      folderURI: msgHdr.folder.URI,
+      messageId: msgHdr.messageId,
+    });
+    this._messageIds.set(hash, id);
     return id;
   },
 
@@ -1401,18 +1494,10 @@ var messageTracker = {
       }
     }
 
+    let hash = JSON.stringify([value.folderURI, value.messageId]);
     this._messages.delete(id);
+    this._messageIds.delete(hash);
     return null;
-  },
-
-  /**
-   * Adds a message to the map.
-   */
-  setId(msgHdr, id) {
-    this._messages.set(id, {
-      folderURI: msgHdr.folder.URI,
-      messageId: msgHdr.messageId,
-    });
   },
 };
 
@@ -1494,8 +1579,13 @@ var messageListTracker = {
       100
     );
     let page = [];
-    for (let i = 0; i < messageCount && messageList.hasMoreElements(); i++) {
-      page.push(messageList.getNext().QueryInterface(Ci.nsIMsgDBHdr));
+    let i = 0;
+    while (i < messageCount && messageList.hasMoreElements()) {
+      let next = messageList.getNext();
+      if (next) {
+        page.push(next.QueryInterface(Ci.nsIMsgDBHdr));
+        i++;
+      }
     }
     return page;
   },

@@ -151,7 +151,7 @@ var gPrivacyPane = {
       introText: bundle.getString("cookiepermissionstext"),
     };
     gSubDialog.open(
-      "chrome://messenger/content/preferences/permissions.xul",
+      "chrome://messenger/content/preferences/permissions.xhtml",
       null,
       params
     );
@@ -161,7 +161,7 @@ var gPrivacyPane = {
    * Displays all the user's cookies in a dialog.
    */
   showCookies(aCategory) {
-    gSubDialog.open("chrome://messenger/content/preferences/cookies.xul");
+    gSubDialog.open("chrome://messenger/content/preferences/cookies.xhtml");
   },
 
   /**
@@ -214,7 +214,7 @@ var gPrivacyPane = {
       introText: bundle.getString("imagepermissionstext"),
     };
     gSubDialog.open(
-      "chrome://messenger/content/preferences/permissions.xul",
+      "chrome://messenger/content/preferences/permissions.xhtml",
       null,
       params
     );
@@ -228,7 +228,7 @@ var gPrivacyPane = {
   },
 
   openJunkLog() {
-    gSubDialog.open("chrome://messenger/content/junkLog.xul");
+    gSubDialog.open("chrome://messenger/content/junkLog.xhtml");
   },
 
   resetTrainingData() {
@@ -302,7 +302,7 @@ var gPrivacyPane = {
       );
     } else {
       gSubDialog.open(
-        "chrome://mozapps/content/preferences/removemp.xul",
+        "chrome://mozapps/content/preferences/removemp.xhtml",
         null,
         null,
         this._initMasterPasswordUI.bind(this)
@@ -316,7 +316,7 @@ var gPrivacyPane = {
    */
   changeMasterPassword() {
     gSubDialog.open(
-      "chrome://mozapps/content/preferences/changemp.xul",
+      "chrome://mozapps/content/preferences/changemp.xhtml",
       null,
       null,
       this._initMasterPasswordUI.bind(this)
@@ -329,7 +329,7 @@ var gPrivacyPane = {
    */
   showPasswords() {
     gSubDialog.open(
-      "chrome://messenger/content/preferences/passwordManager.xul"
+      "chrome://messenger/content/preferences/passwordManager.xhtml"
     );
   },
 
@@ -404,7 +404,7 @@ var gPrivacyPane = {
    * Display the user's certificates and associated options.
    */
   showCertificates() {
-    gSubDialog.open("chrome://pippki/content/certManager.xul");
+    gSubDialog.open("chrome://pippki/content/certManager.xhtml");
   },
 
   /**
@@ -432,7 +432,7 @@ var gPrivacyPane = {
    * Display a dialog from which the user can manage his security devices.
    */
   showSecurityDevices() {
-    gSubDialog.open("chrome://pippki/content/device_manager.xul");
+    gSubDialog.open("chrome://pippki/content/device_manager.xhtml");
   },
 };
 

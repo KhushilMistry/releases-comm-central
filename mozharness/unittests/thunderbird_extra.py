@@ -22,11 +22,9 @@ config = {
             }
         },
     },
-    "all_mozmill_suites": {
-        "mozmill": ["--list=tests/mozmill/mozmilltests.list"],
-    },
     "all_mochitest_suites": {
-        "browser-chrome-thunderbird": ["--flavor=browser",
-                                       "--subsuite=thunderbird"],
+        "mochitest-browser-chrome-thunderbird": ["--flavor=browser",
+                                                 "--subsuite=thunderbird",
+                                                 "--leak-threshold=125829120"],  # 120MB
     },
 }

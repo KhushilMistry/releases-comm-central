@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -369,7 +369,7 @@ NS_IMETHODIMP nsMailboxProtocol::OnStopRequest(nsIRequest *request,
   // we should look at something better, but don't remove this line before
   // talking to me (mscott) and mailnews QA....
 
-  MOZ_LOG(MAILBOX, LogLevel::Info, ("Mailbox Done\n"));
+  MOZ_LOG(MAILBOX, LogLevel::Info, ("Mailbox Done"));
 
   // when on stop binding is called, we as the protocol are done...let's close
   // down the connection releasing all of our interfaces. It's important to

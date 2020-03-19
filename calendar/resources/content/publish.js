@@ -8,7 +8,7 @@
 
 /* import-globals-from ../../base/content/calendar-views-utils.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 /**
@@ -21,7 +21,7 @@ function publishCalendarData() {
   args.onOk = self.publishCalendarDataDialogResponse;
 
   openDialog(
-    "chrome://calendar/content/publishDialog.xul",
+    "chrome://calendar/content/publishDialog.xhtml",
     "caPublishEvents",
     "chrome,titlebar,modal,resizable",
     args
@@ -35,7 +35,7 @@ function publishCalendarData() {
  */
 function publishCalendarDataDialogResponse(CalendarPublishObject, aProgressDialog) {
   publishItemArray(
-    currentView().getSelectedItems({}),
+    currentView().getSelectedItems(),
     CalendarPublishObject.remotePath,
     aProgressDialog
   );
@@ -50,10 +50,9 @@ function publishCalendarDataDialogResponse(CalendarPublishObject, aProgressDialo
  */
 function publishEntireCalendar(aCalendar) {
   if (!aCalendar) {
-    let count = {};
-    let calendars = cal.getCalendarManager().getCalendars(count);
+    let calendars = cal.getCalendarManager().getCalendars();
 
-    if (count.value == 1) {
+    if (calendars.length == 1) {
       // Do not ask user for calendar if only one calendar exists
       aCalendar = calendars[0];
     } else {
@@ -65,7 +64,7 @@ function publishEntireCalendar(aCalendar) {
       args.onOk = publishEntireCalendar;
       args.promptText = cal.l10n.getCalString("publishPrompt");
       openDialog(
-        "chrome://calendar/content/chooseCalendarDialog.xul",
+        "chrome://calendar/content/chooseCalendarDialog.xhtml",
         "_blank",
         "chrome,titlebar,modal,resizable",
         args
@@ -89,7 +88,7 @@ function publishEntireCalendar(aCalendar) {
 
   args.publishObject = publishObject;
   openDialog(
-    "chrome://calendar/content/publishDialog.xul",
+    "chrome://calendar/content/publishDialog.xhtml",
     "caPublishEvents",
     "chrome,titlebar,modal,resizable",
     args
@@ -108,15 +107,15 @@ function publishEntireCalendarDialogResponse(CalendarPublishObject, aProgressDia
   let itemArray = [];
   let getListener = {
     QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-    onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+    onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
       publishItemArray(itemArray, CalendarPublishObject.remotePath, aProgressDialog);
     },
-    onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
+    onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
       if (!Components.isSuccessCode(aStatus)) {
         return;
       }
-      if (aCount) {
-        for (let i = 0; i < aCount; ++i) {
+      if (aItems.length) {
+        for (let i = 0; i < aItems.length; ++i) {
           // Store a (short living) reference to the item.
           let itemCopy = aItems[i].clone();
           itemArray.push(itemCopy);
@@ -177,7 +176,7 @@ function publishItemArray(aItemArray, aPath, aProgressDialog) {
   let serializer = Cc["@mozilla.org/calendar/ics-serializer;1"].createInstance(
     Ci.calIIcsSerializer
   );
-  serializer.addItems(aItemArray, aItemArray.length);
+  serializer.addItems(aItemArray);
   // Outlook requires METHOD:PUBLISH property:
   let methodProp = cal.getIcsService().createIcalProperty("METHOD");
   methodProp.value = "PUBLISH";
@@ -201,7 +200,7 @@ function publishItemArray(aItemArray, aPath, aProgressDialog) {
 
 var notificationCallbacks = {
   // nsIInterfaceRequestor interface
-  getInterface: function(iid, instance) {
+  getInterface(iid, instance) {
     if (iid.equals(Ci.nsIAuthPrompt)) {
       // use the window watcher service to get a nsIAuthPrompt impl
       return Services.ww.getNewAuthPrompter(null);

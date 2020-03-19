@@ -211,9 +211,8 @@ void nsMapiEntryArray::CleanUp(void) {
 
 using namespace mozilla;
 
-uint32_t nsAbWinHelper::mEntryCounter = 0;
-nsAutoPtr<mozilla::Mutex> nsAbWinHelper::mMutex;
-uint32_t nsAbWinHelper::mUseCount = 0;
+uint32_t nsAbWinHelper::sEntryCounter = 0;
+mozilla::StaticMutex nsAbWinHelper::sMutex;
 // There seems to be a deadlock/auto-destruction issue
 // in MAPI when multiple threads perform init/release
 // operations at the same time. So I've put a mutex
@@ -222,15 +221,10 @@ uint32_t nsAbWinHelper::mUseCount = 0;
 // same protection (MAPI is supposed to be thread-safe).
 
 nsAbWinHelper::nsAbWinHelper(void) : mLastError(S_OK), mAddressBook(NULL) {
-  if (!mUseCount++) mMutex = new mozilla::Mutex("nsAbWinHelper.mMutex");
-
   MOZ_COUNT_CTOR(nsAbWinHelper);
 }
 
-nsAbWinHelper::~nsAbWinHelper(void) {
-  if (!--mUseCount) mMutex = nullptr;
-  MOZ_COUNT_DTOR(nsAbWinHelper);
-}
+nsAbWinHelper::~nsAbWinHelper(void) { MOZ_COUNT_DTOR(nsAbWinHelper); }
 
 BOOL nsAbWinHelper::GetFolders(nsMapiEntryArray& aFolders) {
   aFolders.CleanUp();
@@ -608,7 +602,7 @@ BOOL nsAbWinHelper::CreateEntry(const nsMapiEntry& aParent,
 
   displayName.ulPropTag = PR_DISPLAY_NAME_W;
   tempName.AssignLiteral("__MailUser__");
-  tempName.AppendInt(mEntryCounter++);
+  tempName.AppendInt(sEntryCounter++);
   const wchar_t* tempNameValue = tempName.get();
   displayName.Value.lpszW = const_cast<wchar_t*>(tempNameValue);
   mLastError = newEntry->SetProps(1, &displayName, &problems);
@@ -672,7 +666,7 @@ BOOL nsAbWinHelper::CreateDistList(const nsMapiEntry& aParent,
 
   displayName.ulPropTag = PR_DISPLAY_NAME_W;
   tempName.AssignLiteral("__MailList__");
-  tempName.AppendInt(mEntryCounter++);
+  tempName.AppendInt(sEntryCounter++);
   const wchar_t* tempNameValue = tempName.get();
   displayName.Value.lpszW = const_cast<wchar_t*>(tempNameValue);
   mLastError = newEntry->SetProps(1, &displayName, &problems);

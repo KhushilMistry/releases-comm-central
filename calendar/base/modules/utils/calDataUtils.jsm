@@ -2,9 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
-
-XPCOMUtils.defineLazyModuleGetter(this, "cal", "resource://calendar/modules/calUtils.jsm", "cal");
+ChromeUtils.defineModuleGetter(this, "cal", "resource:///modules/calendar/calUtils.jsm");
 
 /*
  * Data structures and algorithms used within the codebase
@@ -164,9 +162,9 @@ class OperationGroup {
 }
 
 var caldata = {
-  ListenerSet: ListenerSet,
-  ObserverSet: ObserverSet,
-  OperationGroup: OperationGroup,
+  ListenerSet,
+  ObserverSet,
+  OperationGroup,
 
   /**
    * Use the binary search algorithm to search for an item in an array.
@@ -183,7 +181,7 @@ var caldata = {
    * @param comptor               A comparison function that can compare two items.
    * @return                      The index of the new item.
    */
-  binarySearch: function(itemArray, newItem, comptor) {
+  binarySearch(itemArray, newItem, comptor) {
     function binarySearchInternal(low, high) {
       // Are we done yet?
       if (low == high) {
@@ -196,9 +194,8 @@ var caldata = {
         return binarySearchInternal(mid + 1, high);
       } else if (cmp < 0) {
         return binarySearchInternal(low, mid);
-      } else {
-        return mid;
       }
+      return mid;
     }
 
     if (itemArray.length < 1) {
@@ -226,22 +223,11 @@ var caldata = {
    * @param itemAccessor         [optional] A function that receives a DOM node and returns the associated item
    *                               If null, this function will be used: function(n) n.item
    */
-  binaryInsertNode: function(
-    parentNode,
-    insertNode,
-    aItem,
-    comptor,
-    discardDuplicates,
-    itemAccessor
-  ) {
+  binaryInsertNode(parentNode, insertNode, aItem, comptor, discardDuplicates, itemAccessor) {
     let accessor = itemAccessor || caldata.binaryInsertNodeDefaultAccessor;
 
     // Get the index of the node before which the inserNode will be inserted
-    let newIndex = caldata.binarySearch(
-      Array.from(parentNode.childNodes, accessor),
-      aItem,
-      comptor
-    );
+    let newIndex = caldata.binarySearch(Array.from(parentNode.children, accessor), aItem, comptor);
 
     if (newIndex < 0) {
       parentNode.appendChild(insertNode);
@@ -249,13 +235,13 @@ var caldata = {
     } else if (
       !discardDuplicates ||
       comptor(
-        accessor(parentNode.childNodes[Math.min(newIndex, parentNode.childNodes.length - 1)]),
+        accessor(parentNode.children[Math.min(newIndex, parentNode.children.length - 1)]),
         aItem
       ) >= 0
     ) {
       // Only add the node if duplicates should not be discarded, or if
       // they should and the childNode[newIndex] == node.
-      let node = parentNode.childNodes[newIndex];
+      let node = parentNode.children[newIndex];
       parentNode.insertBefore(insertNode, node);
     }
     return newIndex;
@@ -274,7 +260,7 @@ var caldata = {
    *                                new item is not inserted.
    * @return                      The index of the new item.
    */
-  binaryInsert: function(itemArray, item, comptor, discardDuplicates) {
+  binaryInsert(itemArray, item, comptor, discardDuplicates) {
     let newIndex = caldata.binarySearch(itemArray, item, comptor);
 
     if (newIndex < 0) {
@@ -300,8 +286,8 @@ var caldata = {
    * @param aOtherObject   second object to be compared
    * @param aIID           IID to use in comparison, undefined/null defaults to nsISupports
    */
-  compareObjects: function(aObject, aOtherObject, aIID) {
-    // xxx todo: seems to work fine e.g. for WCAP, but I still mistrust this trickery...
+  compareObjects(aObject, aOtherObject, aIID) {
+    // xxx todo: seems to work fine, but I still mistrust this trickery...
     //           Anybody knows an official API that could be used for this purpose?
     //           For what reason do clients need to pass aIID since
     //           every XPCOM object has to implement nsISupports?

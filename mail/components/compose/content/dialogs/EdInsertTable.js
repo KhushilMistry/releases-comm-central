@@ -41,7 +41,7 @@ function Startup() {
   gDialog.widthPixelOrPercentMenulist = document.getElementById(
     "widthPixelOrPercentMenulist"
   );
-  gDialog.OkButton = document.documentElement.getButton("accept");
+  gDialog.OkButton = document.querySelector("dialog").getButton("accept");
 
   // Make a copy to use for AdvancedEdit
   globalElement = gTableElement.cloneNode(false);
@@ -49,7 +49,7 @@ function Startup() {
     if (
       Services.prefs.getBoolPref("editor.use_css") &&
       IsHTMLEditor() &&
-      !(gActiveEditor.flags & Ci.nsIPlaintextEditor.eEditorMailMask)
+      !(gActiveEditor.flags & Ci.nsIEditor.eEditorMailMask)
     ) {
       // only for Composer and not for htmlmail
       globalElement.setAttribute("style", "text-align: left;");
@@ -239,9 +239,13 @@ function onAccept(event) {
       // true means delete selection when inserting
       gActiveEditor.insertElementAtSelection(gTableElement, true);
 
-      if (deletePlaceholder && gTableElement && gTableElement.nextSibling) {
+      if (
+        deletePlaceholder &&
+        gTableElement &&
+        gTableElement.nextElementSibling
+      ) {
         // Delete the placeholder <br>
-        gActiveEditor.deleteNode(gTableElement.nextSibling);
+        gActiveEditor.deleteNode(gTableElement.nextElementSibling);
       }
     } catch (e) {}
 

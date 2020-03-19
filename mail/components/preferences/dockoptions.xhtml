@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<!-- -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+   - This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<?xml-stylesheet href="chrome://messenger/skin/preferences/preferences.css"?>
+
+<!DOCTYPE window SYSTEM "chrome://messenger/locale/preferences/dockoptions.dtd">
+
+<window type="child"
+        xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+        xmlns:html="http://www.w3.org/1999/xhtml"
+        title="&dockOptionsDialog.title;"
+        style="width: &window.macWidth;">
+<dialog id="DockOptionsDialog"
+        dlgbuttons="accept,cancel">
+
+  <prefpane id="DockOptionsDialogPane">
+    <hbox orient="vertical">
+      <checkbox id="newMailNotificationBounce"
+                label="&bounceSystemDockIcon.label;"
+                preference="mail.biff.animate_dock_icon"
+                accesskey="&bounceSystemDockIcon.accesskey;"/>
+      <separator class="thin"/>
+      <html:fieldset>
+        <html:legend>&dockIconBadge.label;</html:legend>
+        <vbox>
+        <separator class="thin"/>
+        <label value="&dockIconShow.label;"/>
+        <radiogroup id="dockCount"
+                    preference="mail.biff.use_new_count_in_mac_dock"
+                    class="indent" orient="vertical">
+          <radio id="dockCountAll" value="false"
+                 label="&showAllUnreadMessagesCount.label;"
+                 accesskey="showAllUnreadMessagesCount.accesskey"/>
+          <radio id="dockCountNew" value="true"
+                 label="&newMessagesCountDock.label;"
+                 accesskey="&newMessagesCountDock.label;"/>
+        </radiogroup>
+        </vbox>
+      </html:fieldset>
+      <separator/>
+      <description class="bold">&directNotificationSettings.label;</description>
+    </hbox>
+  </prefpane>
+
+  <script src="chrome://global/content/preferencesBindings.js"/>
+  <script src="chrome://messenger/content/preferences/dockoptions.js"/>
+</dialog>
+</window>

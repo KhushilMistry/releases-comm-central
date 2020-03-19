@@ -2,11 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* exported do_calendar_startup, do_load_calmgr, do_load_timezoneservice, readJSONFile,
- *          ics_unfoldline, dedent, compareItemsSpecific, getStorageCal, getMemoryCal,
- *          createTodoFromIcalString, createEventFromIcalString, createDate, Cc, Ci, Cr, Cu
- */
-
 var { AppConstants } = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { FileUtils } = ChromeUtils.import("resource://gre/modules/FileUtils.jsm");
@@ -17,37 +12,7 @@ ChromeUtils.defineModuleGetter(this, "NetUtil", "resource://gre/modules/NetUtil.
 
 updateAppInfo();
 
-(function() {
-  let manager = Cc["@mozilla.org/component-manager-extra;1"].getService(
-    Ci.nsIComponentManagerExtra
-  );
-
-  let bindir = Services.dirsvc.get("CurProcD", Ci.nsIFile);
-  if (!AppConstants.NIGHTLY_BUILD) {
-    bindir.append("distribution");
-  }
-  bindir.append("extensions");
-
-  let xpiFile = bindir.clone();
-  xpiFile.append("{e2fda1a4-762b-4020-b5ad-a41df1933103}.xpi");
-
-  if (xpiFile.exists()) {
-    dump("Loading " + xpiFile.path + "\n");
-    manager.addLegacyExtensionManifestLocation(xpiFile);
-  } else {
-    // The XPI file is created by the automation, and not available on a local build.
-    // Use the unpacked version instead.
-    bindir.append("{e2fda1a4-762b-4020-b5ad-a41df1933103}");
-    dump("Loading " + bindir.path + "\n");
-    manager.addLegacyExtensionManifestLocation(bindir);
-  }
-
-  // Make sure to load the backend loader as early as possible, as xpcshell doesn't have the
-  // normal app flow with profile-after-change et al.
-  Cc["@mozilla.org/calendar/backend-loader;1"].getService();
-})();
-
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 function createDate(aYear, aMonth, aDay, aHasTime, aHour, aMinute, aSecond, aTimezone) {
   let date = Cc["@mozilla.org/calendar/datetime;1"].createInstance(Ci.calIDateTime);
@@ -68,14 +33,13 @@ function createEventFromIcalString(icalString) {
   if (/^BEGIN:VCALENDAR/.test(icalString)) {
     let parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
     parser.parseString(icalString);
-    let items = parser.getItems({});
+    let items = parser.getItems();
     cal.ASSERT(items.length == 1);
     return items[0].QueryInterface(Ci.calIEvent);
-  } else {
-    let event = Cc["@mozilla.org/calendar/event;1"].createInstance(Ci.calIEvent);
-    event.icalString = icalString;
-    return event;
   }
+  let event = Cc["@mozilla.org/calendar/event;1"].createInstance(Ci.calIEvent);
+  event.icalString = icalString;
+  return event;
 }
 
 function createTodoFromIcalString(icalString) {
@@ -175,9 +139,8 @@ function getProps(aItem, aProp) {
   }
   if (value) {
     return value.toString();
-  } else {
-    return null;
   }
+  return null;
 }
 
 function compareItemsSpecific(aLeftItem, aRightItem, aPropArray) {
@@ -276,7 +239,7 @@ function readJSONFile(aFile) {
 function do_load_timezoneservice(callback) {
   do_test_pending();
   cal.getTimezoneService().startup({
-    onResult: function() {
+    onResult() {
       do_test_finished();
       callback();
     },
@@ -286,7 +249,7 @@ function do_load_timezoneservice(callback) {
 function do_load_calmgr(callback) {
   do_test_pending();
   cal.getCalendarManager().startup({
-    onResult: function() {
+    onResult() {
       do_test_finished();
       callback();
     },
@@ -295,7 +258,7 @@ function do_load_calmgr(callback) {
 
 function do_calendar_startup(callback) {
   let obs = {
-    observe: function() {
+    observe() {
       Services.obs.removeObserver(this, "calendar-startup-done");
       do_test_finished();
       executeSoon(callback);
@@ -310,7 +273,7 @@ function do_calendar_startup(callback) {
   } else {
     do_test_pending();
     Services.obs.addObserver(obs, "calendar-startup-done");
-    if (_profileInitialized) {
+    if (this._profileInitialized) {
       Services.obs.notifyObservers(null, "profile-after-change", "xpcshell-do-get-profile");
     } else {
       do_get_profile(true);

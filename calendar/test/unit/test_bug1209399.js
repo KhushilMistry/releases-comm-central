@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 function run_test() {
   // Test handling for multiple double quotes leading/trailing to attendee CN for bug 1209399
@@ -103,7 +103,7 @@ function test_fromICS() {
   ];
   let event = createEventFromIcalString(ics);
 
-  equal(event.getAttendees({}).length, expected.length, "Check test consistency");
+  equal(event.getAttendees().length, expected.length, "Check test consistency");
   for (let exp of expected) {
     let attendee = event.getAttendeeById(exp.id);
     equal(attendee.commonName, exp.cname, "Test for commonName matching of " + exp.id);

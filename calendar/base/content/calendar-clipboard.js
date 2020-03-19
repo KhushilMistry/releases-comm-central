@@ -2,13 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* import-globals-from calendar-common-sets.js */
+/* import-globals-from calendar-command-controller.js */
 /* import-globals-from calendar-item-editing.js */
 /* import-globals-from calendar-management.js */
 /* import-globals-from calendar-views-utils.js */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 /* exported cutToClipboard, pasteFromClipboard */
 
@@ -32,7 +32,7 @@ function canPaste() {
   } else {
     let calendars = cal
       .getCalendarManager()
-      .getCalendars({})
+      .getCalendars()
       .filter(cal.acl.isCalendarWritable)
       .filter(cal.acl.userCanAddItemsToCalendar);
     if (!calendars.length) {
@@ -96,7 +96,7 @@ function copyToClipboard(aCalendarItemArray = null, aCutMode = false) {
   let icsSerializer = Cc["@mozilla.org/calendar/ics-serializer;1"].createInstance(
     Ci.calIIcsSerializer
   );
-  icsSerializer.addItems(targetItems, targetItems.length);
+  icsSerializer.addItems(targetItems);
   let icsString = icsSerializer.serializeToString();
 
   let clipboard = Services.clipboard;
@@ -115,14 +115,14 @@ function copyToClipboard(aCalendarItemArray = null, aCutMode = false) {
     // Add data objects to transferable
     // Both Outlook 2000 client and Lotus Organizer use text/unicode
     // when pasting iCalendar data.
-    trans.setTransferData("text/calendar", icsWrapper, icsWrapper.data.length * 2); // double byte data
-    trans.setTransferData("text/unicode", icsWrapper, icsWrapper.data.length * 2);
+    trans.setTransferData("text/calendar", icsWrapper);
+    trans.setTransferData("text/unicode", icsWrapper);
 
     clipboard.setData(trans, null, Ci.nsIClipboard.kGlobalClipboard);
     if (aCutMode) {
       // check for MODIFICATION_PARENT
       let useParent = response == 3;
-      calendarViewController.deleteOccurrences(targetItems.length, targetItems, useParent, true);
+      calendarViewController.deleteOccurrences(targetItems, useParent, true);
     }
   }
 }
@@ -154,7 +154,7 @@ function pasteFromClipboard() {
   // Ask transferable for the best flavor.
   let flavor = {};
   let data = {};
-  trans.getAnyTransferData(flavor, data, {});
+  trans.getAnyTransferData(flavor, data);
   data = data.value.QueryInterface(Ci.nsISupportsString).data;
   switch (flavor.value) {
     case "text/calendar":
@@ -167,7 +167,7 @@ function pasteFromClipboard() {
         // there will just be 0 items.
       }
 
-      let items = icsParser.getItems({});
+      let items = icsParser.getItems();
       if (items.length == 0) {
         return;
       }
@@ -209,7 +209,7 @@ function pasteFromClipboard() {
 
       // we only will need to ask whether to send notifications, if there
       // are attendees at all
-      let withAttendees = items.filter(aItem => aItem.getAttendees({}).length > 0);
+      let withAttendees = items.filter(aItem => aItem.getAttendees().length > 0);
 
       let notify = Ci.calIItipItem.USER;
       let destCal = null;
@@ -234,7 +234,7 @@ function pasteFromClipboard() {
 
         let calendars = cal
           .getCalendarManager()
-          .getCalendars({})
+          .getCalendars()
           .filter(cal.acl.isCalendarWritable)
           .filter(cal.acl.userCanAddItemsToCalendar)
           .filter(aCal => {
@@ -268,7 +268,7 @@ function pasteFromClipboard() {
           }
 
           window.openDialog(
-            "chrome://calendar/content/chooseCalendarDialog.xul",
+            "chrome://calendar/content/chooseCalendarDialog.xhtml",
             "_blank",
             "chrome,titlebar,modal,resizable",
             args
@@ -295,7 +295,7 @@ function pasteFromClipboard() {
         }
 
         let extResp = { responseMode: Ci.calIItipItem.NONE };
-        if (item.getAttendees({}).length > 0) {
+        if (item.getAttendees().length > 0) {
           extResp.responseMode = notify;
         }
 

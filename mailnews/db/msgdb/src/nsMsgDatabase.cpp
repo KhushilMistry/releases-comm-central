@@ -856,11 +856,11 @@ void nsMsgDBService::AddToCache(nsMsgDatabase *pMessageDB) {
  */
 void nsMsgDBService::DumpCache() {
   nsMsgDatabase *db = nullptr;
-  MOZ_LOG(DBLog, LogLevel::Info, ("%zu open DBs\n", m_dbCache.Length()));
+  MOZ_LOG(DBLog, LogLevel::Info, ("%zu open DBs", m_dbCache.Length()));
   for (uint32_t i = 0; i < m_dbCache.Length(); i++) {
     db = m_dbCache.ElementAt(i);
     MOZ_LOG(DBLog, LogLevel::Info,
-            ("%s - %" PRIu32 " hdrs in use\n",
+            ("%s - %" PRIu32 " hdrs in use",
              db->m_dbFile->HumanReadablePath().get(),
              db->m_headersInUse ? db->m_headersInUse->EntryCount() : 0));
   }
@@ -939,7 +939,7 @@ class MsgDBReporter final : public nsIMemoryReporter {
       else {
         nsAutoCString folderURL;
         folder->GetFolderURL(folderURL);
-        MsgReplaceChar(folderURL, '/', '\\');
+        folderURL.ReplaceChar('/', '\\');
         memoryPath += folderURL;
       }
     } else {
@@ -1019,7 +1019,7 @@ nsMsgDatabase::~nsMsgDatabase() {
   }
 
   MOZ_LOG(DBLog, LogLevel::Info,
-          ("closing database    %s\n", m_dbFile->HumanReadablePath().get()));
+          ("closing database    %s", m_dbFile->HumanReadablePath().get()));
 
   nsCOMPtr<nsIMsgDBService> serv(do_GetService(NS_MSGDB_SERVICE_CONTRACTID));
   if (serv) static_cast<nsMsgDBService *>(serv.get())->RemoveFromCache(this);
@@ -1073,7 +1073,7 @@ nsresult nsMsgDatabase::OpenInternal(nsMsgDBService *aDBService,
                                      nsIFile *summaryFile, bool aCreate,
                                      bool aLeaveInvalidDB, bool sync) {
   MOZ_LOG(DBLog, LogLevel::Info,
-          ("nsMsgDatabase::Open(%s, %s, %p, %s)\n",
+          ("nsMsgDatabase::Open(%s, %s, %p, %s)",
            summaryFile->HumanReadablePath().get(), aCreate ? "TRUE" : "FALSE",
            this, aLeaveInvalidDB ? "TRUE" : "FALSE"));
 
@@ -1756,13 +1756,12 @@ NS_IMETHODIMP nsMsgDatabase::DeleteMessage(nsMsgKey key,
   return rv;
 }
 
-NS_IMETHODIMP nsMsgDatabase::DeleteMessages(uint32_t aNumKeys,
-                                            nsMsgKey *nsMsgKeys,
+NS_IMETHODIMP nsMsgDatabase::DeleteMessages(nsTArray<nsMsgKey> const &nsMsgKeys,
                                             nsIDBChangeListener *instigator) {
   nsresult err = NS_OK;
 
   uint32_t kindex;
-  for (kindex = 0; kindex < aNumKeys; kindex++) {
+  for (kindex = 0; kindex < nsMsgKeys.Length(); kindex++) {
     nsMsgKey key = nsMsgKeys[kindex];
     nsCOMPtr<nsIMsgDBHdr> msgHdr;
 
@@ -2052,15 +2051,14 @@ NS_IMETHODIMP nsMsgDatabase::MarkHasAttachments(
 NS_IMETHODIMP
 nsMsgDatabase::MarkThreadRead(nsIMsgThread *thread,
                               nsIDBChangeListener *instigator,
-                              uint32_t *aNumMarked, nsMsgKey **aThoseMarked) {
+                              nsTArray<nsMsgKey> &aThoseMarkedRead) {
   NS_ENSURE_ARG_POINTER(thread);
-  NS_ENSURE_ARG_POINTER(aNumMarked);
-  NS_ENSURE_ARG_POINTER(aThoseMarked);
+  aThoseMarkedRead.ClearAndRetainStorage();
   nsresult rv = NS_OK;
 
   uint32_t numChildren;
-  nsTArray<nsMsgKey> thoseMarked;
   thread->GetNumChildren(&numChildren);
+  aThoseMarkedRead.SetCapacity(numChildren);
   for (uint32_t curChildIndex = 0; curChildIndex < numChildren;
        curChildIndex++) {
     nsCOMPtr<nsIMsgDBHdr> child;
@@ -2072,21 +2070,11 @@ nsMsgDatabase::MarkThreadRead(nsIMsgThread *thread,
       if (!isRead) {
         nsMsgKey key;
         if (NS_SUCCEEDED(child->GetMessageKey(&key)))
-          thoseMarked.AppendElement(key);
+          aThoseMarkedRead.AppendElement(key);
         MarkHdrRead(child, true, instigator);
       }
     }
   }
-
-  *aNumMarked = thoseMarked.Length();
-
-  if (thoseMarked.Length()) {
-    *aThoseMarked = (nsMsgKey *)moz_xmemdup(
-        &thoseMarked[0], thoseMarked.Length() * sizeof(nsMsgKey));
-    if (!*aThoseMarked) return NS_ERROR_OUT_OF_MEMORY;
-  } else
-    *aThoseMarked = nullptr;
-
   return rv;
 }
 
@@ -2435,14 +2423,11 @@ nsMsgDatabase::MarkHdrNotNew(nsIMsgDBHdr *aMsgHdr,
   return SetMsgHdrFlag(aMsgHdr, false, nsMsgMessageFlags::New, aInstigator);
 }
 
-NS_IMETHODIMP nsMsgDatabase::MarkAllRead(uint32_t *aNumKeys,
-                                         nsMsgKey **aThoseMarked) {
-  NS_ENSURE_ARG_POINTER(aNumKeys);
-  NS_ENSURE_ARG_POINTER(aThoseMarked);
+NS_IMETHODIMP nsMsgDatabase::MarkAllRead(nsTArray<nsMsgKey> &aThoseMarked) {
   nsMsgHdr *pHeader;
+  aThoseMarked.ClearAndRetainStorage();
 
   nsCOMPtr<nsISimpleEnumerator> hdrs;
-  nsTArray<nsMsgKey> thoseMarked;
   nsresult rv = EnumerateMessages(getter_AddRefs(hdrs));
   if (NS_FAILED(rv)) return rv;
   bool hasMore = false;
@@ -2458,20 +2443,11 @@ NS_IMETHODIMP nsMsgDatabase::MarkAllRead(uint32_t *aNumKeys,
     if (!isRead) {
       nsMsgKey key;
       (void)pHeader->GetMessageKey(&key);
-      thoseMarked.AppendElement(key);
+      aThoseMarked.AppendElement(key);
       rv = MarkHdrRead(pHeader, true, nullptr);  // ### dmb - blow off error?
     }
     NS_RELEASE(pHeader);
   }
-
-  *aNumKeys = thoseMarked.Length();
-
-  if (thoseMarked.Length()) {
-    *aThoseMarked = (nsMsgKey *)moz_xmemdup(
-        &thoseMarked[0], thoseMarked.Length() * sizeof(nsMsgKey));
-    if (!*aThoseMarked) return NS_ERROR_OUT_OF_MEMORY;
-  } else
-    *aThoseMarked = nullptr;
 
   // force num new to 0.
   int32_t numUnreadMessages;
@@ -3260,17 +3236,15 @@ nsresult nsMsgDatabase::RowCellColumnToMime2DecodedString(
   return err;
 }
 
-nsresult nsMsgDatabase::RowCellColumnToAddressCollationKey(nsIMdbRow *row,
-                                                           mdb_token colToken,
-                                                           uint8_t **result,
-                                                           uint32_t *len) {
+nsresult nsMsgDatabase::RowCellColumnToAddressCollationKey(
+    nsIMdbRow *row, mdb_token colToken, nsTArray<uint8_t> &result) {
   nsString sender;
   nsresult rv = RowCellColumnToMime2DecodedString(row, colToken, sender);
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsString name;
   ExtractName(DecodedHeader(sender), name);
-  return CreateCollationKey(name, len, result);
+  return CreateCollationKey(name, result);
 }
 
 nsresult nsMsgDatabase::GetCollationKeyGenerator() {
@@ -3288,8 +3262,7 @@ nsresult nsMsgDatabase::GetCollationKeyGenerator() {
 
 nsresult nsMsgDatabase::RowCellColumnToCollationKey(nsIMdbRow *row,
                                                     mdb_token columnToken,
-                                                    uint8_t **result,
-                                                    uint32_t *len) {
+                                                    nsTArray<uint8_t> &result) {
   const char *nakedString = nullptr;
   nsresult err;
 
@@ -3306,35 +3279,34 @@ nsresult nsMsgDatabase::RowCellColumnToCollationKey(nsIMdbRow *row,
           nsDependentCString(nakedString), charSet.get(), false, true,
           decodedStr);
       if (NS_SUCCEEDED(err))
-        err =
-            CreateCollationKey(NS_ConvertUTF8toUTF16(decodedStr), len, result);
+        err = CreateCollationKey(NS_ConvertUTF8toUTF16(decodedStr), result);
     }
   }
   return err;
 }
 
 NS_IMETHODIMP
-nsMsgDatabase::CompareCollationKeys(uint32_t len1, uint8_t *key1, uint32_t len2,
-                                    uint8_t *key2, int32_t *result) {
+nsMsgDatabase::CompareCollationKeys(const nsTArray<uint8_t> &key1,
+                                    const nsTArray<uint8_t> &key2,
+                                    int32_t *result) {
   nsresult rv = GetCollationKeyGenerator();
   NS_ENSURE_SUCCESS(rv, rv);
   if (!m_collationKeyGenerator) return NS_ERROR_FAILURE;
 
-  rv = m_collationKeyGenerator->CompareRawSortKey(key1, len1, key2, len2,
-                                                  result);
+  rv = m_collationKeyGenerator->CompareRawSortKey(key1, key2, result);
   NS_ENSURE_SUCCESS(rv, rv);
   return rv;
 }
 
 NS_IMETHODIMP
-nsMsgDatabase::CreateCollationKey(const nsAString &sourceString, uint32_t *len,
-                                  uint8_t **result) {
+nsMsgDatabase::CreateCollationKey(const nsAString &sourceString,
+                                  nsTArray<uint8_t> &result) {
   nsresult err = GetCollationKeyGenerator();
   NS_ENSURE_SUCCESS(err, err);
   if (!m_collationKeyGenerator) return NS_ERROR_FAILURE;
 
   err = m_collationKeyGenerator->AllocateRawSortKey(
-      nsICollation::kCollationCaseInSensitive, sourceString, result, len);
+      nsICollation::kCollationCaseInSensitive, sourceString, result);
   NS_ENSURE_SUCCESS(err, err);
   return err;
 }
@@ -4010,8 +3982,7 @@ nsIMsgThread *nsMsgDatabase::GetThreadForSubject(nsCString &subject) {
           nsCString curSubject;
           pThread->GetSubject(curSubject);
           if (subject.Equals(curSubject)) {
-            NS_ERROR(
-                "thread with subject exists, but FindRow didn't find it\n");
+            NS_ERROR("thread with subject exists, but FindRow didn't find it");
             break;
           }
         } else
@@ -4835,7 +4806,7 @@ nsresult nsMsgDatabase::PurgeMessagesOlderThan(uint32_t daysToKeepHdrs,
   }
 
   if (!hdrsToDelete) {
-    DeleteMessages(keysToDelete.Length(), keysToDelete.Elements(), nullptr);
+    DeleteMessages(keysToDelete, nullptr);
 
     if (keysToDelete.Length() >
         10)  // compress commit if we deleted more than 10
@@ -4892,7 +4863,7 @@ nsresult nsMsgDatabase::PurgeExcessMessages(uint32_t numHeadersToKeep,
   if (!hdrsToDelete) {
     int32_t numKeysToDelete = keysToDelete.Length();
     if (numKeysToDelete > 0) {
-      DeleteMessages(keysToDelete.Length(), keysToDelete.Elements(), nullptr);
+      DeleteMessages(keysToDelete, nullptr);
       if (numKeysToDelete > 10)  // compress commit if we deleted more than 10
         Commit(nsMsgDBCommitType::kCompressCommit);
       else
@@ -5111,26 +5082,9 @@ NS_IMETHODIMP nsMsgDatabase::ResetHdrCacheSize(uint32_t aSize) {
   return NS_OK;
 }
 
-/**
-  void getNewList(out unsigned long count, [array, size_is(count)] out long
-  newKeys);
- */
 NS_IMETHODIMP
-nsMsgDatabase::GetNewList(uint32_t *aCount, nsMsgKey **aNewKeys) {
-  NS_ENSURE_ARG_POINTER(aCount);
-  NS_ENSURE_ARG_POINTER(aNewKeys);
-
-  *aCount = m_newSet.Length();
-  if (*aCount > 0) {
-    *aNewKeys =
-        static_cast<nsMsgKey *>(moz_xmalloc(*aCount * sizeof(nsMsgKey)));
-    if (!*aNewKeys) return NS_ERROR_OUT_OF_MEMORY;
-    memcpy(*aNewKeys, m_newSet.Elements(), *aCount * sizeof(nsMsgKey));
-    return NS_OK;
-  }
-  // if there were no new messages, signal this by returning a null pointer
-  //
-  *aNewKeys = nullptr;
+nsMsgDatabase::GetNewList(nsTArray<nsMsgKey> &aNewKeys) {
+  aNewKeys = m_newSet;
   return NS_OK;
 }
 
@@ -5165,9 +5119,8 @@ nsMsgDatabase::GetCachedHits(const char *aSearchFolderUri,
 }
 
 NS_IMETHODIMP nsMsgDatabase::RefreshCache(const char *aSearchFolderUri,
-                                          uint32_t aNumKeys, nsMsgKey *aNewHits,
-                                          uint32_t *aNumBadHits,
-                                          nsMsgKey **aStaleHits) {
+                                          nsTArray<nsMsgKey> const &aNewHits,
+                                          nsTArray<nsMsgKey> &aStaleHits) {
   nsCOMPtr<nsIMdbTable> table;
   nsresult err =
       GetSearchResultsTable(aSearchFolderUri, true, getter_AddRefs(table));
@@ -5182,9 +5135,9 @@ NS_IMETHODIMP nsMsgDatabase::RefreshCache(const char *aSearchFolderUri,
 
   uint32_t rowCount;
   table->GetCount(GetEnv(), &rowCount);
-  nsTArray<nsMsgKey> staleHits;
+  aStaleHits.Clear();
   // should assert that each array is sorted
-  while (newHitIndex < aNumKeys || tableRowIndex < rowCount) {
+  while (newHitIndex < aNewHits.Length() || tableRowIndex < rowCount) {
     mdbOid oid;
     nsMsgKey tableRowKey = nsMsgKey_None;
     if (tableRowIndex < rowCount) {
@@ -5197,12 +5150,13 @@ NS_IMETHODIMP nsMsgDatabase::RefreshCache(const char *aSearchFolderUri,
           oid.mOid_Id;  // ### TODO need the real key for the 0th key problem.
     }
 
-    if (newHitIndex < aNumKeys && aNewHits[newHitIndex] == tableRowKey) {
+    if (newHitIndex < aNewHits.Length() &&
+        aNewHits[newHitIndex] == tableRowKey) {
       newHitIndex++;
       tableRowIndex++;
       continue;
     } else if (tableRowIndex >= rowCount ||
-               (newHitIndex < aNumKeys &&
+               (newHitIndex < aNewHits.Length() &&
                 aNewHits[newHitIndex] < tableRowKey)) {
       nsCOMPtr<nsIMdbRow> hdrRow;
       mdbOid rowObjectId;
@@ -5219,21 +5173,14 @@ NS_IMETHODIMP nsMsgDatabase::RefreshCache(const char *aSearchFolderUri,
       }
       newHitIndex++;
       continue;
-    } else if (newHitIndex >= aNumKeys || aNewHits[newHitIndex] > tableRowKey) {
-      staleHits.AppendElement(tableRowKey);
+    } else if (newHitIndex >= aNewHits.Length() ||
+               aNewHits[newHitIndex] > tableRowKey) {
+      aStaleHits.AppendElement(tableRowKey);
       table->CutOid(GetEnv(), &oid);
       rowCount--;
       continue;  // don't increment tableRowIndex since we removed that row.
     }
   }
-  *aNumBadHits = staleHits.Length();
-  if (*aNumBadHits) {
-    *aStaleHits =
-        static_cast<nsMsgKey *>(moz_xmalloc(*aNumBadHits * sizeof(nsMsgKey)));
-    if (!*aStaleHits) return NS_ERROR_OUT_OF_MEMORY;
-    memcpy(*aStaleHits, staleHits.Elements(), *aNumBadHits * sizeof(nsMsgKey));
-  } else
-    *aStaleHits = nullptr;
 
 #ifdef DEBUG_David_Bienvenu
   printf("after refreshing cache\n");

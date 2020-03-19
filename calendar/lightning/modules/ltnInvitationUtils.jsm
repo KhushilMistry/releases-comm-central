@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { recurrenceRule2String } = ChromeUtils.import(
-  "resource://calendar/modules/calRecurrenceUtils.jsm"
+  "resource:///modules/calendar/calRecurrenceUtils.jsm"
 );
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
@@ -18,11 +18,11 @@ ltn.invitation = {
    * @param  {calItipItem}     aItipItem  the itip item to check
    * @return {String}          the header title
    */
-  getItipHeader: function(aItipItem) {
+  getItipHeader(aItipItem) {
     let header;
 
     if (aItipItem) {
-      let item = aItipItem.getItemList({})[0];
+      let item = aItipItem.getItemList()[0];
       let summary = item.getProperty("SUMMARY") || "";
       let organizer = item.organizer;
       let organizerString = organizer ? organizer.commonName || organizer.toString() : "";
@@ -37,7 +37,7 @@ ltn.invitation = {
         case "COUNTER":
         // falls through
         case "REPLY": {
-          let attendees = item.getAttendees({});
+          let attendees = item.getAttendees();
           let sender = cal.itip.getAttendeesBySender(attendees, aItipItem.sender);
           if (sender.length == 1) {
             if (aItipItem.responseMethod == "COUNTER") {
@@ -74,7 +74,7 @@ ltn.invitation = {
    * @param  {calItipItem}  aItipItem  The itip item, which contains aEvent.
    * @return {DOM}                     The html representation of aEvent.
    */
-  createInvitationOverlay: function(aEvent, aItipItem) {
+  createInvitationOverlay(aEvent, aItipItem) {
     // Creates HTML using the Node strings in the properties file
     let doc = cal.xml.parseFile("chrome://lightning/content/lightning-invitation.xhtml");
     let formatter = cal.getDateFormatter();
@@ -149,7 +149,7 @@ ltn.invitation = {
       };
 
       // Show removed instances
-      for (let exc of aEvent.recurrenceInfo.getRecurrenceItems({})) {
+      for (let exc of aEvent.recurrenceInfo.getRecurrenceItems()) {
         if (exc instanceof Ci.calIRecurrenceDate) {
           if (exc.isNegative) {
             // This is an EXDATE
@@ -167,7 +167,7 @@ ltn.invitation = {
       }
 
       // Show modified occurrences
-      for (let recurrenceId of aEvent.recurrenceInfo.getExceptionIds({})) {
+      for (let recurrenceId of aEvent.recurrenceInfo.getExceptionIds()) {
         let exc = aEvent.recurrenceInfo.getExceptionFor(recurrenceId);
         let excLocation = exc.getProperty("LOCATION");
 
@@ -212,7 +212,7 @@ ltn.invitation = {
 
     // ATTACH - we only display URI but no BINARY type attachments here
     let links = [];
-    let attachments = aEvent.getAttachments({});
+    let attachments = aEvent.getAttachments();
     for (let attachment of attachments) {
       if (attachment.uri) {
         links.push(attachment.uri.spec);
@@ -221,7 +221,7 @@ ltn.invitation = {
     field("attachments", links.join("<br>"), true);
 
     // ATTENDEE and ORGANIZER fields
-    let attendees = aEvent.getAttendees({});
+    let attendees = aEvent.getAttendees();
     let attendeeTemplate = doc.getElementById("attendee-template");
     let attendeeTable = doc.getElementById("attendee-table");
     let organizerTable = doc.getElementById("organizer-table");
@@ -292,7 +292,7 @@ ltn.invitation = {
    * @param  {String} aIgnoreId  attendee id to ignore, usually the organizer
    * @return {String}            updated serialized DOM of the new document
    */
-  compareInvitationOverlay: function(aOldDoc, aNewDoc, aIgnoreId) {
+  compareInvitationOverlay(aOldDoc, aNewDoc, aIgnoreId) {
     /**
      * Transforms text node content to formatted child nodes. Decorations are defined in imip.css
      * @param {Node}    aToNode text node to change
@@ -302,9 +302,12 @@ ltn.invitation = {
      */
     function _content2Child(aToNode, aType, aText = "", aClear = true) {
       let nodeDoc = aToNode.ownerDocument;
-      if (aClear && aToNode.hasChildNodes()) {
-        aToNode.firstChild.remove();
+      if (aClear) {
+        while (aToNode.lastChild) {
+          aToNode.lastChild.remove();
+        }
       }
+
       let n = nodeDoc.createElement(aType.toLowerCase() == "newline" ? "br" : "span");
       switch (aType) {
         case "added":
@@ -432,7 +435,7 @@ ltn.invitation = {
    * @param   {nsIMsgIdentity} aIdentity   the identity to use for that email
    * @returns {String}                     the source code of the header section of the email
    */
-  getHeaderSection: function(aMessageId, aIdentity, aToList, aSubject) {
+  getHeaderSection(aMessageId, aIdentity, aToList, aSubject) {
     let recipient = aIdentity.fullName + " <" + aIdentity.email + ">";
     let from = aIdentity.fullName.length
       ? cal.email.validateRecipientList(recipient)
@@ -482,7 +485,7 @@ ltn.invitation = {
    * @return {String}            Datetime string with a modified tz-offset notation compared to
    *                             Date.toString() like "Fri, 20 Nov 2015 09:45:36 +0100"
    */
-  getRfc5322FormattedDate: function(aDate = null) {
+  getRfc5322FormattedDate(aDate = null) {
     let date = aDate || new Date();
     let str = date
       .toString()
@@ -504,7 +507,7 @@ ltn.invitation = {
    * @param  {String} aText   a unicode encoded string
    * @return {String}         the converted uft-8 encoded string
    */
-  encodeUTF8: function(aText) {
+  encodeUTF8(aText) {
     return ltn.invitation.convertFromUnicode("UTF-8", aText).replace(/(\r\n)|\n/g, "\r\n");
   },
 
@@ -514,7 +517,7 @@ ltn.invitation = {
    * @param  {String} aSrc       unicode text to convert
    * @return {String}            the converted string
    */
-  convertFromUnicode: function(aCharset, aSrc) {
+  convertFromUnicode(aCharset, aSrc) {
     let unicodeConverter = Cc["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(
       Ci.nsIScriptableUnicodeConverter
     );
@@ -529,7 +532,7 @@ ltn.invitation = {
    *                             converted - default value is false
    * @return {String}            the encoded string
    */
-  encodeMimeHeader: function(aHeader, aIsEmail = false) {
+  encodeMimeHeader(aHeader, aIsEmail = false) {
     let fieldNameLen = aHeader.indexOf(": ") + 2;
     return MailServices.mimeConverter.encodeMimePartIIStr_UTF8(
       aHeader,
@@ -550,7 +553,7 @@ ltn.invitation = {
    *                                                 and original properties.
    * @return {String} JsObject.comment           A comment of the attendee, if any
    */
-  parseCounter: function(aProposedItem, aExistingItem) {
+  parseCounter(aProposedItem, aExistingItem) {
     let isEvent = cal.item.isEvent(aProposedItem);
     // atm we only support a subset of properties, for a full list see RfC 5546 section 3.2.7
     let properties = ["SUMMARY", "LOCATION", "DTSTART", "DTEND", "COMMENT"];

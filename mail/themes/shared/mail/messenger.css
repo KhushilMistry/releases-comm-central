@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+@namespace xul url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 @namespace html url("http://www.w3.org/1999/xhtml");
 
 :root {
@@ -112,6 +113,15 @@ toolbox[labelalign="end"] > toolbar[mode="full"] deck .toolbarbutton-text {
 
 description.error {
   color: #f00;
+}
+
+.sidebar-header {
+  min-height: 25px;
+  text-shadow: none;
+}
+
+.sidebar-header > xul|label {
+  padding-inline-start: 4px;
 }
 
 #notification-popup-box > image.notification-anchor-icon {
@@ -326,10 +336,22 @@ toolbarpaletteitem toolbarbutton {
   list-style-image: url("chrome://messenger/skin/icons/notloading.png");
 }
 
+/* Status panel */
+
+:root[lwt-tree] .statuspanel-label {
+  background-color: var(--lwt-toolbar-field-background-color);
+  color: var(--lwt-toolbar-field-color, -moz-dialogText);
+  border-color: var(--lwt-toolbar-field-border-color);
+}
+
 /* ::::: Status bar ::::: */
 
 #status-bar:-moz-lwtheme {
   border-top: 1px solid var(--tabs-border-color);
+}
+
+#status-bar:-moz-lwtheme-brighttext {
+  border-top-color: var(--lwt-accent-color);
 }
 
 #status-bar:-moz-lwtheme toolbarbutton {
@@ -462,7 +484,7 @@ toolbarpaletteitem toolbarbutton {
 
 .panelButton[prettykey]::after {
   content: attr(prettykey);
-  float: right;
+  float: inline-end;
   color: GrayText;
 }
 
@@ -521,6 +543,7 @@ html|input[type="number"].size5 {
   width: calc(5ch + 44px);
 }
 
-html|input[type="number"]::-moz-number-spin-box {
-  height: initial;
+/* Fix the height of the print preview toolbar */
+#print-preview-toolbar {
+  max-height: 2.5em;
 }

@@ -70,7 +70,11 @@ function goUpdateFindTypeMenuItems() {
   goUpdateCommand("cmd_findTypeLinks");
 }
 
-// Gather all descendent text under given document node.
+/**
+ * Gather all descendent text under given node.
+ * @param {Node} root - The root node to gather text from.
+ * @returns {string} The text data under the node.
+ */
 function gatherTextUnder(root) {
   var text = "";
   var node = root.firstChild;
@@ -88,9 +92,8 @@ function gatherTextUnder(root) {
       }
     }
     // Find next node to test.
-    // First, see if this node has children.
-    if (node.hasChildNodes()) {
-      // Go to first child.
+    if (node.firstChild) {
+      // If it has children, go to first child.
       node = node.firstChild;
       depth++;
     } else if (node.nextSibling) {
@@ -266,7 +269,7 @@ function openTab(tabType, tabParams, where) {
   // Either we explicitly wanted to open in a new window, or we fell through to
   // here because there's no 3pane.
   return window.openDialog(
-    "chrome://messenger/content/",
+    "chrome://messenger/content/messenger.xhtml",
     "_blank",
     "chrome,dialog=no,all",
     null,

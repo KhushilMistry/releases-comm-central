@@ -498,12 +498,7 @@ DBListener.prototype = {
 // folder counts match the database counts)
 function folderCount(folder) {
   // count using the database
-  let enumerator = folder.msgDatabase.EnumerateMessages();
-  let dbCount = 0;
-  while (enumerator.hasMoreElements()) {
-    dbCount++;
-    enumerator.getNext();
-  }
+  let dbCount = [...folder.msgDatabase.EnumerateMessages()].length;
 
   // count using the folder
   let count = folder.getTotalMessages(false);
@@ -540,10 +535,8 @@ function testCounts(aHasNew, aUnreadDelta, aFolderNewDelta, aDbNewDelta) {
     let folderNew = IMAPPump.inbox.getNumNewMessages(false);
     let hasNew = IMAPPump.inbox.hasNewMessages;
     let unread = IMAPPump.inbox.getNumUnread(false);
-    let countOut = {};
-    let arrayOut = {};
-    db().getNewList(countOut, arrayOut);
-    let dbNew = countOut.value ? countOut.value : 0;
+    let arrayOut = db().getNewList();
+    let dbNew = arrayOut.length;
     dump(
       " hasNew: " +
         hasNew +

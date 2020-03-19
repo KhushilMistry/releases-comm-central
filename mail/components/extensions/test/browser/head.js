@@ -6,6 +6,9 @@ var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
+var { toXPCOMArray } = ChromeUtils.import(
+  "resource:///modules/iteratorUtils.jsm"
+);
 
 // There are shutdown issues for which multiple rejections are left uncaught.
 // This bug should be fixed, but for the moment this directory is whitelisted.
@@ -19,13 +22,22 @@ PromiseTestUtils.whitelistRejectionsGlobally(/Message manager disconnected/);
 PromiseTestUtils.whitelistRejectionsGlobally(/No matching message handler/);
 PromiseTestUtils.whitelistRejectionsGlobally(/Receiving end does not exist/);
 
+registerCleanupFunction(() => {
+  let tabmail = document.getElementById("tabmail");
+  is(tabmail.tabInfo.length, 1);
+
+  while (tabmail.tabInfo.length > 1) {
+    tabmail.closeTab(tabmail.tabInfo[1]);
+  }
+});
+
 function createAccount() {
   registerCleanupFunction(() => {
-    [...MailServices.accounts.accounts.enumerate()].forEach(cleanUpAccount);
+    MailServices.accounts.accounts.forEach(cleanUpAccount);
   });
 
   MailServices.accounts.createLocalMailAccount();
-  let account = MailServices.accounts.accounts.enumerate().getNext();
+  let account = MailServices.accounts.accounts[0];
   info(`Created account ${account.toString()}`);
 
   return account;
@@ -46,12 +58,12 @@ function addIdentity(account) {
 
 function createMessages(folder, count) {
   const { MessageGenerator } = ChromeUtils.import(
-    "resource://testing-common/mailnews/messageGenerator.js"
+    "resource://testing-common/mailnews/MessageGenerator.jsm"
   );
   let messages = new MessageGenerator().makeMessages({ count });
   let messageStrings = messages.map(message => message.toMboxString());
   folder.QueryInterface(Ci.nsIMsgLocalMailFolder);
-  folder.addMessageBatch(messageStrings.length, messageStrings);
+  folder.addMessageBatch(messageStrings);
 }
 
 async function promiseAnimationFrame(win = window) {
@@ -159,7 +171,7 @@ async function openNewMailWindow(options = {}) {
   }
 
   let win = window.openDialog(
-    "chrome://messenger/content/",
+    "chrome://messenger/content/messenger.xhtml",
     "_blank",
     "chrome,all,dialog=no"
   );
@@ -169,4 +181,114 @@ async function openNewMailWindow(options = {}) {
   ]);
 
   return win;
+}
+
+/**
+ * Check the headers of an open compose window against expected values.
+ *
+ * @param {Object} expected - A dictionary of expected headers.
+ *    Omit headers that should have no value.
+ * @param {string[]} [fields.to]
+ * @param {string[]} [fields.cc]
+ * @param {string[]} [fields.bcc]
+ * @param {string[]} [fields.replyTo]
+ * @param {string[]} [fields.followupTo]
+ * @param {string[]} [fields.newsgroups]
+ * @param {string} [fields.subject]
+ */
+async function checkComposeHeaders(expected) {
+  let composeWindows = [...Services.wm.getEnumerator("msgcompose")];
+  is(composeWindows.length, 1);
+  let composeDocument = composeWindows[0].document;
+  await new Promise(resolve => composeWindows[0].setTimeout(resolve));
+
+  let checkField = (fieldName, elementId) => {
+    let pills = composeDocument
+      .getElementById(elementId)
+      .getElementsByTagName("mail-address-pill");
+
+    if (fieldName in expected) {
+      is(
+        pills.length,
+        expected[fieldName].length,
+        `${fieldName} has the right number of pills`
+      );
+      for (let i = 0; i < expected[fieldName].length; i++) {
+        is(pills[i].label, expected[fieldName][i]);
+      }
+    } else {
+      is(pills.length, 0, `${fieldName} is empty`);
+    }
+  };
+
+  checkField("to", "addressRowTo");
+  checkField("cc", "addressRowCc");
+  checkField("bcc", "addressRowBcc");
+  checkField("replyTo", "addressRowReply");
+  checkField("followupTo", "addressRowFollowup");
+  checkField("newsgroups", "addressRowNewsgroups");
+
+  let subject = composeDocument.getElementById("msgSubject").value;
+  if ("subject" in expected) {
+    is(subject, expected.subject, "subject is correct");
+  } else {
+    is(subject, "", "subject is empty");
+  }
+}
+
+async function openContextMenu(selector = "#img1", win = window) {
+  let contentAreaContextMenu = win.document.getElementById("mailContext");
+  let popupShownPromise = BrowserTestUtils.waitForEvent(
+    contentAreaContextMenu,
+    "popupshown"
+  );
+  let tabmail = document.getElementById("tabmail");
+  await BrowserTestUtils.synthesizeMouseAtCenter(
+    selector,
+    { type: "mousedown", button: 2 },
+    tabmail.selectedBrowser
+  );
+  await BrowserTestUtils.synthesizeMouseAtCenter(
+    selector,
+    { type: "contextmenu" },
+    tabmail.selectedBrowser
+  );
+  await popupShownPromise;
+  return contentAreaContextMenu;
+}
+
+async function closeExtensionContextMenu(itemToSelect, modifiers = {}) {
+  let contentAreaContextMenu = document.getElementById("mailContext");
+  let popupHiddenPromise = BrowserTestUtils.waitForEvent(
+    contentAreaContextMenu,
+    "popuphidden"
+  );
+  if (itemToSelect) {
+    EventUtils.synthesizeMouseAtCenter(itemToSelect, modifiers);
+  } else {
+    contentAreaContextMenu.hidePopup();
+  }
+  await popupHiddenPromise;
+
+  // Bug 1351638: parent menu fails to close intermittently, make sure it does.
+  contentAreaContextMenu.hidePopup();
+}
+
+async function openSubmenu(submenuItem, win = window) {
+  const submenu = submenuItem.menupopup;
+  const shown = BrowserTestUtils.waitForEvent(submenu, "popupshown");
+  EventUtils.synthesizeMouseAtCenter(submenuItem, {}, win);
+  await shown;
+  return submenu;
+}
+
+async function closeContextMenu(contextMenu) {
+  let contentAreaContextMenu =
+    contextMenu || document.getElementById("mailContext");
+  let popupHiddenPromise = BrowserTestUtils.waitForEvent(
+    contentAreaContextMenu,
+    "popuphidden"
+  );
+  contentAreaContextMenu.hidePopup();
+  await popupHiddenPromise;
 }

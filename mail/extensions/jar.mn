@@ -2,6 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-browser.jar:
-% content browser %content/
-  content/built_in_addons.json    (built_in_addons.json)
+messenger.jar:
+*  content/messenger/am-e2e.xhtml                                 (am-e2e/am-e2e.xhtml)
+   content/messenger/am-e2e.js                                    (am-e2e/am-e2e.js)

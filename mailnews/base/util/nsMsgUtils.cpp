@@ -65,10 +65,6 @@
 #include "nsTextFormatter.h"
 #include "nsIStreamListener.h"
 #include "nsReadLine.h"
-#include "nsICharsetDetectionObserver.h"
-#include "nsICharsetDetector.h"
-#include "nsIStringCharsetDetector.h"
-#include "nsCyrillicDetector.h"
 #include "nsILineInputStream.h"
 #include "nsIParserUtils.h"
 #include "nsICharsetConverterManager.h"
@@ -84,7 +80,9 @@
 #include "mozilla/Unused.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/Encoding.h"
-#include "mozilla/JapaneseDetector.h"
+#include "mozilla/EncodingDetector.h"
+#include "mozilla/UniquePtr.h"
+#include "mozilla/Utf8.h"
 
 /* for logging to Error Console */
 #include "nsIScriptError.h"
@@ -479,7 +477,7 @@ nsresult NS_MsgCreatePathStringFromFolderURI(const char *aFolderURI,
   // A file name has to be in native charset. Here we convert
   // to UTF-16 and check for 'unsafe' characters before converting
   // to native charset.
-  NS_ENSURE_TRUE(MsgIsUTF8(nsDependentCString(aFolderURI)),
+  NS_ENSURE_TRUE(mozilla::IsUtf8(nsDependentCString(aFolderURI)),
                  NS_ERROR_UNEXPECTED);
   NS_ConvertUTF8toUTF16 oldPath(aFolderURI);
 
@@ -1506,35 +1504,6 @@ NS_MSG_BASE nsresult MsgGetHeadersFromKeys(nsIMsgDatabase *aDB,
   return rv;
 }
 
-NS_MSG_BASE nsresult MsgGetHdrsFromKeys(nsIMsgDatabase *aDB, nsMsgKey *aMsgKeys,
-                                        uint32_t aNumKeys,
-                                        nsIMutableArray **aHeaders) {
-  NS_ENSURE_ARG_POINTER(aDB);
-  NS_ENSURE_ARG_POINTER(aMsgKeys);
-  NS_ENSURE_ARG_POINTER(aHeaders);
-
-  nsresult rv;
-  nsCOMPtr<nsIMutableArray> messages(
-      do_CreateInstance(NS_ARRAY_CONTRACTID, &rv));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  for (uint32_t kindex = 0; kindex < aNumKeys; kindex++) {
-    nsMsgKey key = aMsgKeys[kindex];
-    bool hasKey;
-    rv = aDB->ContainsKey(key, &hasKey);
-    // This function silently skips when the key is not found. This is an
-    // expected case.
-    if (NS_SUCCEEDED(rv) && hasKey) {
-      nsCOMPtr<nsIMsgDBHdr> msgHdr;
-      rv = aDB->GetMsgHdrForKey(key, getter_AddRefs(msgHdr));
-      if (NS_SUCCEEDED(rv)) messages->AppendElement(msgHdr);
-    }
-  }
-
-  messages.forget(aHeaders);
-  return NS_OK;
-}
-
 bool MsgAdvanceToNextLine(const char *buffer, uint32_t &bufferOffset,
                           uint32_t maxBufferOffset) {
   bool result = false;
@@ -1720,8 +1689,7 @@ NS_MSG_BASE bool MsgIsHex(const char *aHexString, size_t aNumChars) {
 
 NS_MSG_BASE nsresult MsgStreamMsgHeaders(nsIInputStream *aInputStream,
                                          nsIStreamListener *aConsumer) {
-  nsAutoPtr<nsLineBuffer<char> > lineBuffer(new nsLineBuffer<char>);
-  NS_ENSURE_TRUE(lineBuffer, NS_ERROR_OUT_OF_MEMORY);
+  mozilla::UniquePtr<nsLineBuffer<char>> lineBuffer(new nsLineBuffer<char>);
 
   nsresult rv;
 
@@ -1739,7 +1707,7 @@ NS_MSG_BASE nsresult MsgStreamMsgHeaders(nsIInputStream *aInputStream,
     msgHeaders.Append(curLine);
     msgHeaders.AppendLiteral("\r\n");
   }
-  lineBuffer = nullptr;
+  lineBuffer.reset();
   nsCOMPtr<nsIStringInputStream> hdrsStream =
       do_CreateInstance("@mozilla.org/io/string-input-stream;1", &rv);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -1752,58 +1720,11 @@ NS_MSG_BASE nsresult MsgStreamMsgHeaders(nsIInputStream *aInputStream,
   return pump->AsyncRead(aConsumer, nullptr);
 }
 
-class CharsetDetectionObserver : public nsICharsetDetectionObserver {
- public:
-  NS_DECL_ISUPPORTS
-  CharsetDetectionObserver(){};
-  NS_IMETHOD Notify(const char *aCharset, nsDetectionConfident aConf) override {
-    mCharset.AssignASCII(aCharset);
-    return NS_OK;
-  };
-  void GetDetectedCharset(nsACString &aCharset) { aCharset = mCharset; }
-
- private:
-  virtual ~CharsetDetectionObserver() {}
-  nsCString mCharset;
-};
-
-NS_IMPL_ISUPPORTS(CharsetDetectionObserver, nsICharsetDetectionObserver)
-
-static bool IsStreamUTF8(nsIInputStream *aStream) {
-  mozilla::Array<uint8_t, 1024> bufferArr;
-  mozilla::Array<uint8_t, 1028> discardedArr;  // 4 slots longer than buffer
-  auto buffer = MakeSpan(bufferArr);
-  auto discarded = MakeSpan(discardedArr);
-  auto decoder = UTF_8_ENCODING->NewDecoderWithoutBOMHandling();
-  for (;;) {
-    uint32_t numRead = 0;
-    nsresult rv = aStream->Read(reinterpret_cast<char *>(buffer.Elements()),
-                                buffer.Length(), &numRead);
-    if (NS_FAILED(rv)) {
-      return false;
-    }
-    uint32_t result;
-    size_t read;
-    size_t written;
-    bool last = (numRead == 0);
-    mozilla::Tie(result, read, written) =
-        decoder->DecodeToUTF8WithoutReplacement(buffer.To(numRead), discarded,
-                                                last);
-    MOZ_ASSERT(result != kOutputFull);
-    if (last) {
-      return (result == kInputEmpty);
-    }
-    if (result != kInputEmpty) {
-      return false;
-    }
-  }
-}
-
 NS_MSG_BASE nsresult MsgDetectCharsetFromFile(nsIFile *aFile,
                                               nsACString &aCharset) {
   // We do the detection in this order:
   // Check BOM.
-  // If no BOM, run localized detection (Russian, Ukranian or Japanese).
+  // If no BOM, run localized detection (Russian, Ukrainian or Japanese).
   // We need to run this first, since ISO-2022-JP is 7bit ASCII and would be
   // detected as UTF-8. If ISO-2022-JP not detected, check for UTF-8. If no
   // UTF-8, but detector detected something, use that, otherwise return an
@@ -1836,71 +1757,22 @@ NS_MSG_BASE nsresult MsgDetectCharsetFromFile(nsIFile *aFile,
   if (seekStream) seekStream->Seek(nsISeekableStream::NS_SEEK_SET, 0);
 
   // Use detector.
-  nsCOMPtr<nsICharsetDetector> detector;
-  mozilla::UniquePtr<mozilla::JapaneseDetector> japaneseDetector;
-  nsAutoCString detectorName;
-  Preferences::GetLocalizedCString("intl.charset.detector", detectorName);
-  if (!detectorName.IsEmpty()) {
-    // We recognize one of the two magic strings for Russian and Ukranian.
-    if (detectorName.EqualsLiteral("ruprob")) {
-      detector = new nsRUProbDetector();
-    } else if (detectorName.EqualsLiteral("ukprob")) {
-      detector = new nsUKProbDetector();
-    } else if (detectorName.EqualsLiteral("ja_parallel_state_machine")) {
-      japaneseDetector = mozilla::JapaneseDetector::Create(true);
+  mozilla::UniquePtr<mozilla::EncodingDetector> detector =
+      mozilla::EncodingDetector::Create();
+  char buffer[1024];
+  numRead = 0;
+  while (NS_SUCCEEDED(inputStream->Read(buffer, sizeof(buffer), &numRead))) {
+    mozilla::Span<const uint8_t> src =
+        mozilla::AsBytes(mozilla::MakeSpan(buffer, numRead));
+    Unused << detector->Feed(src, false);
+    if (numRead == 0) {
+      break;
     }
   }
-
-  if (detector) {
-    RefPtr<CharsetDetectionObserver> observer = new CharsetDetectionObserver();
-
-    rv = detector->Init(observer);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    char buffer[1024];
-    uint32_t numRead = 0;
-    bool dontFeed = false;
-    while (NS_SUCCEEDED(inputStream->Read(buffer, sizeof(buffer), &numRead))) {
-      detector->DoIt(buffer, numRead, &dontFeed);
-      NS_ENSURE_SUCCESS(rv, rv);
-      if (dontFeed || numRead == 0) break;
-    }
-    rv = detector->Done();
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    observer->GetDetectedCharset(aCharset);
-  } else if (japaneseDetector) {
-    char buffer[1024];
-    uint32_t numRead = 0;
-    while (NS_SUCCEEDED(inputStream->Read(buffer, sizeof(buffer), &numRead))) {
-      mozilla::Span<const uint8_t> src =
-          mozilla::AsBytes(mozilla::MakeSpan(buffer, numRead));
-      auto encoding = japaneseDetector->Feed(src, (numRead == 0));
-      if (encoding) {
-        encoding->Name(aCharset);
-        break;
-      }
-      if (numRead == 0) {
-        break;
-      }
-    }
-    if (aCharset.EqualsLiteral("ISO-2022-JP")) return NS_OK;
-  }
-
-  // Rewind file again.
-  seekStream->Seek(nsISeekableStream::NS_SEEK_SET, 0);
-
-  // Check UTF-8.
-  if (IsStreamUTF8(inputStream)) {
-    aCharset.AssignLiteral("UTF-8");
-    return NS_OK;
-  }
-
-  // No UTF-8 detected, use previous detection result.
-  if (!aCharset.IsEmpty()) return NS_OK;
-
-  // Nothing found, leave it to the caller.
-  return NS_ERROR_FAILURE;
+  Unused << detector->Feed(nullptr, true);
+  auto encoding = detector->Guess(nullptr, true);
+  encoding->Name(aCharset);
+  return NS_OK;
 }
 
 /*

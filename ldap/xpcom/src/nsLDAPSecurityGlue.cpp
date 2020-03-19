@@ -58,7 +58,7 @@ nsLDAPSSLClose(int s, struct lextiof_socket_private *socketarg) {
   memset(&socketInfo, 0, sizeof(socketInfo));
   socketInfo.soinfo_size = PRLDAP_SOCKETINFO_SIZE;
   if (prldap_get_socket_info(s, socketarg, &socketInfo) != LDAP_SUCCESS) {
-    NS_ERROR("nsLDAPSSLClose(): prldap_get_socket_info() failed\n");
+    NS_ERROR("nsLDAPSSLClose(): prldap_get_socket_info() failed");
     return -1;
   }
 
@@ -104,6 +104,8 @@ extern "C" int LDAP_CALLBACK nsLDAPSSLConnect(
                "nsLDAPSSLConnect(): called for non-secure connection");
   options &= ~LDAP_X_EXTIOF_OPT_SECURE;
 
+  NS_ASSERTION(options & LDAP_X_EXTIOF_OPT_NONBLOCKING,
+               "nsLDAPSSLConnect(): called for blocking connection");
   // Retrieve session info. so we can store a pointer to our session info.
   // in our socket info. later.
   //
@@ -291,7 +293,7 @@ nsresult nsLDAPInstallSSL(LDAP *ld, const char *aHostName) {
   //
   sessionClosure->hostname = PL_strdup(aHostName);
   if (!sessionClosure->hostname) {
-    NS_ERROR("nsLDAPInstallSSL(): PL_strdup failed\n");
+    NS_ERROR("nsLDAPInstallSSL(): PL_strdup failed");
     nsLDAPSSLFreeSessionClosure(&sessionClosure);
     return NS_ERROR_OUT_OF_MEMORY;
   }

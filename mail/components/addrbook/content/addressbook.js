@@ -5,7 +5,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* import-globals-from ../../../../mailnews/addrbook/content/abResultsPane.js */
 /* import-globals-from ../../../../mailnews/base/content/msgPrintEngine.js */
 /* import-globals-from abCardView.js */
 /* import-globals-from abCommon.js */
@@ -142,6 +141,7 @@ var gAddressBookAbViewListener = {
   },
   onCountChanged(total) {
     SetStatusText(total);
+    window.dispatchEvent(new CustomEvent("countchange"));
   },
 };
 
@@ -373,7 +373,7 @@ function AbPrintCardInternal(doPrintPreview, msgType) {
   }
 
   window.openDialog(
-    "chrome://messenger/content/msgPrintEngine.xul",
+    "chrome://messenger/content/msgPrintEngine.xhtml",
     "",
     "chrome,dialog=no,all",
     selectionArray.length,
@@ -418,7 +418,7 @@ function AbPrintAddressBookInternal(doPrintPreview, msgType) {
     "addbook://" + abURIArr[0] + "/" + abURIArr[1] + "?action=print";
 
   window.openDialog(
-    "chrome://messenger/content/msgPrintEngine.xul",
+    "chrome://messenger/content/msgPrintEngine.xhtml",
     "",
     "chrome,dialog=no,all",
     1,
@@ -461,10 +461,7 @@ function AbExportSelection() {
  * Export all found addressbooks, each in a separate file.
  */
 function AbExportAll() {
-  let directories = MailServices.ab.directories;
-
-  while (directories.hasMoreElements()) {
-    let directory = directories.getNext();
+  for (let directory of MailServices.ab.directories) {
     // Do not export LDAP ABs.
     if (!directory.URI.startsWith(kLdapUrlPrefix)) {
       AbExport(directory.URI);
@@ -530,10 +527,17 @@ function SetStatusText(total) {
         ).replace("#1", total);
       }
     } else {
-      statusText = gAddressBookBundle.getFormattedString("totalContactStatus", [
-        getSelectedDirectory().dirName,
-        total,
-      ]);
+      let selectedDirectory = getSelectedDirectory();
+      // The result of getSelectedDirectory may be null, like when there's a
+      // mailing list just being created in a brand new address book.
+      if (selectedDirectory) {
+        statusText = gAddressBookBundle.getFormattedString(
+          "totalContactStatus",
+          [selectedDirectory.dirName, total]
+        );
+      } else {
+        statusText = "";
+      }
     }
 
     gStatusText.setAttribute("value", statusText);
@@ -565,7 +569,7 @@ function onAdvancedAbSearch() {
     existingSearchWindow.focus();
   } else {
     window.openDialog(
-      "chrome://messenger/content/ABSearchDialog.xul",
+      "chrome://messenger/content/ABSearchDialog.xhtml",
       "",
       "chrome,resizable,status,centerscreen,dialog=no",
       { directory: selectedDirURI }
@@ -810,7 +814,7 @@ function AbIMSelected() {
       win.chatHandler.focusConversation(uiConv);
     } else {
       window.openDialog(
-        "chrome://messenger/content/",
+        "chrome://messenger/content/messenger.xhtml",
         "_blank",
         "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar",
         null,
@@ -841,19 +845,13 @@ function getMailToolbox() {
 
 var kOSXDirectoryURI = "moz-abosxdirectory:///";
 var kOSXPrefBase = "ldap_2.servers.osx";
+var MAPI_DIRECTORY_TYPE = 3; // From AddrBookManager.jsm.
 
 function AbOSXAddressBookExists() {
-  // I hate doing it this way - until we redo how we manage address books
-  // I can't think of a better way though.
-
-  // See if the pref exists, if so, then we need to delete the address book
-  var uriPresent =
-    Services.prefs.getStringPref(kOSXPrefBase + ".uri", null) ==
-    kOSXDirectoryURI;
-  var position = Services.prefs.getIntPref(kOSXPrefBase + ".position", 1);
-
-  // Address book exists if the uri is correct and the position is not zero.
-  return uriPresent && position != 0;
+  return (
+    Services.prefs.getIntPref(kOSXPrefBase + ".dirType", 0) ==
+    MAPI_DIRECTORY_TYPE
+  );
 }
 
 function AbShowHideOSXAddressBook() {

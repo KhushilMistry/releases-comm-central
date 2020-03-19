@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -1104,7 +1104,7 @@ bool nsIMAPBodyShellCache::AddShellToCache(nsIMAPBodyShell *shell) {
   // Add the new one to the cache
   m_shellList->AppendElement(shell);
 
-  m_shellHash.Put(shell->GetUID_validity(), shell);
+  m_shellHash.Put(shell->GetUID_validity(), RefPtr{shell});
   shell->SetIsCached(true);
 
   // while we're not over our size limit, eject entries

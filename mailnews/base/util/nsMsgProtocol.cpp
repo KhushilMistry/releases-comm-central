@@ -502,6 +502,14 @@ NS_IMETHODIMP nsMsgProtocol::SetLoadGroup(nsILoadGroup *aLoadGroup) {
   return NS_OK;
 }
 
+NS_IMETHODIMP nsMsgProtocol::GetTRRMode(nsIRequest::TRRMode *aTRRMode) {
+  return GetTRRModeImpl(aTRRMode);
+}
+
+NS_IMETHODIMP nsMsgProtocol::SetTRRMode(nsIRequest::TRRMode aTRRMode) {
+  return SetTRRModeImpl(aTRRMode);
+}
+
 NS_IMETHODIMP nsMsgProtocol::GetOriginalURI(nsIURI **aURI) {
   NS_IF_ADDREF(*aURI = m_originalUrl ? m_originalUrl : m_url);
   return NS_OK;
@@ -738,6 +746,13 @@ NS_IMETHODIMP nsMsgProtocol::Cancel(nsresult status) {
 
   NS_WARNING("no request to cancel");
   return NS_ERROR_NOT_AVAILABLE;
+}
+
+NS_IMETHODIMP nsMsgProtocol::GetCanceled(bool *aCanceled) {
+  nsresult status = NS_ERROR_FAILURE;
+  GetStatus(&status);
+  *aCanceled = NS_FAILED(status);
+  return NS_OK;
 }
 
 NS_IMETHODIMP nsMsgProtocol::Suspend() {

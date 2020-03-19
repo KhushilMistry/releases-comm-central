@@ -3,10 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var { StringBundle } = ChromeUtils.import(
-  "resource:///modules/StringBundle.js"
+  "resource:///modules/StringBundle.jsm"
 );
 
-var { FacetDriver } = ChromeUtils.import("resource:///modules/gloda/facet.js");
+var { FacetDriver } = ChromeUtils.import("resource:///modules/gloda/Facet.jsm");
 
 var glodaFacetTabType = {
   name: "glodaFacet",
@@ -26,7 +26,9 @@ var glodaFacetTabType = {
     aTab.browser = null;
 
     // First clone the page and set up the basics.
-    let clone = document.getElementById("glodaTab").firstChild.cloneNode(true);
+    let clone = document
+      .getElementById("glodaTab")
+      .firstElementChild.cloneNode(true);
 
     aTab.panel.setAttribute("id", "glodaTab" + this.lastTabId);
     aTab.panel.appendChild(clone);
@@ -79,7 +81,7 @@ var glodaFacetTabType = {
     });
     aTab.iframe.setAttribute(
       "src",
-      "chrome://messenger/content/glodaFacetViewWrapper.xul"
+      "chrome://messenger/content/glodaFacetViewWrapper.xhtml"
     );
 
     this.lastTabId++;

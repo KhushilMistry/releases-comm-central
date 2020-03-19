@@ -27,16 +27,6 @@
 //
 #define NS_ABMANAGER_CONTRACTID "@mozilla.org/abmanager;1"
 
-#define NS_ABMANAGERSTARTUPHANDLER_CONTRACTID \
-  "@mozilla.org/commandlinehandler/general-startup;1?type=addressbook"
-
-#define NS_ABMANAGER_CID                             \
-  {                                                  \
-    0xad81b321, 0x8a8a, 0x42ca, {                    \
-      0xa5, 0x08, 0xfe, 0x65, 0x9d, 0x8e, 0x45, 0x86 \
-    }                                                \
-  }
-
 //
 // nsAbContentHandler
 //
@@ -48,17 +38,10 @@
   }
 
 //
-// nsAbBSDirectory - the root address book
+// JS/SQLite address book
 //
-#define NS_ABDIRECTORY_CONTRACTID \
-  NS_AB_DIRECTORY_TYPE_CONTRACTID_PREFIX "moz-abdirectory"
-
-#define NS_ABDIRECTORY_CID                           \
-  {                                                  \
-    0x012D3C24, 0x1DD2, 0x11B2, {                    \
-      0xBA, 0x79, 0xB4, 0xAD, 0x35, 0x9F, 0xC4, 0x61 \
-    }                                                \
-  }
+#define NS_ABJSDIRECTORY_CONTRACTID \
+  NS_AB_DIRECTORY_TYPE_CONTRACTID_PREFIX "jsaddrbook"
 
 //
 // nsAddressBookDB
@@ -155,46 +138,6 @@
     }                                                \
   }
 
-//
-// mdb directory factory
-//
-#define NS_ABMDBDIRECTORY "moz-abmdbdirectory"
-
-#define NS_ABMDBDIRFACTORY_CONTRACTID \
-  NS_AB_DIRECTORY_FACTORY_CONTRACTID_PREFIX NS_ABMDBDIRECTORY
-
-#define NS_ABMDBDIRFACTORY_CID                       \
-  {                                                  \
-    0xE1CB9C8A, 0x722D, 0x43E4, {                    \
-      0x9D, 0x7B, 0x7C, 0xCA, 0xE4, 0xB0, 0x33, 0x8A \
-    }                                                \
-  }
-
-//
-// nsAbMDBDirectory
-//
-#define NS_ABMDBDIRECTORY_CONTRACTID \
-  NS_AB_DIRECTORY_TYPE_CONTRACTID_PREFIX NS_ABMDBDIRECTORY
-
-#define NS_ABMDBDIRECTORY_CID                        \
-  {                                                  \
-    0xe618f894, 0x1dd1, 0x11b2, {                    \
-      0x88, 0x9c, 0x9a, 0xae, 0xfa, 0xa9, 0x0d, 0xde \
-    }                                                \
-  }
-
-//
-// nsAbMDBCard
-//
-#define NS_ABMDBCARD_CONTRACTID "@mozilla.org/addressbook/moz-abmdbcard;1"
-
-#define NS_ABMDBCARD_CID                             \
-  {                                                  \
-    0xf578a5d2, 0x1dd1, 0x11b2, {                    \
-      0x88, 0x41, 0xf4, 0x5c, 0xc5, 0xe7, 0x65, 0xf8 \
-    }                                                \
-  }
-
 #ifdef XP_WIN
 //
 // nsAbOutlookDirectory
@@ -212,10 +155,10 @@
 //
 // Outlook directory factory
 //
-#  define NS_ABOUTLOOKDIRFACTORY_CONTRACTID \
-    NS_AB_DIRECTORY_FACTORY_CONTRACTID_PREFIX "moz-aboutlookdirectory"
+#  define NS_ABOUTLOOKINTERFACE_CONTRACTID \
+    "@mozilla.org/addressbook/outlookinterface;1"
 
-#  define NS_ABOUTLOOKDIRFACTORY_CID                   \
+#  define NS_ABOUTLOOKINTERFACE_CID                    \
     {                                                  \
       0x558ccc0f, 0x2681, 0x4dac, {                    \
         0xa0, 0x66, 0xde, 0xbd, 0x8d, 0x26, 0xfa, 0xf6 \

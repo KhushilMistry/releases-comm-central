@@ -5,7 +5,7 @@
 ChromeUtils.defineModuleGetter(
   this,
   "Gloda",
-  "resource:///modules/gloda/public.js"
+  "resource:///modules/gloda/GlodaPublic.jsm"
 );
 ChromeUtils.defineModuleGetter(
   this,
@@ -20,13 +20,20 @@ ChromeUtils.defineModuleGetter(
 ChromeUtils.defineModuleGetter(
   this,
   "MsgHdrToMimeMessage",
-  "resource:///modules/gloda/mimemsg.js"
+  "resource:///modules/gloda/MimeMessage.jsm"
 );
 ChromeUtils.defineModuleGetter(
   this,
   "toXPCOMArray",
   "resource:///modules/iteratorUtils.jsm"
 );
+ChromeUtils.defineModuleGetter(
+  this,
+  "NetUtil",
+  "resource://gre/modules/NetUtil.jsm"
+);
+
+Cu.importGlobalProperties(["fetch"]);
 
 var { DefaultMap } = ExtensionUtils;
 
@@ -48,11 +55,48 @@ function convertMessagePart(part) {
       partObject[key] = part[key];
     }
   }
-  if (Array.isArray(part.parts) && part.parts.length > 0) {
+  if ("parts" in part && Array.isArray(part.parts) && part.parts.length > 0) {
     partObject.parts = part.parts.map(convertMessagePart);
   }
   return partObject;
 }
+
+/**
+ * Listens to the folder notification service for new messages, which are
+ * passed to the onNewMailReceived event.
+ *
+ * @implements {nsIMsgFolderListener}
+ */
+let newMailEventTracker = new (class extends EventEmitter {
+  constructor() {
+    super();
+    this.listenerCount = 0;
+  }
+  on(event, listener) {
+    super.on(event, listener);
+
+    if (++this.listenerCount == 1) {
+      MailServices.mfn.addListener(this, MailServices.mfn.msgsClassified);
+    }
+  }
+  off(event, listener) {
+    super.off(event, listener);
+
+    if (--this.listenerCount == 0) {
+      MailServices.mfn.removeListener(this);
+    }
+  }
+
+  msgsClassified(messages, junkProcessed, traitProcessed) {
+    if (messages.length > 0) {
+      this.emit(
+        "new-mail-received",
+        messages.queryElementAt(0, Ci.nsIMsgDBHdr).folder,
+        messages.enumerate()
+      );
+    }
+  }
+})();
 
 this.messages = class extends ExtensionAPI {
   getAPI(context) {
@@ -124,6 +168,23 @@ this.messages = class extends ExtensionAPI {
 
     return {
       messages: {
+        onNewMailReceived: new EventManager({
+          context,
+          name: "messageDisplay.onNewMailReceived",
+          register: fire => {
+            let listener = (event, folder, newMessages) => {
+              fire.async(
+                convertFolder(folder),
+                messageListTracker.startList(newMessages, context.extension)
+              );
+            };
+
+            newMailEventTracker.on("new-mail-received", listener);
+            return () => {
+              newMailEventTracker.off("new-mail-received", listener);
+            };
+          },
+        }).api(),
         async list({ accountId, path }) {
           let uri = folderPathToURI(accountId, path);
           let folder = MailServices.folderLookup.getFolderForURL(uri);
@@ -152,6 +213,44 @@ this.messages = class extends ExtensionAPI {
               resolve(convertMessagePart(mimeMsg));
             });
           });
+        },
+        async getRaw(messageId) {
+          let messenger = Cc["@mozilla.org/messenger;1"].createInstance(
+            Ci.nsIMessenger
+          );
+          let msgHdr = messageTracker.getMessage(messageId);
+          let msgUri = msgHdr.folder.generateMessageURI(msgHdr.messageKey);
+          let service = messenger.messageServiceFromURI(msgUri);
+
+          let streamListener = Cc[
+            "@mozilla.org/network/sync-stream-listener;1"
+          ].createInstance(Ci.nsISyncStreamListener);
+          await new Promise((resolve, reject) => {
+            service.streamMessage(
+              msgUri,
+              streamListener,
+              null,
+              {
+                OnStartRunningUrl() {},
+                OnStopRunningUrl(url, exitCode) {
+                  if (exitCode !== 0) {
+                    Cu.reportError(exitCode);
+                    reject();
+                    return;
+                  }
+                  resolve();
+                },
+              },
+              false,
+              ""
+            );
+          }).catch(() => {
+            throw new ExtensionError(`Error reading message ${messageId}`);
+          });
+          return NetUtil.readInputStreamToString(
+            streamListener.inputStream,
+            streamListener.available()
+          );
         },
         async query(queryInfo) {
           let query = Gloda.newQuery(Gloda.NOUN_MESSAGE);
@@ -189,6 +288,21 @@ this.messages = class extends ExtensionAPI {
           if (queryInfo.fromDate || queryInfo.toDate) {
             query.dateRange([queryInfo.fromDate, queryInfo.toDate]);
           }
+          let validTags;
+          if (queryInfo.tags) {
+            validTags = MailServices.tags
+              .getAllTags()
+              .filter(
+                tag =>
+                  tag.key in queryInfo.tags.tags && queryInfo.tags.tags[tag.key]
+              );
+            if (validTags.length === 0) {
+              // No messages will match this. Just return immediately.
+              return messageListTracker.startList([], context.extension);
+            }
+            query.tags(...validTags);
+            validTags = validTags.map(tag => tag.key);
+          }
 
           let collectionArray = await new Promise(resolve => {
             query.getCollection({
@@ -197,7 +311,9 @@ this.messages = class extends ExtensionAPI {
               onItemsRemoved(items, collection) {},
               onQueryCompleted(collection) {
                 resolve(
-                  collection.items.map(glodaMsg => glodaMsg.folderMessage)
+                  collection.items
+                    .map(glodaMsg => glodaMsg.folderMessage)
+                    .filter(Boolean)
                 );
               },
             });
@@ -207,6 +323,12 @@ this.messages = class extends ExtensionAPI {
             collectionArray = collectionArray.filter(
               msg => msg.isRead == !queryInfo.unread
             );
+          }
+          if (validTags && queryInfo.tags.mode == "all") {
+            collectionArray = collectionArray.filter(msg => {
+              let messageTags = msg.getStringProperty("keywords").split(" ");
+              return validTags.every(tag => messageTags.includes(tag));
+            });
           }
 
           return messageListTracker.startList(
@@ -225,13 +347,28 @@ this.messages = class extends ExtensionAPI {
           if (newProperties.flagged !== null) {
             msgHdr.markFlagged(newProperties.flagged);
           }
-          if (Array.isArray(newProperties.tags)) {
-            newProperties.tags = newProperties.tags.filter(
-              MailServices.tags.isValidKey
+          if (newProperties.junk !== null) {
+            let messages = Cc["@mozilla.org/array;1"].createInstance(
+              Ci.nsIMutableArray
             );
-            msgHdr.setProperty("keywords", newProperties.tags.join(" "));
-            for (let window of Services.wm.getEnumerator("mail:3pane")) {
-              window.OnTagsChange();
+            let score = newProperties.junk
+              ? Ci.nsIJunkMailPlugin.IS_SPAM_SCORE
+              : Ci.nsIJunkMailPlugin.IS_HAM_SCORE;
+            messages.appendElement(msgHdr);
+            msgHdr.folder.setJunkScoreForMessages(messages, score);
+          }
+          if (Array.isArray(newProperties.tags)) {
+            let currentTags = msgHdr.getStringProperty("keywords").split(" ");
+            let msgHdrArray = toXPCOMArray([msgHdr], Ci.nsIMutableArray);
+
+            for (let { key: tagKey } of MailServices.tags.getAllTags()) {
+              if (newProperties.tags.includes(tagKey)) {
+                if (!currentTags.includes(tagKey)) {
+                  msgHdr.folder.addKeywordsToMessages(msgHdrArray, tagKey);
+                }
+              } else if (currentTags.includes(tagKey)) {
+                msgHdr.folder.removeKeywordsFromMessages(msgHdrArray, tagKey);
+              }
             }
           }
         },
@@ -308,7 +445,7 @@ this.messages = class extends ExtensionAPI {
         },
         async listTags() {
           return MailServices.tags
-            .getAllTags({})
+            .getAllTags()
             .map(({ key, tag, color, ordinal }) => {
               return {
                 key,

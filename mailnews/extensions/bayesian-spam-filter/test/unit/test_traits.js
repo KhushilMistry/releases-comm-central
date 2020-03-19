@@ -83,7 +83,12 @@ var tests = [
     // spam1 trained as "pro" for first pro/anti pair
     // spam4 trained as "anti" for second pro/anti pair
     // others are partials
-    percents: [[100, 50], [81, 0], [98, 50], [81, 0]],
+    percents: [
+      [100, 50],
+      [81, 0],
+      [98, 50],
+      [81, 0],
+    ],
   },
   // reset the plugin, read in data, and retest the classification
   // this tests the trait file writing
@@ -109,7 +114,12 @@ var tests = [
     fileName: "spam1.eml,spam2.eml,spam3.eml,spam4.eml",
     traitIds: [4, 6],
     traitAntiIds: [3, 5],
-    percents: [[100, 50], [81, 0], [98, 50], [81, 0]],
+    percents: [
+      [100, 50],
+      [81, 0],
+      [98, 50],
+      [81, 0],
+    ],
   },
 ];
 
@@ -123,7 +133,7 @@ function run_test() {
 
 var listener = {
   // nsIMsgTraitClassificationListener implementation
-  onMessageTraitsClassified(aMsgURI, aTraitCount, aTraits, aPercents) {
+  onMessageTraitsClassified(aMsgURI, aTraits, aPercents) {
     // print("Message URI is " + aMsgURI);
     if (!aMsgURI) {
       // Ignore end-of-batch signal.
@@ -154,7 +164,6 @@ var listener = {
   onMessageTraitDetails(
     aMsgURI,
     aProTrait,
-    aTokenCount,
     aTokenString,
     aTokenPercents,
     aRunningPercents
@@ -209,11 +218,9 @@ function startCommand() {
       gTest.callbacks = 1;
 
       nsIJunkMailPlugin.setMsgTraitClassification(
-        getSpec(gTest.fileName), // in string aMsgURI
-        0,
-        null, // in nsIArray aOldTraits
-        proArray.length,
-        proArray, // in nsIArray aNewTraits
+        getSpec(gTest.fileName), // aMsgURI
+        [], // aOldTraits
+        proArray, // aNewTraits
         listener
       ); // [optional] in nsIMsgTraitClassificationListener aTraitListener
       // null,      // [optional] in nsIMsgWindow aMsgWindow
@@ -238,7 +245,6 @@ function startCommand() {
         // use the singular classifier
         nsIJunkMailPlugin.classifyTraitsInMessage(
           getSpec(gTest.fileName), // in string aMsgURI
-          proArray.length, // length of traits arrays
           proArray, // in array aProTraits,
           antiArray, // in array aAntiTraits
           listener
@@ -248,9 +254,7 @@ function startCommand() {
       } else {
         // use the plural classifier
         nsIJunkMailPlugin.classifyTraitsInMessages(
-          gTest.files.length, // in unsigned long aCount,
-          gTest.files, // [array, size_is(aCount)] in string aMsgURIs,
-          proArray.length, // length of traits arrays
+          gTest.files, // in Array<ACString> aMsgURIs,
           proArray, // in array aProTraits,
           antiArray, // in array aAntiTraits
           listener

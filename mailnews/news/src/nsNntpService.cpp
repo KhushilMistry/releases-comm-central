@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -46,6 +46,7 @@
 #include "nsDocShellLoadState.h"
 #include "nsContentUtils.h"
 #include "mozilla/LoadInfo.h"
+#include "mozilla/Utf8.h"
 
 #include "../../base/src/MailnewsLoadContextInfo.h"
 
@@ -305,7 +306,7 @@ nsresult nsNntpService::GetMessageFromUrl(nsIURI *aUrl,
     if (mOpenAttachmentOperation) loadState->SetLoadType(LOAD_LINK);
     loadState->SetFirstParty(false);
     loadState->SetTriggeringPrincipal(nsContentUtils::GetSystemPrincipal());
-    rv = docShell->LoadURI(loadState);
+    rv = docShell->LoadURI(loadState, false);
   } else {
     nsCOMPtr<nsIStreamListener> aStreamListener(
         do_QueryInterface(aDisplayConsumer, &rv));
@@ -435,7 +436,7 @@ NS_IMETHODIMP nsNntpService::OpenAttachment(
       loadState->SetLoadType(LOAD_LINK);
       loadState->SetFirstParty(false);
       loadState->SetTriggeringPrincipal(nsContentUtils::GetSystemPrincipal());
-      return docShell->LoadURI(loadState);
+      return docShell->LoadURI(loadState, false);
     } else {
       return RunNewsUrl(url, aMsgWindow, aDisplayConsumer);
     }
@@ -593,7 +594,7 @@ nsNntpService::CopyMessage(const char *aSrcMessageURI,
 }
 
 NS_IMETHODIMP
-nsNntpService::CopyMessages(uint32_t aNumKeys, nsMsgKey *akeys,
+nsNntpService::CopyMessages(const nsTArray<nsMsgKey> &akeys,
                             nsIMsgFolder *srcFolder,
                             nsIStreamListener *aMailboxCopyHandler,
                             bool moveMessage, nsIUrlListener *aUrlListener,
@@ -613,7 +614,7 @@ nsresult nsNntpService::FindServerWithNewsgroup(nsCString &host,
   rv = accountManager->GetAllServers(getter_AddRefs(servers));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  NS_ASSERTION(MsgIsUTF8(groupName), "newsgroup is not in UTF-8");
+  NS_ASSERTION(mozilla::IsUtf8(groupName), "newsgroup is not in UTF-8");
 
   // XXX TODO
   // this only looks at the list of subscribed newsgroups.
@@ -1532,7 +1533,7 @@ nsNntpService::Handle(nsICommandLine *aCmdLine) {
 
     nsCOMPtr<mozIDOMWindowProxy> opened;
     wwatch->OpenWindow(
-        nullptr, "chrome://messenger/content/", "_blank",
+        nullptr, "chrome://messenger/content/messenger.xhtml", "_blank",
         "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar",
         nullptr, getter_AddRefs(opened));
     aCmdLine->SetPreventDefault(true);
@@ -1601,9 +1602,9 @@ nsNntpService::HandleContent(const char *aContentType,
           arg->SetData(folderURL);
 
           nsCOMPtr<mozIDOMWindowProxy> newWindow;
-          rv = wwatcher->OpenWindow(nullptr, "chrome://messenger/content/",
-                                    "_blank", "chome,all,dialog=no", arg,
-                                    getter_AddRefs(newWindow));
+          rv = wwatcher->OpenWindow(
+              nullptr, "chrome://messenger/content/messenger.xhtml", "_blank",
+              "chome,all,dialog=no", arg, getter_AddRefs(newWindow));
           NS_ENSURE_SUCCESS(rv, rv);
         }
       }

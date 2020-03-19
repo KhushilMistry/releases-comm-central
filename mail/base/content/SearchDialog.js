@@ -28,7 +28,6 @@ var gMessageDisplay;
 
 var gFolderPicker;
 var gStatusFeedback;
-var gTimelineEnabled = false;
 var gSearchBundle;
 
 // Datasource search listener -- made global as it has to be registered
@@ -429,10 +428,7 @@ function getSearchFolders() {
 }
 
 function AddSubFolders(folder, outFolders) {
-  var subFolders = folder.subFolders;
-  while (subFolders.hasMoreElements()) {
-    var nextFolder = subFolders.getNext().QueryInterface(Ci.nsIMsgFolder);
-
+  for (let nextFolder of folder.subFolders) {
     if (!(nextFolder.flags & Ci.nsMsgFolderFlags.Virtual)) {
       if (!nextFolder.noSelect) {
         outFolders.push(nextFolder);
@@ -446,11 +442,7 @@ function AddSubFolders(folder, outFolders) {
 function AddSubFoldersToURI(folder) {
   var returnString = "";
 
-  var subFolders = folder.subFolders;
-
-  while (subFolders.hasMoreElements()) {
-    var nextFolder = subFolders.getNext().QueryInterface(Ci.nsIMsgFolder);
-
+  for (let nextFolder of folder.subFolders) {
     if (!(nextFolder.flags & Ci.nsMsgFolderFlags.Virtual)) {
       if (!nextFolder.noSelect && !nextFolder.isServer) {
         if (returnString.length > 0) {
@@ -547,8 +539,8 @@ function GetScopeForFolder(folder) {
 }
 
 function goUpdateSearchItems(commandset) {
-  for (var i = 0; i < commandset.childNodes.length; i++) {
-    var commandID = commandset.childNodes[i].getAttribute("id");
+  for (var i = 0; i < commandset.children.length; i++) {
+    var commandID = commandset.children[i].getAttribute("id");
     if (commandID) {
       goUpdateCommand(commandID);
     }
@@ -605,7 +597,7 @@ function saveAsVirtualFolder() {
   var doOnlineSearch = searchOnline.checked && !searchOnline.disabled;
 
   window.openDialog(
-    "chrome://messenger/content/virtualFolderProperties.xul",
+    "chrome://messenger/content/virtualFolderProperties.xhtml",
     "",
     "chrome,titlebar,modal,centerscreen",
     {

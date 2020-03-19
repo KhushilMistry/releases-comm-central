@@ -528,7 +528,7 @@ function GetColorAndUpdate(ColorWellID) {
       break;
   }
   window.openDialog(
-    "chrome://messenger/content/messengercompose/EdColorPicker.xul",
+    "chrome://messenger/content/messengercompose/EdColorPicker.xhtml",
     "_blank",
     "chrome,close,titlebar,modal",
     "",
@@ -1398,10 +1398,12 @@ function ApplyAttributesToOneCell(destElement) {
 function SetCloseButton() {
   // Change text on "Cancel" button after Apply is used
   if (!gApplyUsed) {
-    document.documentElement.setAttribute(
-      "buttonlabelcancel",
-      document.documentElement.getAttribute("buttonlabelclose")
-    );
+    document
+      .querySelector("dialog")
+      .setAttribute(
+        "buttonlabelcancel",
+        document.querySelector("dialog").getAttribute("buttonlabelclose")
+      );
     gApplyUsed = true;
   }
 }

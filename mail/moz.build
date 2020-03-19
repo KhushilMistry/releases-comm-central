@@ -21,6 +21,12 @@ if CONFIG['MAKENSISU']:
 if CONFIG['MOZ_BUNDLED_FONTS']:
     DIRS += ['/%s/browser/fonts' % CONFIG['mozreltopsrcdir']]
 
-TEST_DIRS += ['test/mozmill', 'test/marionette']
+DIRS += ['../third_party']
+
+TEST_DIRS += [
+    'test/browser',
+    'test/marionette',
+    'test/static',
+]
 
 FINAL_TARGET_FILES.defaults += ['app/permissions']

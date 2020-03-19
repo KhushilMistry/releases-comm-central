@@ -5,7 +5,7 @@
 /* import-globals-from calendar-management.js */
 /* import-globals-from calendar-views-utils.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 /* exported modifyEventWithDialog, undo, redo, setContextPartstat */
@@ -421,7 +421,7 @@ function openEventDialog(
   // Set up some defaults
   mode = mode || "new";
   calendar = calendar || getSelectedCalendar();
-  let calendars = cal.getCalendarManager().getCalendars({});
+  let calendars = cal.getCalendarManager().getCalendars();
   calendars = calendars.filter(cal.acl.isCalendarWritable);
 
   let isItemSupported;
@@ -470,15 +470,14 @@ function openEventDialog(
       // item. Don't show the dialog.
       disposeJob(job);
       return;
-    } else {
-      // Pick the first calendar that supports the item and is writable
-      calendar = calendars[0];
-      if (calendarItem) {
-        // XXX The dialog currently uses the items calendar as a first
-        // choice. Since we are shortly before a release to keep
-        // regression risk low, explicitly set the item's calendar here.
-        calendarItem.calendar = calendars[0];
-      }
+    }
+    // Pick the first calendar that supports the item and is writable
+    calendar = calendars[0];
+    if (calendarItem) {
+      // XXX The dialog currently uses the items calendar as a first
+      // choice. Since we are shortly before a release to keep
+      // regression risk low, explicitly set the item's calendar here.
+      calendarItem.calendar = calendars[0];
     }
   }
 
@@ -518,12 +517,12 @@ function openEventDialog(
     if (args.inTab) {
       url = args.useNewItemUI
         ? "chrome://lightning/content/html-item-editing/lightning-item-iframe.html"
-        : "chrome://lightning/content/lightning-item-iframe.xul";
+        : "chrome://lightning/content/lightning-item-iframe.xhtml";
     } else {
-      url = "chrome://calendar/content/calendar-event-dialog.xul";
+      url = "chrome://calendar/content/calendar-event-dialog.xhtml";
     }
   } else {
-    url = "chrome://calendar/content/calendar-summary-dialog.xul";
+    url = "chrome://calendar/content/calendar-summary-dialog.xhtml";
     args.inTab = false;
   }
 
@@ -541,12 +540,12 @@ function openEventDialog(
     let features;
     // keyword "dependent" should not be used (cf bug 752206)
     if (Services.appinfo.OS == "WINNT") {
-      features = "chrome,titlebar,resizable";
+      features = "chrome,titlebar,toolbar,resizable";
     } else if (Services.appinfo.OS == "Darwin") {
-      features = "chrome,titlebar,resizable,minimizable=no";
+      features = "chrome,titlebar,toolbar,resizable,minimizable=no";
     } else {
       // All other targets, mostly Linux flavors using gnome.
-      features = "chrome,titlebar,resizable,minimizable=no,dialog=no";
+      features = "chrome,titlebar,toolbar,resizable,minimizable=no,dialog=no";
     }
     openDialog(url, "_blank", features, args);
   }
@@ -609,9 +608,9 @@ function promptOccurrenceModification(aItem, aNeedsFuture, aAction) {
   } else if (aItem && items.length) {
     // Prompt the user. Setting modal blocks the dialog until it is closed. We
     // use rv to pass our return value.
-    let rv = { value: CANCEL, items: items, action: aAction };
+    let rv = { value: CANCEL, items, action: aAction };
     window.openDialog(
-      "chrome://calendar/content/calendar-occurrence-prompt.xul",
+      "chrome://calendar/content/calendar-occurrence-prompt.xhtml",
       "PromptOccurrenceModification",
       "centerscreen,chrome,modal,titlebar",
       rv
@@ -765,7 +764,7 @@ function setContextPartstat(aTarget, aItems) {
     let party = null;
     if (cal.itip.isInvitation(aItem)) {
       party = cal.itip.getInvitedAttendee(aItem);
-    } else if (aItem.organizer && aItem.getAttendees({}).length) {
+    } else if (aItem.organizer && aItem.getAttendees().length) {
       let calOrgId = aItem.calendar.getProperty("organizerId");
       if (calOrgId.toLowerCase() == aItem.organizer.id.toLowerCase()) {
         party = aItem.organizer;

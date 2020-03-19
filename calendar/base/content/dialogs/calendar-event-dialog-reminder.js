@@ -10,7 +10,7 @@
 
 var { PluralForm } = ChromeUtils.import("resource://gre/modules/PluralForm.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 
 var allowedActionsMap = {};
@@ -56,7 +56,7 @@ function onLoad() {
 
   // Hide all actions that are not supported by this provider
   let firstAvailableItem;
-  let actionNodes = document.getElementById("reminder-actions-menupopup").childNodes;
+  let actionNodes = document.getElementById("reminder-actions-menupopup").children;
   for (let actionNode of actionNodes) {
     let shouldHide =
       !(actionNode.value in allowedActionsMap) ||
@@ -85,7 +85,7 @@ function onLoad() {
 function loadReminders() {
   let args = window.arguments[0];
   let listbox = document.getElementById("reminder-listbox");
-  let reminders = args.reminders || args.item.getAlarms({});
+  let reminders = args.reminders || args.item.getAlarms();
 
   // This dialog should not be shown if the calendar doesn't support alarms at
   // all, so the case of maxCount = 0 breaking this logic doesn't apply.
@@ -104,7 +104,7 @@ function loadReminders() {
   let absDate = document.getElementById("reminder-absolute-date");
   absDate.value = cal.dtz.dateTimeToJsDate(cal.dtz.getDefaultStartDate());
 
-  if (listbox.childNodes.length) {
+  if (listbox.children.length) {
     // We have reminders, select the first by default. For some reason,
     // setting the selected index in a load handler makes the selection
     // break for the set item, therefore we need a setTimeout.
@@ -170,7 +170,7 @@ function setupMaxReminders() {
 
   // != null is needed here to ensure cond to be true/false, instead of
   // true/null. The former is needed for setElementValue.
-  let cond = maxReminders != null && listbox.childNodes.length >= maxReminders;
+  let cond = maxReminders != null && listbox.children.length >= maxReminders;
 
   // If we hit the maximum number of reminders, show the error box and
   // disable the new button.
@@ -194,7 +194,7 @@ function setupMaxReminders() {
       gNotification.notificationbox.PRIORITY_WARNING_MEDIUM
     );
 
-    let closeButton = notification.messageDetails.nextSibling;
+    let closeButton = notification.messageDetails.nextElementSibling;
     closeButton.setAttribute("hidden", "true");
   } else {
     gNotification.notificationbox.removeAllNotifications();
@@ -383,9 +383,8 @@ function updateReminder(event) {
 function getItemBundleStringName(aPrefix) {
   if (cal.item.isEvent(window.arguments[0].item)) {
     return aPrefix + "Event";
-  } else {
-    return aPrefix + "Task";
   }
+  return aPrefix + "Task";
 }
 
 /**
@@ -446,13 +445,15 @@ function onNewReminder() {
 function onRemoveReminder() {
   let listbox = document.getElementById("reminder-listbox");
   let listitem = listbox.selectedItem;
-  let newSelection = listitem ? listitem.nextSibling || listitem.previousSibling : null;
+  let newSelection = listitem
+    ? listitem.nextElementSibling || listitem.previousElementSibling
+    : null;
 
   listbox.clearSelection();
   listitem.remove();
   listbox.selectItem(newSelection);
 
-  setElementValue("reminder-remove-button", listbox.childNodes.length < 1 && "true", "disabled");
+  setElementValue("reminder-remove-button", listbox.children.length < 1 && "true", "disabled");
   setupMaxReminders();
 }
 
@@ -461,7 +462,7 @@ function onRemoveReminder() {
  */
 document.addEventListener("dialogaccept", () => {
   let listbox = document.getElementById("reminder-listbox");
-  let reminders = Array.from(listbox.childNodes).map(node => node.reminder);
+  let reminders = Array.from(listbox.children).map(node => node.reminder);
   if (window.arguments[0].onOk) {
     window.arguments[0].onOk(reminders);
   }

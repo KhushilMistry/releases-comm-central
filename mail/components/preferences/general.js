@@ -236,7 +236,10 @@ var gGeneralPane = {
       let item = document.createXULElement("menuitem");
       item.setAttribute("label", "");
       item.setAttribute("value", "");
-      menulist.menupopup.insertBefore(item, menulist.menupopup.firstChild);
+      menulist.menupopup.insertBefore(
+        item,
+        menulist.menupopup.firstElementChild
+      );
       menulist.selectedIndex = 0;
     }
 
@@ -302,10 +305,12 @@ var gGeneralPane = {
     if (AppConstants.MOZ_UPDATER) {
       this.updateReadPrefs();
       gAppUpdater = new appUpdater(); // eslint-disable-line no-global-assign
-      if (Services.policies && !Services.policies.isAllowed("appUpdate")) {
+      let updateDisabled =
+        Services.policies && !Services.policies.isAllowed("appUpdate");
+      if (updateDisabled || UpdateUtils.appUpdateAutoSettingIsLocked()) {
         document.getElementById("updateAllowDescription").hidden = true;
-        document.getElementById("updateRadioGroup").hidden = true;
-        if (AppConstants.MOZ_MAINTENANCE_SERVICE) {
+        document.getElementById("updateSettingsContainer").hidden = true;
+        if (updateDisabled && AppConstants.MOZ_MAINTENANCE_SERVICE) {
           document.getElementById("useService").hidden = true;
         }
       } else {
@@ -473,14 +478,14 @@ var gGeneralPane = {
 
   customizeMailAlert() {
     gSubDialog.open(
-      "chrome://messenger/content/preferences/notifications.xul",
+      "chrome://messenger/content/preferences/notifications.xhtml",
       "resizable=no"
     );
   },
 
   configureDockOptions() {
     gSubDialog.open(
-      "chrome://messenger/content/preferences/dockoptions.xul",
+      "chrome://messenger/content/preferences/dockoptions.xhtml",
       "resizable=no"
     );
   },
@@ -740,7 +745,7 @@ var gGeneralPane = {
 
     // otherwise, bring up the default client dialog
     gSubDialog.open(
-      "chrome://messenger/content/systemIntegrationDialog.xul",
+      "chrome://messenger/content/systemIntegrationDialog.xhtml",
       "resizable=no",
       "calledFromPrefs"
     );
@@ -821,10 +826,6 @@ var gGeneralPane = {
 
         var element = document.getElementById(prefs[i].element);
         if (element) {
-          // Make sure we have the font list ready for readFontSelection below to
-          // work. readFontSelection gets called at onsyncfrompreference, but the
-          // exact semantics of when it is called (whether during setAttribute or
-          // during setElementValue) aren't obvious.
           if (prefs[i].fonttype) {
             await FontBuilder.buildFontList(
               aLanguageGroup,
@@ -846,7 +847,10 @@ var gGeneralPane = {
    * configured.
    */
   configureFonts() {
-    gSubDialog.open("chrome://messenger/content/preferences/fonts.xul");
+    gSubDialog.open(
+      "chrome://messenger/content/preferences/fonts.xhtml",
+      "resizable=no"
+    );
   },
 
   /**
@@ -855,7 +859,7 @@ var gGeneralPane = {
    */
   configureColors() {
     gSubDialog.open(
-      "chrome://messenger/content/preferences/colors.xul",
+      "chrome://messenger/content/preferences/colors.xhtml",
       "resizable=no"
     );
   },
@@ -905,7 +909,9 @@ var gGeneralPane = {
       }
     }
 
-    let defaultValue = element.firstChild.firstChild.getAttribute("value");
+    let defaultValue = element.firstElementChild.firstElementChild.getAttribute(
+      "value"
+    );
     let languagePref = Preferences.get("font.language.group");
     let defaultType = this._readDefaultFontTypeForLanguage(languagePref.value);
     let listPref = Preferences.get(
@@ -1021,7 +1027,7 @@ var gGeneralPane = {
   showMessengerLanguages({ search }) {
     let opts = { selected: gGeneralPane.selectedLocales, search };
     gSubDialog.open(
-      "chrome://messenger/content/preferences/messengerLanguages.xul",
+      "chrome://messenger/content/preferences/messengerLanguages.xhtml",
       null,
       opts,
       this.messengerLanguagesClosed
@@ -1161,7 +1167,7 @@ var gGeneralPane = {
   },
 
   buildTagList() {
-    let tagArray = MailServices.tags.getAllTags({});
+    let tagArray = MailServices.tags.getAllTags();
     for (let i = 0; i < tagArray.length; ++i) {
       let taginfo = tagArray[i];
       this.appendTagItem(taginfo.tag, taginfo.key, taginfo.color);
@@ -1193,7 +1199,7 @@ var gGeneralPane = {
         okCallback: editTagCallback,
       };
       gSubDialog.open(
-        "chrome://messenger/content/newTagDialog.xul",
+        "chrome://messenger/content/newTagDialog.xhtml",
         "resizable=no",
         args
       );
@@ -1203,7 +1209,7 @@ var gGeneralPane = {
   addTag() {
     var args = { result: "", okCallback: addTagCallback };
     gSubDialog.open(
-      "chrome://messenger/content/newTagDialog.xul",
+      "chrome://messenger/content/newTagDialog.xhtml",
       "resizable=no",
       args
     );
@@ -1264,20 +1270,20 @@ var gGeneralPane = {
    */
   showReturnReceipts() {
     gSubDialog.open(
-      "chrome://messenger/content/preferences/receipts.xul",
+      "chrome://messenger/content/preferences/receipts.xhtml",
       "resizable=no"
     );
   },
 
   showConfigEdit() {
-    gSubDialog.open("chrome://global/content/config.xul");
+    gSubDialog.open("chrome://global/content/config.xhtml");
   },
 
   /**
    * Display the the connection settings dialog.
    */
   showConnections() {
-    gSubDialog.open("chrome://messenger/content/preferences/connection.xul");
+    gSubDialog.open("chrome://messenger/content/preferences/connection.xhtml");
   },
 
   /**
@@ -1285,7 +1291,7 @@ var gGeneralPane = {
    */
   showOffline() {
     gSubDialog.open(
-      "chrome://messenger/content/preferences/offline.xul",
+      "chrome://messenger/content/preferences/offline.xhtml",
       "resizable=no"
     );
   },
@@ -1521,7 +1527,7 @@ var gGeneralPane = {
   },
 
   showUpdates() {
-    gSubDialog.open("chrome://mozapps/content/update/history.xul");
+    gSubDialog.open("chrome://mozapps/content/update/history.xhtml");
   },
 
   _loadAppHandlerData() {
@@ -1532,11 +1538,7 @@ var gGeneralPane = {
    * Load the set of handlers defined by the application datastore.
    */
   _loadApplicationHandlers() {
-    var wrappedHandlerInfos = gHandlerService.enumerate();
-    while (wrappedHandlerInfos.hasMoreElements()) {
-      let wrappedHandlerInfo = wrappedHandlerInfos
-        .getNext()
-        .QueryInterface(Ci.nsIHandlerInfo);
+    for (let wrappedHandlerInfo of gHandlerService.enumerate()) {
       let type = wrappedHandlerInfo.type;
 
       let handlerInfoWrapper;
@@ -1651,9 +1653,8 @@ var gGeneralPane = {
   _typeDetails(aHandlerInfo) {
     let exts = [];
     if (aHandlerInfo.wrappedHandlerInfo instanceof Ci.nsIMIMEInfo) {
-      let extIter = aHandlerInfo.wrappedHandlerInfo.getFileExtensions();
-      while (extIter.hasMore()) {
-        let ext = "." + extIter.getNext();
+      for (let extName of aHandlerInfo.wrappedHandlerInfo.getFileExtensions()) {
+        let ext = "." + extName;
         if (!exts.includes(ext)) {
           exts.push(ext);
         }
@@ -1802,10 +1803,8 @@ var gGeneralPane = {
 
     // Create menu items for possible handlers.
     let preferredApp = handlerInfo.preferredApplicationHandler;
-    let possibleApps = handlerInfo.possibleApplicationHandlers.enumerate();
     var possibleAppMenuItems = [];
-    while (possibleApps.hasMoreElements()) {
-      let possibleApp = possibleApps.getNext();
+    for (let possibleApp of handlerInfo.possibleApplicationHandlers.enumerate()) {
       if (!gGeneralPane.isValidHandlerApp(possibleApp)) {
         continue;
       }
@@ -2043,7 +2042,7 @@ var gGeneralPane = {
     };
 
     gSubDialog.open(
-      "chrome://messenger/content/preferences/applicationManager.xul",
+      "chrome://messenger/content/preferences/applicationManager.xhtml",
       "resizable=no",
       handlerInfo,
       closingCallback
@@ -2066,7 +2065,7 @@ var gGeneralPane = {
       if (handlerApp) {
         let typeItem = this._list.selectedItem;
         let actionsMenu = typeItem.querySelector(".actionsMenu");
-        let menuItems = actionsMenu.menupopup.childNodes;
+        let menuItems = actionsMenu.menupopup.children;
         for (let i = 0; i < menuItems.length; i++) {
           let menuItem = menuItems[i];
           if (menuItem.handlerApp && menuItem.handlerApp.equals(handlerApp)) {
@@ -2104,7 +2103,7 @@ var gGeneralPane = {
       }
 
       gSubDialog.open(
-        "chrome://global/content/appPicker.xul",
+        "chrome://global/content/appPicker.xhtml",
         "resizable=no",
         params,
         closingCallback
@@ -2334,7 +2333,7 @@ class HandlerListItem {
 
   connectAndAppendToList(list) {
     list.appendChild(document.importNode(gHandlerListItemFragment, true));
-    this.node = list.lastChild;
+    this.node = list.lastElementChild;
     gNodeToObjectMap.set(this.node, this);
 
     this.node
@@ -2563,9 +2562,8 @@ class HandlerInfoWrapper {
   }
 
   addPossibleApplicationHandler(aNewHandler) {
-    var possibleApps = this.possibleApplicationHandlers.enumerate();
-    while (possibleApps.hasMoreElements()) {
-      if (possibleApps.getNext().equals(aNewHandler)) {
+    for (let possibleApp of this.possibleApplicationHandlers.enumerate()) {
+      if (possibleApp.equals(aNewHandler)) {
         return;
       }
     }

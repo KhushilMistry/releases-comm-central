@@ -7,8 +7,8 @@
 /* import-globals-from ../../base/content/calendar-ui-utils.js */
 /* globals msgWindow */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
-var { ltn } = ChromeUtils.import("resource://calendar/modules/ltnInvitationUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
+var { ltn } = ChromeUtils.import("resource:///modules/calendar/ltnInvitationUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 /**
@@ -45,20 +45,20 @@ var ltnImipBar = {
   /**
    * Thunderbird Message listener interface, hide the bar before we begin
    */
-  onStartHeaders: function() {
+  onStartHeaders() {
     ltnImipBar.resetBar();
   },
 
   /**
    * Thunderbird Message listener interface
    */
-  onEndHeaders: function() {},
+  onEndHeaders() {},
 
   /**
    * Load Handler called to initialize the imip bar
    * NOTE: This function is called without a valid this-context!
    */
-  load: function() {
+  load() {
     // Add a listener to gMessageListeners defined in msgHdrView.js
     gMessageListeners.push(ltnImipBar);
 
@@ -66,9 +66,9 @@ var ltnImipBar = {
     // message header pane. Otherwise, the imip bar will still be shown when
     // changing folders.
     ltnImipBar.tbHideMessageHeaderPane = HideMessageHeaderPane;
-    HideMessageHeaderPane = function() {
+    HideMessageHeaderPane = function(...args) {
       ltnImipBar.resetBar();
-      ltnImipBar.tbHideMessageHeaderPane.apply(null, arguments);
+      ltnImipBar.tbHideMessageHeaderPane(...args);
     };
 
     // Set up our observers
@@ -79,7 +79,7 @@ var ltnImipBar = {
    * Unload handler to clean up after the imip bar
    * NOTE: This function is called without a valid this-context!
    */
-  unload: function() {
+  unload() {
     removeEventListener("messagepane-loaded", ltnImipBar.load, true);
     removeEventListener("messagepane-unloaded", ltnImipBar.unload, true);
 
@@ -87,8 +87,13 @@ var ltnImipBar = {
     Services.obs.removeObserver(ltnImipBar, "onItipItemCreation");
   },
 
-  observe: function(subject, topic, state) {
+  observe(subject, topic, state) {
     if (topic == "onItipItemCreation") {
+      if (!Services.prefs.getBoolPref("calendar.itip.showImipBar", true)) {
+        // Do not show the imip bar if the user has opted out of seeing it.
+        return;
+      }
+
       let itipItem = null;
       let msgOverlay = null;
       try {
@@ -122,7 +127,7 @@ var ltnImipBar = {
   /**
    * Hide the imip bar and reset the itip item.
    */
-  resetBar: function() {
+  resetBar() {
     imipBar.collapsed = true;
     ltnImipBar.resetButtons();
 
@@ -134,7 +139,7 @@ var ltnImipBar = {
   /**
    * Resets all buttons and its menuitems, all buttons are hidden thereafter
    */
-  resetButtons: function() {
+  resetButtons() {
     let buttons = ltnImipBar.getButtons();
     for (let button of buttons) {
       button.setAttribute("hidden", "true");
@@ -147,7 +152,7 @@ var ltnImipBar = {
   /**
    * Provides a list of all available buttons
    */
-  getButtons: function() {
+  getButtons() {
     let toolbarbuttons = document
       .getElementById("imip-view-toolbar")
       .getElementsByTagName("toolbarbutton");
@@ -159,7 +164,7 @@ var ltnImipBar = {
    *
    * @param aButton        button node
    */
-  getMenuItems: function(aButton) {
+  getMenuItems(aButton) {
     let items = [];
     let mitems = aButton.getElementsByTagName("menuitem");
     if (mitems != null && mitems.length > 0) {
@@ -175,7 +180,7 @@ var ltnImipBar = {
    * to avoid dropdowns which are empty or only replicating the default button action
    * Should be called once the buttons are set up
    */
-  conformButtonType: function() {
+  conformButtonType() {
     // check only needed on visible and not simple buttons
     let buttons = ltnImipBar
       .getButtons()
@@ -211,7 +216,7 @@ var ltnImipBar = {
    * @param foundItems    An array of items found while searching for the item
    *                      in subscribed calendars
    */
-  setupOptions: function(itipItem, rc, actionFunc, foundItems) {
+  setupOptions(itipItem, rc, actionFunc, foundItems) {
     let data = cal.itip.getOptionsText(itipItem, rc, actionFunc, foundItems);
 
     if (Components.isSuccessCode(rc)) {
@@ -276,7 +281,7 @@ var ltnImipBar = {
   /**
    * Displays changes in case of invitation updates in invitation overlay
    */
-  displayModifications: function() {
+  displayModifications() {
     if (
       !ltnImipBar.msgOverlay ||
       !msgWindow ||
@@ -288,7 +293,7 @@ var ltnImipBar = {
     }
 
     let msgOverlay = ltnImipBar.msgOverlay;
-    let diff = cal.itip.compare(ltnImipBar.itipItem.getItemList({})[0], ltnImipBar.foundItems[0]);
+    let diff = cal.itip.compare(ltnImipBar.itipItem.getItemList()[0], ltnImipBar.foundItems[0]);
     // displaying changes is only needed if that is enabled, an item already exists and there are
     // differences
     if (diff != 0 && Services.prefs.getBoolPref("calendar.itip.displayInvitationChanges", false)) {
@@ -326,7 +331,7 @@ var ltnImipBar = {
    *                                          see calItipItem interface
    * @returns {Boolean}                     true, if the action succeeded
    */
-  executeAction: function(aParticipantStatus, aResponse) {
+  executeAction(aParticipantStatus, aResponse) {
     /**
      * Internal function to trigger an scheduling operation
      *
@@ -353,15 +358,15 @@ var ltnImipBar = {
 
         let opListener = {
           QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-          onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+          onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
             if (Components.isSuccessCode(aStatus) && isDeclineCounter) {
               // TODO: move the DECLINECOUNTER stuff to actionFunc
-              aItipItem.getItemList({}).forEach(aItem => {
+              aItipItem.getItemList().forEach(aItem => {
                 // we can rely on the received itipItem to reply at this stage
                 // already, the checks have been done in cal.itip.processFoundItems
                 // when setting up the respective aActionFunc
                 let attendees = cal.itip.getAttendeesBySender(
-                  aItem.getAttendees({}),
+                  aItem.getAttendees(),
                   aItipItem.sender
                 );
                 let status = true;
@@ -403,7 +408,7 @@ var ltnImipBar = {
               cal.showError(label);
             }
           },
-          onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {},
+          onGetResult(calendar, status, itemType, detail, items) {},
         };
 
         try {
@@ -428,7 +433,7 @@ var ltnImipBar = {
         if (aParticipantStatus == "X-RESCHEDULE") {
           // TODO most of the following should be moved to the actionFunc defined in
           // calItipUtils
-          let proposedItem = ltnImipBar.itipItem.getItemList({})[0];
+          let proposedItem = ltnImipBar.itipItem.getItemList()[0];
           let proposedRID = proposedItem.getProperty("RECURRENCE-ID");
           if (proposedRID) {
             // if this is a counterproposal for a specific occurrence, we use
@@ -437,7 +442,7 @@ var ltnImipBar = {
           }
           let parsedProposal = ltn.invitation.parseCounter(proposedItem, item);
           let potentialProposers = cal.itip.getAttendeesBySender(
-            proposedItem.getAttendees({}),
+            proposedItem.getAttendees(),
             ltnImipBar.itipItem.sender
           );
           let proposingAttendee = potentialProposers.length == 1 ? potentialProposers[0] : null;
@@ -491,7 +496,7 @@ var ltnImipBar = {
       let delmgr = Cc["@mozilla.org/calendar/deleted-items-manager;1"].getService(
         Ci.calIDeletedItems
       );
-      let items = ltnImipBar.itipItem.getItemList({});
+      let items = ltnImipBar.itipItem.getItemList();
       if (items && items.length) {
         let delTime = delmgr.getDeletedDate(items[0].id);
         let dialogText = cal.l10n.getLtnString("confirmProcessInvitation");
@@ -504,7 +509,7 @@ var ltnImipBar = {
       if (aParticipantStatus == "X-SAVECOPY") {
         // we create and adopt copies of the respective events
         let saveitems = ltnImipBar.itipItem
-          .getItemList({})
+          .getItemList()
           .map(cal.itip.getPublishLikeItemCopy.bind(cal));
         if (saveitems.length > 0) {
           let methods = { receivedMethod: "PUBLISH", responseMethod: "PUBLISH" };
@@ -533,11 +538,64 @@ var ltnImipBar = {
     }
     return false;
   },
+
+  /**
+   * Hide the imip bar in all windows and set a pref to prevent it from being
+   * shown again. Called when clicking the imip bar's "do not show..." menu item.
+   */
+  doNotShowImipBar() {
+    Services.prefs.setBoolPref("calendar.itip.showImipBar", false);
+    for (let window of Services.ww.getWindowEnumerator()) {
+      if (window.ltnImipBar) {
+        window.ltnImipBar.resetBar();
+      }
+    }
+  },
+
+  /**
+   * Open (or focus if already open) the calendar tab, even if the imip bar is
+   * in a message window, and even if there is no main three pane Thunderbird
+   * window open. Called when clicking the imip bar's calendar button.
+   */
+  goToCalendar() {
+    let openCal = mainWindow => {
+      mainWindow.focus();
+      mainWindow.document.getElementById("tabmail").openTab("calendar", {
+        title: mainWindow.document.getElementById("calendar-tab-button").getAttribute("title"),
+      });
+    };
+
+    let mainWindow = Services.wm.getMostRecentWindow("mail:3pane");
+
+    if (mainWindow) {
+      openCal(mainWindow);
+    } else {
+      mainWindow = Services.ww.openWindow(
+        null,
+        "chrome://messenger/content/messenger.xhtml",
+        "_blank",
+        "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar",
+        null
+      );
+
+      // Wait until calendar is set up in the new window.
+      let calStartupObserver = {
+        observe(subject, topic, data) {
+          openCal(mainWindow);
+          Services.obs.removeObserver(calStartupObserver, "lightning-startup-done");
+        },
+      };
+      Services.obs.addObserver(calStartupObserver, "lightning-startup-done");
+    }
+  },
 };
 
-if (document.getElementById("msgHeaderView").loaded) {
-  ltnImipBar.load();
-} else {
-  addEventListener("messagepane-loaded", ltnImipBar.load, true);
+{
+  let msgHeaderView = document.getElementById("msgHeaderView");
+  if (msgHeaderView && msgHeaderView.loaded) {
+    ltnImipBar.load();
+  } else {
+    addEventListener("messagepane-loaded", ltnImipBar.load, true);
+  }
 }
 addEventListener("messagepane-unloaded", ltnImipBar.unload, true);

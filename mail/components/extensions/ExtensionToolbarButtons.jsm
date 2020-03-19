@@ -2,7 +2,7 @@
 /* vim: set sts=2 sw=2 et tw=80: */
 "use strict";
 
-this.EXPORTED_SYMBOLS = ["ToolbarButtonAPI"];
+const EXPORTED_SYMBOLS = ["ToolbarButtonAPI"];
 
 ChromeUtils.defineModuleGetter(
   this,
@@ -43,6 +43,14 @@ XPCOMUtils.defineLazyGlobalGetters(this, ["InspectorUtils"]);
 var DEFAULT_ICON = "chrome://messenger/content/extension.svg";
 
 this.ToolbarButtonAPI = class extends ExtensionAPI {
+  constructor(extension, global) {
+    super(extension);
+    this.global = global;
+    this.tabContext = new this.global.TabContext(target =>
+      this.getContextData(null)
+    );
+  }
+
   /**
    * Called when the extension is enabled.
    *
@@ -157,7 +165,7 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
     button.id = this.id;
     button.classList.add("toolbarbutton-1");
     button.classList.add("webextension-action");
-    button.classList.add("badged-button");
+    button.setAttribute("badged", "true");
     button.setAttribute("data-extensionid", this.extension.id);
     button.addEventListener("mousedown", this);
     this.updateButton(button, this.globals);
@@ -235,8 +243,9 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
   async triggerAction(window) {
     let { document } = window;
     let button = document.getElementById(this.id);
-    let popupURL = this.getProperty(this.globals, "popup");
-    let enabled = this.getProperty(this.globals, "enabled");
+    let { popup: popupURL, enabled } = this.getContextData(
+      this.getTargetFromWindow(window)
+    );
 
     if (button && popupURL && enabled) {
       let popup =
@@ -244,7 +253,11 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
         this.getPopup(window, popupURL);
       popup.viewNode.openPopup(button, "bottomcenter topleft", 0, 0);
     } else {
+      if (!this.lastClickInfo) {
+        this.lastClickInfo = { button: 0, modifiers: [] };
+      }
       this.emit("click", window);
+      delete this.lastClickInfo;
     }
   }
 
@@ -259,8 +272,15 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
     switch (event.type) {
       case "mousedown":
         if (event.button == 0) {
+          this.lastClickInfo = {
+            button: 0,
+            modifiers: this.global.clickModifiersFromEvent(event),
+          };
           this.triggerAction(window);
         }
+        break;
+      case "TabSelect":
+        this.updateWindow(window);
         break;
     }
   }
@@ -428,7 +448,10 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
   async updateWindow(window) {
     let button = window.document.getElementById(this.id);
     if (button) {
-      this.updateButton(button, this.globals);
+      this.updateButton(
+        button,
+        this.getContextData(this.getTargetFromWindow(window))
+      );
     }
     await new Promise(window.requestAnimationFrame);
   }
@@ -444,7 +467,7 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
    */
   async updateOnChange(target) {
     if (target) {
-      let window = target.ownerGlobal;
+      let window = Cu.getGlobalForObject(target);
       if (target === window || target.selected) {
         await this.updateWindow(window);
       }
@@ -460,38 +483,55 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
   }
 
   /**
-   * Gets the target object and its associated values corresponding to
-   * the `details` parameter of the various get* and set* API methods.
+   * Gets the active tab of the passed window if the window has tabs, or the
+   * window itself.
+   *
+   * @param {ChromeWindow} window
+   * @returns {XULElement|ChromeWindow}
+   */
+  getTargetFromWindow(window) {
+    let tabmail = window.document.getElementById("tabmail");
+    if (tabmail) {
+      return tabmail.currentTabInfo;
+    }
+    return window;
+  }
+
+  /**
+   * Gets the target object corresponding to the `details` parameter of the various
+   * get* and set* API methods.
    *
    * @param {Object} details
    *        An object with optional `tabId` or `windowId` properties.
-   * @throws if both `tabId` and `windowId` are specified, or if they are invalid.
-   * @returns {Object}
-   *        An object with two properties: `target` and `values`.
-   *        - If a `tabId` was specified, `target` will be the corresponding
-   *          XULElement tab. If a `windowId` was specified, `target` will be
-   *          the corresponding ChromeWindow. Otherwise it will be `null`.
-   *        - `values` will contain the icon, title, badge, etc. associated with
-   *          the target.
+   * @throws if `windowId` is specified, this is not valid in Thunderbird.
+   * @returns {XULElement|ChromeWindow|null}
+   *        If a `tabId` was specified, the corresponding XULElement tab.
+   *        If a `windowId` was specified, the corresponding ChromeWindow.
+   *        Otherwise, `null`.
    */
-  getContextData({ tabId, windowId }) {
-    if (tabId != null && windowId != null) {
-      throw new ExtensionError(
-        "Only one of tabId and windowId can be specified."
-      );
+  getTargetFromDetails({ tabId, windowId }) {
+    if (windowId != null) {
+      throw new ExtensionError("windowId is not allowed, use tabId instead.");
     }
-    let target, values;
-    // if (tabId != null) {
-    //   target = tabTracker.getTab(tabId);
-    //   values = this.tabContext.get(target);
-    // } else if (windowId != null) {
-    //   target = windowTracker.getWindow(windowId);
-    //   values = this.tabContext.get(target);
-    // } else {
-    target = null;
-    values = this.globals;
-    // }
-    return { target, values };
+    if (tabId != null) {
+      return this.global.tabTracker.getTab(tabId);
+    }
+    return null;
+  }
+
+  /**
+   * Gets the data associated with a tab, window, or the global one.
+   *
+   * @param {XULElement|ChromeWindow|null} target
+   *        A XULElement tab, a ChromeWindow, or null for the global data.
+   * @returns {Object}
+   *        The icon, title, badge, etc. associated with the target.
+   */
+  getContextData(target) {
+    if (target) {
+      return this.tabContext.get(target);
+    }
+    return this.globals;
   }
 
   /**
@@ -506,7 +546,8 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
    *        Value for prop.
    */
   async setProperty(details, prop, value) {
-    let { target, values } = this.getContextData(details);
+    let target = this.getTargetFromDetails(details);
+    let values = this.getContextData(target);
     if (value === null) {
       delete values[prop];
     } else {
@@ -528,7 +569,7 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
    *          Value of prop.
    */
   getProperty(details, prop) {
-    return this.getContextData(details).values[prop];
+    return this.getContextData(this.getTargetFromDetails(details))[prop];
   }
 
   /**
@@ -538,6 +579,7 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
    */
   getAPI(context) {
     let { extension } = context;
+    let { tabManager, windowManager } = extension;
 
     let action = this;
 
@@ -548,8 +590,12 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
           name: `${this.manifestName}.onClicked`,
           inputHandling: true,
           register: fire => {
-            let listener = event => {
-              fire.sync();
+            let listener = (event, window) => {
+              let win = windowManager.wrapWindow(window);
+              fire.sync(
+                tabManager.convert(win.activeTab.nativeTab),
+                this.lastClickInfo
+              );
             };
             action.on("click", listener);
             return () => {
@@ -634,8 +680,10 @@ this.ToolbarButtonAPI = class extends ExtensionAPI {
         },
 
         openPopup() {
-          let window = action.global.windowTracker.topWindow;
-          action.triggerAction(window);
+          let window = Services.wm.getMostRecentWindow("");
+          if (action.windowURLs.includes(window.location.href)) {
+            action.triggerAction(window);
+          }
         },
       },
     };

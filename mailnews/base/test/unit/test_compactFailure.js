@@ -2,15 +2,15 @@ const { toXPCOMArray } = ChromeUtils.import(
   "resource:///modules/iteratorUtils.jsm"
 );
 const { MockFactory } = ChromeUtils.import(
-  "resource://testing-common/mailnews/MockFactory.js"
+  "resource://testing-common/mailnews/MockFactory.jsm"
 );
 
 /* import-globals-from ../../../test/resources/logHelper.js */
 /* import-globals-from ../../../test/resources/asyncTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 
 Services.prefs.setCharPref(
   "mail.serverDefaultStoreContractID",
@@ -124,11 +124,7 @@ function* setup_open_failure_folder() {
 }
 
 function* delete_all_messages() {
-  let enumerator = gTargetFolder.messages;
-  let headers = [];
-  while (enumerator.hasMoreElements()) {
-    headers.push(enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr));
-  }
+  let headers = [...gTargetFolder.messages];
 
   let array = toXPCOMArray(headers, Ci.nsIMutableArray);
 

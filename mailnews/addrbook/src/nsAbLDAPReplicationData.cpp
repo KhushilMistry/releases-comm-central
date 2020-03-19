@@ -12,26 +12,28 @@
 #include "nsILDAPErrors.h"
 #include "nsComponentManagerUtils.h"
 #include "nsMsgUtils.h"
+#include "nsIObserverService.h"
+#include "nsIObserver.h"
+#include "mozilla/Services.h"
+
+using namespace mozilla;
 
 // once bug # 101252 gets fixed, this should be reverted back to be non
 // threadsafe implementation is not really thread safe since each object should
 // exist independently along with its related independent
 // nsAbLDAPReplicationQuery object.
 NS_IMPL_ISUPPORTS(nsAbLDAPProcessReplicationData,
-                  nsIAbLDAPProcessReplicationData, nsILDAPMessageListener)
+                  nsIAbLDAPProcessReplicationData, nsILDAPMessageListener,
+                  nsIObserver)
 
 nsAbLDAPProcessReplicationData::nsAbLDAPProcessReplicationData()
     : nsAbLDAPListenerBase(),
       mState(kIdle),
       mProtocol(-1),
       mCount(0),
-      mDBOpen(false),
       mInitialized(false) {}
 
-nsAbLDAPProcessReplicationData::~nsAbLDAPProcessReplicationData() {
-  /* destructor code */
-  if (mDBOpen && mReplicationDB) mReplicationDB->Close(false);
-}
+nsAbLDAPProcessReplicationData::~nsAbLDAPProcessReplicationData() {}
 
 NS_IMETHODIMP nsAbLDAPProcessReplicationData::Init(
     nsIAbLDAPDirectory *aDirectory, nsILDAPConnection *aConnection,
@@ -129,26 +131,7 @@ NS_IMETHODIMP nsAbLDAPProcessReplicationData::Abort() {
     if (NS_SUCCEEDED(rv)) mState = kIdle;
   }
 
-  if (mReplicationDB && mDBOpen) {
-    // force close since we need to delete the file.
-    mReplicationDB->ForceClosed();
-    mDBOpen = false;
-
-    // delete the unsaved replication file
-    if (mReplicationFile) {
-      rv = mReplicationFile->Remove(false);
-      if (NS_SUCCEEDED(rv) && mDirectory) {
-        nsAutoCString fileName;
-        rv = mDirectory->GetReplicationFileName(fileName);
-        // now put back the backed up replicated file if aborted
-        if (NS_SUCCEEDED(rv) && mBackupReplicationFile)
-          rv = mBackupReplicationFile->MoveToNative(nullptr, fileName);
-      }
-    }
-  }
-
   Done(false);
-
   return rv;
 }
 
@@ -157,7 +140,7 @@ nsresult nsAbLDAPProcessReplicationData::DoTask() {
 
   nsresult rv = OpenABForReplicatedDir(true);
   if (NS_FAILED(rv))
-    // do not call done here since it is called by OpenABForReplicationDir
+    // do not call done here since it is called by OpenABForReplicatedDir
     return rv;
 
   mOperation = do_CreateInstance(NS_LDAPOPERATION_CONTRACTID, &rv);
@@ -207,14 +190,15 @@ nsresult nsAbLDAPProcessReplicationData::OnLDAPSearchEntry(
   if (!mInitialized) return NS_ERROR_NOT_INITIALIZED;
   // since this runs on the main thread and is single threaded, this will
   // take care of entries returned by LDAP Connection thread after Abort.
-  if (!mReplicationDB || !mDBOpen) return NS_ERROR_FAILURE;
+  if (!mReplicationDB) return NS_ERROR_FAILURE;
 
   nsresult rv = NS_OK;
 
   // Although we would may naturally create an nsIAbLDAPCard here, we don't
   // need to as we are writing this straight to the database, so just create
   // the database version instead.
-  nsCOMPtr<nsIAbCard> newCard(do_CreateInstance(NS_ABMDBCARD_CONTRACTID, &rv));
+  nsCOMPtr<nsIAbCard> newCard(
+      do_CreateInstance(NS_ABCARDPROPERTY_CONTRACTID, &rv));
   if (NS_FAILED(rv)) {
     Abort();
     return rv;
@@ -229,7 +213,8 @@ nsresult nsAbLDAPProcessReplicationData::OnLDAPSearchEntry(
     return NS_OK;
   }
 
-  rv = mReplicationDB->CreateNewCardAndAddToDB(newCard, false, nullptr);
+  nsCOMPtr<nsIAbCard> tempCard;
+  rv = mReplicationDB->AddCard(newCard, getter_AddRefs(tempCard));
   if (NS_FAILED(rv)) {
     Abort();
     return rv;
@@ -239,10 +224,10 @@ nsresult nsAbLDAPProcessReplicationData::OnLDAPSearchEntry(
   nsAutoCString authDN;
   rv = aMessage->GetDn(authDN);
   if (NS_SUCCEEDED(rv) && !authDN.IsEmpty()) {
-    newCard->SetPropertyAsAUTF8String("_DN", authDN);
+    tempCard->SetPropertyAsAUTF8String("_DN", authDN);
   }
 
-  rv = mReplicationDB->EditCard(newCard, false, nullptr);
+  rv = mReplicationDB->ModifyCard(tempCard);
   if (NS_FAILED(rv)) {
     Abort();
     return rv;
@@ -263,10 +248,6 @@ nsresult nsAbLDAPProcessReplicationData::OnLDAPSearchEntry(
 
 nsresult nsAbLDAPProcessReplicationData::OnLDAPSearchResult(
     nsILDAPMessage *aMessage) {
-#ifdef DEBUG_rdayal
-  printf("LDAP Replication : Got Results for Completion");
-#endif
-
   NS_ENSURE_ARG_POINTER(aMessage);
   if (!mInitialized) return NS_ERROR_NOT_INITIALIZED;
 
@@ -278,58 +259,20 @@ nsresult nsAbLDAPProcessReplicationData::OnLDAPSearchResult(
     if (errorCode == nsILDAPErrors::SUCCESS ||
         errorCode == nsILDAPErrors::SIZELIMIT_EXCEEDED) {
       Done(true);
-      if (mReplicationDB && mDBOpen) {
-        rv = mReplicationDB->Close(true);
-        NS_ASSERTION(NS_SUCCEEDED(rv),
-                     "Replication DB Close on Success failed");
-        mDBOpen = false;
-        // once we have saved the new replication file, delete the backup file
-        if (mBackupReplicationFile) {
-          rv = mBackupReplicationFile->Remove(false);
-          NS_ASSERTION(NS_SUCCEEDED(rv),
-                       "Replication BackupFile Remove on Success failed");
-        }
-      }
       return NS_OK;
     }
   }
 
   // in case if GetErrorCode returned error or errorCode is not SUCCESS /
   // SIZELIMIT_EXCEEDED
-  if (mReplicationDB && mDBOpen) {
-    // if error result is returned close the DB without saving ???
-    // should we commit anyway ??? whatever is returned is not lost then !!
-    rv = mReplicationDB
-             ->ForceClosed();  // force close since we need to delete the file.
-    NS_ASSERTION(NS_SUCCEEDED(rv),
-                 "Replication DB ForceClosed on Failure failed");
-    mDBOpen = false;
-    // if error result is returned remove the replicated file
-    if (mReplicationFile) {
-      rv = mReplicationFile->Remove(false);
-      NS_ASSERTION(NS_SUCCEEDED(rv),
-                   "Replication File Remove on Failure failed");
-      if (NS_SUCCEEDED(rv)) {
-        // now put back the backed up replicated file
-        if (mBackupReplicationFile && mDirectory) {
-          nsAutoCString fileName;
-          rv = mDirectory->GetReplicationFileName(fileName);
-          if (NS_SUCCEEDED(rv) && !fileName.IsEmpty()) {
-            rv = mBackupReplicationFile->MoveToNative(nullptr, fileName);
-            NS_ASSERTION(NS_SUCCEEDED(rv),
-                         "Replication Backup File Move back on Failure failed");
-          }
-        }
-      }
-    }
-    Done(false);
-  }
-
+  Done(false);
   return NS_OK;
 }
 
 nsresult nsAbLDAPProcessReplicationData::OpenABForReplicatedDir(bool aCreate) {
   if (!mInitialized) return NS_ERROR_NOT_INITIALIZED;
+
+  mDirectory->GetReplicationFileName(mReplicationFileName);
 
   nsresult rv =
       mDirectory->GetReplicationFile(getter_AddRefs(mReplicationFile));
@@ -338,121 +281,122 @@ nsresult nsAbLDAPProcessReplicationData::OpenABForReplicatedDir(bool aCreate) {
     return NS_ERROR_FAILURE;
   }
 
+  // If the database file already exists, create a new one and populate it,
+  // then replace the old file with the new one. Otherwise, create the
+  // database in place.
+  bool fileExists;
+  rv = mReplicationFile->Exists(&fileExists);
+  if (NS_SUCCEEDED(rv) && fileExists) {
+    rv = mReplicationFile->Clone(getter_AddRefs(mOldReplicationFile));
+    if (NS_FAILED(rv)) {
+      Done(false);
+      return rv;
+    }
+
+    rv = mReplicationFile->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 0777);
+    if (NS_FAILED(rv)) {
+      Done(false);
+      return rv;
+    }
+    mReplicationFile->Remove(false);
+  }
+
   nsCString fileName;
   rv = mReplicationFile->GetNativeLeafName(fileName);
   if (NS_FAILED(rv)) {
     Done(false);
     return rv;
   }
+  mDirectory->SetReplicationFileName(fileName);
 
-  // if the AB DB already exists backup existing one,
-  // in case if the user cancels or Abort put back the backed up file
-  bool fileExists;
-  rv = mReplicationFile->Exists(&fileExists);
-  if (NS_SUCCEEDED(rv) && fileExists) {
-    // create the backup file object same as the Replication file object.
-    // we create a backup file here since we need to cleanup the existing file
-    // for create and then commit so instead of deleting existing cards we just
-    // clone the existing one for a much better performance - for Download All.
-    // And also important in case if replication fails we donot lose user's
-    // existing replicated data for both Download all and Changelog.
-    nsCOMPtr<nsIFile> clone;
-    rv = mReplicationFile->Clone(getter_AddRefs(clone));
-    if (NS_FAILED(rv)) {
-      Done(false);
-      return rv;
-    }
-    mBackupReplicationFile = clone;
-    rv = mBackupReplicationFile->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 0777);
-    if (NS_FAILED(rv)) {
-      Done(false);
-      return rv;
-    }
-    nsAutoString backupFileLeafName;
-    rv = mBackupReplicationFile->GetLeafName(backupFileLeafName);
-    if (NS_FAILED(rv)) {
-      Done(false);
-      return rv;
-    }
-    // remove the newly created unique backup file so that move and copy
-    // succeeds.
-    rv = mBackupReplicationFile->Remove(false);
-    if (NS_FAILED(rv)) {
-      Done(false);
-      return rv;
-    }
+  nsCString uri(kJSDirectoryRoot);
+  uri.Append(fileName);
 
-    if (aCreate) {
-      // set backup file to existing replication file for move
-      mBackupReplicationFile->SetNativeLeafName(fileName);
-
-      rv = mBackupReplicationFile->MoveTo(nullptr, backupFileLeafName);
-      // set the backup file leaf name now
-      if (NS_SUCCEEDED(rv))
-        mBackupReplicationFile->SetLeafName(backupFileLeafName);
-    } else {
-      // set backup file to existing replication file for copy
-      mBackupReplicationFile->SetNativeLeafName(fileName);
-
-      // specify the parent here specifically,
-      // passing nullptr to copy to the same dir actually renames existing file
-      // instead of making another copy of the existing file.
-      nsCOMPtr<nsIFile> parent;
-      rv = mBackupReplicationFile->GetParent(getter_AddRefs(parent));
-      if (NS_SUCCEEDED(rv))
-        rv = mBackupReplicationFile->CopyTo(parent, backupFileLeafName);
-      // set the backup file leaf name now
-      if (NS_SUCCEEDED(rv))
-        mBackupReplicationFile->SetLeafName(backupFileLeafName);
-    }
-    if (NS_FAILED(rv)) {
-      Done(false);
-      return rv;
-    }
-  }
-
-  nsCOMPtr<nsIAddrDatabase> addrDBFactory =
-      do_GetService(NS_ADDRDATABASE_CONTRACTID, &rv);
+  mReplicationDB = do_CreateInstance(NS_ABJSDIRECTORY_CONTRACTID, &rv);
   if (NS_FAILED(rv)) {
-    if (mBackupReplicationFile) mBackupReplicationFile->Remove(false);
+    Done(false);
+    return rv;
+  }
+  rv = mReplicationDB->Init(uri.get());
+  if (NS_FAILED(rv)) {
     Done(false);
     return rv;
   }
 
-  rv = addrDBFactory->Open(mReplicationFile, aCreate, true,
-                           getter_AddRefs(mReplicationDB));
-  if (NS_FAILED(rv)) {
-    Done(false);
-    if (mBackupReplicationFile) mBackupReplicationFile->Remove(false);
-    return rv;
-  }
-
-  mDBOpen = true;  // replication DB is now Open
   return rv;
+}
+
+NS_IMETHODIMP nsAbLDAPProcessReplicationData::Observe(nsISupports *aSubject,
+                                                      const char *aTopic,
+                                                      const char16_t *aData) {
+  if (mDatabaseClosedPromise) {
+    mDatabaseClosedPromise->Resolve(true, __func__);
+  }
+  return NS_OK;
+}
+
+RefPtr<GenericPromise> nsAbLDAPProcessReplicationData::PromiseDatabaseClosed(
+    nsIFile *file) {
+  nsCOMPtr<nsIObserverService> observerService =
+      mozilla::services::GetObserverService();
+  observerService->NotifyObservers(file, "addrbook-close-ab", nullptr);
+
+  mDatabaseClosedPromise = new GenericPromise::Private(__func__);
+  return mDatabaseClosedPromise;
 }
 
 void nsAbLDAPProcessReplicationData::Done(bool aSuccess) {
   if (!mInitialized) return;
 
-  mState = kReplicationDone;
+  nsCOMPtr<nsIObserverService> observerService =
+      mozilla::services::GetObserverService();
+  observerService->AddObserver(this, "addrbook-close-ab-complete", false);
+  RefPtr<GenericPromise> promise;
 
-  if (mQuery) mQuery->Done(aSuccess);
+  if (aSuccess) {
+    if (mOldReplicationFile) {
+      // Close mReplicationFile.
+      promise =
+          this->PromiseDatabaseClosed(mReplicationFile)
+              ->Then(GetCurrentThreadSerialEventTarget(), __func__,
+                     [&] {
+                       // Close mOldReplicationFile.
+                       return this->PromiseDatabaseClosed(mOldReplicationFile);
+                     })
+              ->Then(GetCurrentThreadSerialEventTarget(), __func__, [&] {
+                // Remove mOldReplicationFile.
+                mOldReplicationFile->Remove(false);
+                // Move mReplicationFile to the right place.
+                mReplicationFile->MoveToNative(nullptr, mReplicationFileName);
+                return GenericPromise::CreateAndResolve(true, __func__);
+              });
+    } else {
+      promise = GenericPromise::CreateAndResolve(true, __func__);
+    }
+  } else {
+    // Close mReplicationFile.
+    mReplicationFile->Remove(false);
+    promise = this->PromiseDatabaseClosed(mReplicationFile);
+  }
 
-  if (mListener)
-    // XXX Cast from bool to nsresult
-    mListener->OnStateChange(nullptr, nullptr,
-                             nsIWebProgressListener::STATE_STOP,
-                             static_cast<nsresult>(aSuccess));
+  promise->Then(GetCurrentThreadSerialEventTarget(), __func__, [&] {
+    nsCOMPtr<nsIObserverService> observerService =
+        mozilla::services::GetObserverService();
+    observerService->RemoveObserver(this, "addrbook-close-ab-complete");
 
-  // since this is called when all is done here, either on success,
-  // failure or abort release the query now.
-  mQuery = nullptr;
-}
+    mDirectory->SetReplicationFileName(mReplicationFileName);
+    mState = kReplicationDone;
 
-nsresult nsAbLDAPProcessReplicationData::DeleteCard(nsString &aDn) {
-  nsCOMPtr<nsIAbCard> cardToDelete;
-  mReplicationDB->GetCardFromAttribute(nullptr, "_DN",
-                                       NS_ConvertUTF16toUTF8(aDn), false,
-                                       getter_AddRefs(cardToDelete));
-  return mReplicationDB->DeleteCard(cardToDelete, false, nullptr);
+    if (mQuery) mQuery->Done(aSuccess);
+
+    if (mListener)
+      // XXX Cast from bool to nsresult
+      mListener->OnStateChange(nullptr, nullptr,
+                               nsIWebProgressListener::STATE_STOP,
+                               aSuccess ? NS_OK : NS_ERROR_FAILURE);
+
+    // since this is called when all is done here, either on success,
+    // failure or abort release the query now.
+    mQuery = nullptr;
+  });
 }

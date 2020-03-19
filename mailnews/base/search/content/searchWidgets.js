@@ -16,9 +16,6 @@
     "resource:///modules/MailServices.jsm"
   );
   const { MailUtils } = ChromeUtils.import("resource:///modules/MailUtils.jsm");
-  const { fixIterator } = ChromeUtils.import(
-    "resource:///modules/iteratorUtils.jsm"
-  );
 
   const updateParentNode = parentNode => {
     if (parentNode.hasAttribute("initialActionIndex")) {
@@ -38,7 +35,7 @@
       menulist.setAttribute("flex", "1");
       menulist.appendChild(menuPopup);
 
-      for (let taginfo of MailServices.tags.getAllTags({})) {
+      for (let taginfo of MailServices.tags.getAllTags()) {
         const newMenuItem = document.createXULElement("menuitem");
         newMenuItem.setAttribute("label", taginfo.tag);
         newMenuItem.setAttribute("value", taginfo.key);
@@ -215,8 +212,8 @@
 
       const type = this.getAttribute("type");
 
-      while (this.firstChild) {
-        this.firstChild.remove();
+      while (this.lastChild) {
+        this.lastChild.remove();
       }
 
       if (type == null) {
@@ -469,7 +466,7 @@
         // Customize menuitem selected.
         let args = {};
         window.openDialog(
-          "chrome://messenger/content/CustomHeaders.xul",
+          "chrome://messenger/content/CustomHeaders.xhtml",
           "",
           "modal,centerscreen,resizable,titlebar,chrome",
           args
@@ -809,43 +806,43 @@
 
         // Initialize the priority picker.
         this.fillStringsForChildren(
-          this.childNodes[1].querySelector("menupopup"),
+          this.children[1].querySelector("menupopup"),
           bundle
         );
 
         // Initialize the status picker.
         this.fillStringsForChildren(
-          this.childNodes[2].querySelector("menupopup"),
+          this.children[2].querySelector("menupopup"),
           bundle
         );
 
         // initialize the address book picker
         this.fillStringsForChildren(
-          this.childNodes[4].querySelector("menupopup"),
+          this.children[4].querySelector("menupopup"),
           bundle
         );
 
         // initialize the junk status picker
         this.fillStringsForChildren(
-          this.childNodes[6].querySelector("menupopup"),
+          this.children[6].querySelector("menupopup"),
           bundle
         );
 
         // initialize the has attachment status picker
         this.fillStringsForChildren(
-          this.childNodes[7].querySelector("menupopup"),
+          this.children[7].querySelector("menupopup"),
           bundle
         );
 
         // initialize the junk score origin picker
         this.fillStringsForChildren(
-          this.childNodes[8].querySelector("menupopup"),
+          this.children[8].querySelector("menupopup"),
           bundle
         );
       }
 
       // Initialize the date picker.
-      const datePicker = this.childNodes[3];
+      const datePicker = this.children[3];
       const searchAttribute = this.searchAttribute;
       const time =
         searchAttribute == Ci.nsMsgSearchAttrib.Date
@@ -922,7 +919,7 @@
         return val;
       }
 
-      const children = this.childNodes;
+      const children = this.children;
       if (val == Ci.nsMsgSearchOp.IsntInAB || val == Ci.nsMsgSearchOp.IsInAB) {
         // If the old internalOperator was IsntInAB or IsInAB, and the new internalOperator is
         // IsntInAB or IsInAB, noop because the search value was an ab type, and it still is.
@@ -980,7 +977,7 @@
       if (isNaN(val)) {
         // Is this a custom attribute?
         this.setAttribute("selectedIndex", "10");
-        let customHbox = this.childNodes[10];
+        let customHbox = this.children[10];
         if (this.internalValue) {
           customHbox.setAttribute("value", this.internalValue.str);
         }
@@ -1007,17 +1004,17 @@
       } else if (val == Ci.nsMsgSearchAttrib.JunkScoreOrigin) {
         this.setAttribute("selectedIndex", "8");
       } else if (val == Ci.nsMsgSearchAttrib.AgeInDays) {
-        let valueBox = this.childNodes[9];
+        let valueBox = this.children[9];
         valueBox.min = -40000; // ~-100 years
         valueBox.max = 40000; // ~100 years
         this.setAttribute("selectedIndex", "9");
       } else if (val == Ci.nsMsgSearchAttrib.Size) {
-        let valueBox = this.childNodes[9];
+        let valueBox = this.children[9];
         valueBox.min = 0;
         valueBox.max = 1000000000;
         this.setAttribute("selectedIndex", "9");
       } else if (val == Ci.nsMsgSearchAttrib.JunkPercent) {
-        let valueBox = this.childNodes[9];
+        let valueBox = this.children[9];
         valueBox.min = 0;
         valueBox.max = 100;
         this.setAttribute("selectedIndex", "9");
@@ -1036,11 +1033,11 @@
       // val is a nsIMsgSearchValue object
       this.internalValue = val;
       const attrib = this.internalAttribute;
-      const children = this.childNodes;
+      const children = this.children;
       this.searchAttribute = attrib;
       if (isNaN(attrib)) {
         // a custom term
-        let customHbox = this.childNodes[10];
+        let customHbox = this.children[10];
         customHbox.setAttribute("value", val.str);
         return val;
       }
@@ -1124,7 +1121,7 @@
     save() {
       const searchValue = this.value;
       const searchAttribute = this.searchAttribute;
-      const children = this.childNodes;
+      const children = this.children;
 
       searchValue.attrib = searchAttribute;
       if (searchAttribute == Ci.nsMsgSearchAttrib.Priority) {
@@ -1177,10 +1174,10 @@
     }
 
     fillInTags() {
-      let menulist = this.childNodes[5];
+      let menulist = this.children[5];
       // Force initialization of the menulist custom element first.
       customElements.upgrade(menulist);
-      let tagArray = MailServices.tags.getAllTags({});
+      let tagArray = MailServices.tags.getAllTags();
       for (let i = 0; i < tagArray.length; i++) {
         const taginfo = tagArray[i];
         const newMenuItem = menulist.appendItem(taginfo.tag, taginfo.key);
@@ -1191,7 +1188,7 @@
     }
 
     fillStringsForChildren(parentNode, bundle) {
-      for (let node of parentNode.childNodes) {
+      for (let node of parentNode.children) {
         const stringTag = node.getAttribute("stringTag");
         if (stringTag) {
           const attr = node.tagName == "label" ? "value" : "label";
@@ -1427,17 +1424,14 @@
             continue;
           }
 
-          while (enumerator.hasMoreElements()) {
-            let header = enumerator.getNext();
-            if (header instanceof Ci.nsIMsgDBHdr) {
-              let uri =
-                msgFolder.URI +
-                "?messageId=" +
-                header.messageId +
-                "&subject=" +
-                header.mime2DecodedSubject;
-              templates.push({ label: header.mime2DecodedSubject, value: uri });
-            }
+          for (let header of enumerator) {
+            let uri =
+              msgFolder.URI +
+              "?messageId=" +
+              header.messageId +
+              "&subject=" +
+              header.mime2DecodedSubject;
+            templates.push({ label: header.mime2DecodedSubject, value: uri });
           }
         }
         return templates;
@@ -1583,14 +1577,14 @@
 
     initWithAction(aFilterAction) {
       let filterActionStr;
-      let actionTarget = this.childNodes[1];
+      let actionTarget = this.children[1];
       let actionItem = actionTarget.ruleactiontargetElement;
       let nsMsgFilterAction = Ci.nsMsgFilterAction;
       switch (aFilterAction.type) {
         case nsMsgFilterAction.Custom:
           filterActionStr = aFilterAction.customId;
           if (actionItem) {
-            actionItem.childNodes[0].value = aFilterAction.strValue;
+            actionItem.children[0].value = aFilterAction.strValue;
           }
 
           // Make sure the custom action has been added. If not, it
@@ -1629,23 +1623,23 @@
           break;
         case nsMsgFilterAction.MoveToFolder:
         case nsMsgFilterAction.CopyToFolder:
-          actionItem.childNodes[0].value = aFilterAction.targetFolderUri;
+          actionItem.children[0].value = aFilterAction.targetFolderUri;
           break;
         case nsMsgFilterAction.Reply:
         case nsMsgFilterAction.Forward:
-          actionItem.childNodes[0].value = aFilterAction.strValue;
+          actionItem.children[0].value = aFilterAction.strValue;
           break;
         case nsMsgFilterAction.Label:
-          actionItem.childNodes[0].value = aFilterAction.label;
+          actionItem.children[0].value = aFilterAction.label;
           break;
         case nsMsgFilterAction.ChangePriority:
-          actionItem.childNodes[0].value = aFilterAction.priority;
+          actionItem.children[0].value = aFilterAction.priority;
           break;
         case nsMsgFilterAction.JunkScore:
-          actionItem.childNodes[0].value = aFilterAction.junkScore;
+          actionItem.children[0].value = aFilterAction.junkScore;
           break;
         case nsMsgFilterAction.AddTag:
-          actionItem.childNodes[0].value = aFilterAction.strValue;
+          actionItem.children[0].value = aFilterAction.strValue;
           break;
         default:
           break;
@@ -1667,10 +1661,10 @@
      */
     validateAction() {
       let filterActionString = this.getAttribute("value");
-      let actionTarget = this.childNodes[1];
+      let actionTarget = this.children[1];
       let actionTargetLabel =
         actionTarget.ruleactiontargetElement &&
-        actionTarget.ruleactiontargetElement.childNodes[0].value;
+        actionTarget.ruleactiontargetElement.children[0].value;
       let errorString, customError;
 
       switch (filterActionString) {
@@ -1692,9 +1686,7 @@
           }
           break;
         case "replytomessage":
-          if (
-            !actionTarget.ruleactiontargetElement.childNodes[0].selectedItem
-          ) {
+          if (!actionTarget.ruleactiontargetElement.children[0].selectedItem) {
             errorString = "pickTemplateToReplyWith";
           }
           break;
@@ -1732,31 +1724,29 @@
       let filterAction = aFilter.createAction();
       let filterActionString = this.getAttribute("value");
       filterAction.type = gFilterActionStrings.indexOf(filterActionString);
-      let actionTarget = this.childNodes[1];
+      let actionTarget = this.children[1];
       let actionItem = actionTarget.ruleactiontargetElement;
       let nsMsgFilterAction = Ci.nsMsgFilterAction;
       switch (filterAction.type) {
         case nsMsgFilterAction.Label:
-          filterAction.label = actionItem.childNodes[0].getAttribute("value");
+          filterAction.label = actionItem.children[0].getAttribute("value");
           break;
         case nsMsgFilterAction.ChangePriority:
-          filterAction.priority = actionItem.childNodes[0].getAttribute(
-            "value"
-          );
+          filterAction.priority = actionItem.children[0].getAttribute("value");
           break;
         case nsMsgFilterAction.MoveToFolder:
         case nsMsgFilterAction.CopyToFolder:
-          filterAction.targetFolderUri = actionItem.childNodes[0].value;
+          filterAction.targetFolderUri = actionItem.children[0].value;
           break;
         case nsMsgFilterAction.JunkScore:
-          filterAction.junkScore = actionItem.childNodes[0].value;
+          filterAction.junkScore = actionItem.children[0].value;
           break;
         case nsMsgFilterAction.Custom:
           filterAction.customId = filterActionString;
         // Fall through to set the value.
         default:
-          if (actionItem && actionItem.childNodes.length > 0) {
-            filterAction.strValue = actionItem.childNodes[0].value;
+          if (actionItem && actionItem.children.length > 0) {
+            filterAction.strValue = actionItem.children[0].value;
           }
           break;
       }
@@ -1777,7 +1767,7 @@
       });
       listItem.classList.add("ruleaction");
       listItem.setAttribute("onfocus", "this.storeFocus();");
-      this.mListBox.insertBefore(listItem, this.nextSibling);
+      this.mListBox.insertBefore(listItem, this.nextElementSibling);
       this.mListBox.ensureElementIsVisible(listItem);
 
       // Make sure the first remove button is enabled.

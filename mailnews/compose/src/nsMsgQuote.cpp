@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -164,8 +164,8 @@ nsresult nsMsgQuote::QuoteMessage(
 
   nsCOMPtr<nsIStreamListener> convertedListener;
   rv = streamConverterService->AsyncConvertData(
-      "message/rfc822", "application/vnd.mozilla.xul+xml", mStreamListener,
-      quoteSupport, getter_AddRefs(convertedListener));
+      "message/rfc822", "application/xhtml+xml", mStreamListener, quoteSupport,
+      getter_AddRefs(convertedListener));
   if (NS_FAILED(rv)) return rv;
 
   //  now try to open the channel passing in our display consumer as the

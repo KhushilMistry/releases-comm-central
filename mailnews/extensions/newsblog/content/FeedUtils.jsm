@@ -6,7 +6,7 @@
 this.EXPORTED_SYMBOLS = ["Feed", "FeedItem", "FeedParser", "FeedUtils"];
 
 /* eslint-disable-next-line no-unused-vars */
-const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 const { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
@@ -493,7 +493,7 @@ var FeedUtils = {
         arg.data = aUrl;
         Services.ww.openWindow(
           null,
-          "chrome://messenger/content/",
+          "chrome://messenger/content/messenger.xhtml",
           "_blank",
           "chrome,dialog=no,all",
           arg
@@ -1152,20 +1152,20 @@ var FeedUtils = {
       // note: deleteFeed() calls saveSoon(), so we don't need to.
     } else if (aFolder.server == aOrigFolder.server) {
       // Staying in same account - just update destFolder as required
-      affectedSubs.forEach(function(sub) {
+      for (let sub of affectedSubs) {
         sub.destFolder = folderURI;
-      });
+      }
       origDS.saveSoon();
     } else {
-      // Moving between folders.
+      // Moving between accounts.
       let destDS = this.getSubscriptionsDS(aFolder.server);
-      affectedSubs.forEach(function(sub) {
+      for (let sub of affectedSubs) {
         // Move to the new subscription db (replacing any existing entry).
         origDS.data = origDS.data.filter(x => x.url != sub.url);
         destDS.data = destDS.data.filter(x => x.url != sub.url);
         sub.destFolder = folderURI;
-        destDS.push(sub);
-      });
+        destDS.data.push(sub);
+      }
       this.setFolderPaneProperty(aFolder, "favicon", null, "row");
       origDS.saveSoon();
       destDS.saveSoon();
@@ -1427,7 +1427,7 @@ var FeedUtils = {
     }
     this[aServer.serverURI].FeedsDS = ds;
     if (!exists) {
-      // No feeds.json, so we need to initalise.
+      // No feeds.json, so we need to initialise.
       ds.data = [];
     }
     return ds;

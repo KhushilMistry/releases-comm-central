@@ -334,7 +334,7 @@ function toggleFilter(aFilterItem, aSetForEvent) {
 
   // Now update the checkbox
   if (aSetForEvent === undefined) {
-    aFilterItem.firstChild.nextSibling.checked = filter.enabled;
+    aFilterItem.firstElementChild.nextElementSibling.checked = filter.enabled;
   }
   // For accessibility set the checked state on listitem
   aFilterItem.setAttribute("aria-checked", filter.enabled);
@@ -388,7 +388,7 @@ function onEditFilter() {
   let args = { filter: selectedFilter, filterList: gCurrentFilterList };
 
   window.openDialog(
-    "chrome://messenger/content/FilterEditor.xul",
+    "chrome://messenger/content/FilterEditor.xhtml",
     "FilterEditor",
     "chrome,modal,titlebar,resizable,centerscreen",
     args
@@ -457,7 +457,7 @@ function calculatePositionAndShowCreateFilterDialog(args) {
   args.filterList = gCurrentFilterList;
 
   window.openDialog(
-    "chrome://messenger/content/FilterEditor.xul",
+    "chrome://messenger/content/FilterEditor.xhtml",
     "FilterEditor",
     "chrome,modal,titlebar,resizable,centerscreen",
     args
@@ -649,7 +649,7 @@ function viewLog() {
   var args = { filterList: gCurrentFilterList };
 
   window.openDialog(
-    "chrome://messenger/content/viewLog.xul",
+    "chrome://messenger/content/viewLog.xhtml",
     "FilterLog",
     "chrome,modal,titlebar,resizable,centerscreen",
     args
@@ -807,8 +807,8 @@ function rebuildFilterList() {
       // If there is a free existing listitem, reuse it.
       // Use .itemChildren[] instead of .getItemAtIndex() as it is much faster.
       listitem = gFilterListbox.itemChildren[listitemIndex];
-      nameCell = listitem.firstChild;
-      enabledCell = nameCell.nextSibling;
+      nameCell = listitem.firstElementChild;
+      enabledCell = nameCell.nextElementSibling;
     } else {
       // If there are not enough listitems in the list, create a new one.
       listitem = document.createXULElement("richlistitem");
@@ -865,8 +865,11 @@ function updateViewPosition(firstVisibleRowIndex) {
 
   // Restore to the extent possible the scroll position.
   if (firstVisibleRowIndex && gFilterListbox.itemCount) {
-    gFilterListbox.scrollToIndex(
-      Math.min(firstVisibleRowIndex, gFilterListbox.itemCount - 1)
+    gFilterListbox.ensureElementIsVisible(
+      gFilterListbox.getItemAtIndex(
+        Math.min(firstVisibleRowIndex, gFilterListbox.itemCount - 1)
+      ),
+      true
     );
   }
 

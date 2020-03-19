@@ -127,7 +127,7 @@ async function testBodyWithLongLine() {
     '<meta http-equiv="content-type" content="text/html; charset=utf-8">' +
     "</head><body>" +
     longMultibyteLine +
-    "</body></html>";
+    "</body></html>\r\n";
   fields.body = htmlMessage;
   await richCreateMessage(fields, [], identity);
   checkDraftHeadersAndBody(
@@ -148,7 +148,7 @@ async function testBodyWithLongLine() {
       "Content-Type": "text/plain; charset=UTF-8; format=flowed",
       "Content-Transfer-Encoding": "base64",
     },
-    longMultibyteLine + newline // Expected body: The message without the tags.
+    longMultibyteLine + " " + newline + newline // Expected body: The message without the tags.
   );
 
   // Now CJK.
@@ -158,7 +158,7 @@ async function testBodyWithLongLine() {
     '<meta http-equiv="content-type" content="text/html; charset=utf-8">' +
     "</head><body>" +
     longMultibyteLineCJK +
-    "</body></html>";
+    "</body></html>\r\n";
   fields.body = htmlMessage;
   await richCreateMessage(fields, [], identity);
   checkDraftHeadersAndBody(
@@ -179,7 +179,7 @@ async function testBodyWithLongLine() {
       "Content-Type": "text/plain; charset=UTF-8; format=flowed",
       "Content-Transfer-Encoding": "base64",
     },
-    longMultibyteLineCJK + newline // Expected body: The message without the tags.
+    longMultibyteLineCJK + " " + newline + newline // Expected body: The message without the tags.
   );
 
   // Now a special test for ISO-2022-JP.
@@ -191,7 +191,7 @@ async function testBodyWithLongLine() {
     '<meta http-equiv="content-type" content="text/html; charset=ISO-2022-JP">' +
     "</head><body>" +
     longMultibyteLineJapanese +
-    "</body></html>";
+    "</body></html>\r\n";
   fields.body = htmlMessage;
   await richCreateMessage(fields, [], identity);
   checkDraftHeadersAndBody(

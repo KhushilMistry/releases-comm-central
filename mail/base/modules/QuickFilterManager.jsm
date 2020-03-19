@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = [
+const EXPORTED_SYMBOLS = [
   "QuickFilterState",
   "QuickFilterManager",
   "MessageTextFilter",
@@ -18,7 +18,7 @@ const { AppConstants } = ChromeUtils.import(
 );
 
 const { logException, logObject } = ChromeUtils.import(
-  "resource:///modules/errUtils.js"
+  "resource:///modules/ErrUtils.jsm"
 );
 const { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
@@ -27,11 +27,11 @@ const { MailServices } = ChromeUtils.import(
 // XXX we need to know whether the gloda indexer is enabled for upsell reasons,
 // but this should really just be exposed on the main Gloda public interface.
 const { GlodaIndexer } = ChromeUtils.import(
-  "resource:///modules/gloda/indexer.js"
+  "resource:///modules/gloda/GlodaIndexer.jsm"
 );
 // we need to be able to create gloda message searcher instances for upsells:
 const { GlodaMsgSearcher } = ChromeUtils.import(
-  "resource:///modules/gloda/msg_search.js"
+  "resource:///modules/gloda/GlodaMsgSearcher.jsm"
 );
 
 /**
@@ -624,12 +624,10 @@ QuickFilterManager.defineFilter({
   domId: "qfb-inaddrbook",
   appendTerms(aTermCreator, aTerms, aFilterValue) {
     let term, value;
-    let enumerator = MailServices.ab.directories;
     let firstBook = true;
     term = null;
-    while (enumerator.hasMoreElements()) {
-      let addrbook = enumerator.getNext();
-      if (addrbook instanceof Ci.nsIAbDirectory && !addrbook.isRemote) {
+    for (let addrbook of MailServices.ab.directories) {
+      if (!addrbook.isRemote) {
         term = aTermCreator.createTerm();
         term.attrib = Ci.nsMsgSearchAttrib.Sender;
         value = term.value;
@@ -807,7 +805,7 @@ var TagFacetingFilter = {
 
     // only propagate things that are actually tags though!
     let outKeyMap = { tags: {} };
-    let tags = MailServices.tags.getAllTags({});
+    let tags = MailServices.tags.getAllTags();
     let tagCount = tags.length;
     for (let iTag = 0; iTag < tagCount; iTag++) {
       let tag = tags[iTag];
@@ -917,14 +915,14 @@ var TagFacetingFilter = {
     }
 
     // -- nuke existing exposed tags, but not the mode selector (which is first)
-    while (tagbar.childNodes.length > 1) {
-      tagbar.lastChild.remove();
+    while (tagbar.children.length > 1) {
+      tagbar.lastElementChild.remove();
     }
 
     let addCount = 0;
 
     // -- create an element for each tag
-    let tags = MailServices.tags.getAllTags({});
+    let tags = MailServices.tags.getAllTags();
     let tagCount = tags.length;
     for (let iTag = 0; iTag < tagCount; iTag++) {
       let tag = tags[iTag];
@@ -1001,7 +999,7 @@ var MessageTextFilter = {
    * to put a quote at the end of the string.  (This is important because we
    * update using a timer and this results in stable behavior.)
    *
-   * This code is cloned from gloda's msg_search.js and known good (enough :).
+   * This code is cloned from gloda's GlodaMsgSearcher.jsm and known good (enough :).
    * I did change the friendless quote situation, though.
    *
    * @param aSearchString The phrase to parse up.
@@ -1154,7 +1152,7 @@ var MessageTextFilter = {
         let panel = aDocument.getElementById("qfb-text-search-upsell");
         if (
           (Services.focus.activeWindow != aDocument.defaultView ||
-            aDocument.commandDispatcher.focusedElement != aNode.inputField) &&
+            aDocument.commandDispatcher.focusedElement != aNode) &&
           panel.state == "open"
         ) {
           panel.hidePopup();
@@ -1216,7 +1214,7 @@ var MessageTextFilter = {
 
       if (
         panel.state == "closed" &&
-        aDocument.commandDispatcher.focusedElement == aNode.inputField
+        aDocument.commandDispatcher.focusedElement == aNode
       ) {
         let filterBar = aDocument.getElementById("quick-filter-bar");
         // panel.sizeTo(filterBar.clientWidth - 20, filterBar.clientHeight - 20);

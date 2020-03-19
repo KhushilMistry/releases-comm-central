@@ -5,12 +5,12 @@
 var { XPCOMUtils } = ChromeUtils.import(
   "resource://gre/modules/XPCOMUtils.jsm"
 );
-var { Gloda } = ChromeUtils.import("resource:///modules/gloda/gloda.js");
+var { Gloda } = ChromeUtils.import("resource:///modules/gloda/Gloda.jsm");
 var { mimeMsgToContentSnippetAndMeta } = ChromeUtils.import(
-  "resource:///modules/gloda/connotent.js"
+  "resource:///modules/gloda/GlodaContent.jsm"
 );
 var { MsgHdrToMimeMessage } = ChromeUtils.import(
-  "resource:///modules/gloda/mimemsg.js"
+  "resource:///modules/gloda/MimeMessage.jsm"
 );
 var { DisplayNameUtils } = ChromeUtils.import(
   "resource:///modules/DisplayNameUtils.jsm"
@@ -21,7 +21,7 @@ var { MailServices } = ChromeUtils.import(
 var { TagUtils } = ChromeUtils.import("resource:///modules/TagUtils.jsm");
 
 var { PluralStringFormatter, makeFriendlyDateAgo } = ChromeUtils.import(
-  "resource:///modules/templateUtils.js"
+  "resource:///modules/TemplateUtils.jsm"
 );
 
 var gMessenger = Cc["@mozilla.org/messenger;1"].createInstance(Ci.nsIMessenger);
@@ -242,12 +242,16 @@ MultiMessageSummary.prototype = {
     row.classList.toggle("thread", thread && thread.length > 1);
     row.classList.toggle("unread", numUnread > 0);
     row.classList.toggle("starred", isStarred);
-    row.innerHTML =
-      '<div class="star"/>' +
-      '<div class="item_summary">' +
-      '<div class="item_header"/>' +
-      '<div class="snippet"/>' +
-      "</div>";
+
+    row.appendChild(document.createElement("div")).classList.add("star");
+
+    let summary = document.createElement("div");
+    summary.classList.add("item_summary");
+    summary
+      .appendChild(document.createElement("div"))
+      .classList.add("item_header");
+    summary.appendChild(document.createElement("div")).classList.add("snippet");
+    row.appendChild(summary);
 
     let itemHeaderNode = row.querySelector(".item_header");
 
@@ -373,7 +377,7 @@ MultiMessageSummary.prototype = {
    */
   _getTagsForMsg(aMsgHdr) {
     let keywords = new Set(aMsgHdr.getStringProperty("keywords").split(" "));
-    let allTags = MailServices.tags.getAllTags({});
+    let allTags = MailServices.tags.getAllTags();
 
     return allTags.filter(function(tag) {
       return keywords.has(tag.key);
@@ -474,6 +478,9 @@ MultiMessageSummary.prototype = {
       // items warrant it.
       let key = glodaMsg.messageKey + glodaMsg.folder.uri;
       let headerNode = this._msgNodes[key];
+      if (!headerNode) {
+        continue;
+      }
       if (!knownMessageNodes.has(headerNode)) {
         knownMessageNodes.set(headerNode, {
           read: true,

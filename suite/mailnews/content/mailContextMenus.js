@@ -264,6 +264,7 @@ function FillFolderPaneContextMenu()
   SetupRenameMenuItem(folder, numSelected, isServer, serverType, specialFolder);
   SetupRemoveMenuItem(folder, numSelected, isServer, serverType, specialFolder);
   SetupCompactMenuItem(folder, numSelected);
+  SetupFavoritesMenuItem(folder, numSelected, isServer, "folderPaneContext-favoriteFolder");
 
   ShowMenuItem("folderPaneContext-emptyTrash", (numSelected <= 1) && (specialFolder == 'Trash'));
   EnableMenuItem("folderPaneContext-emptyTrash", true);
@@ -335,6 +336,20 @@ function SetupCompactMenuItem(folder, numSelected)
 
   if (canCompact)
     SetMenuItemLabel("folderPaneContext-compact", gMessengerBundle.getString("compactFolder"));
+}
+
+function SetupFavoritesMenuItem(folder, numSelected, isServer, menuItemId)
+{
+  var showItem = !isServer && (numSelected <=1);
+  ShowMenuItem(menuItemId, showItem);
+
+  // adjust the checked state on the menu
+  if (showItem)
+  {
+    document.getElementById(menuItemId)
+            .setAttribute("checked",
+                          folder.getFlag(Ci.nsMsgFolderFlags.Favorite));
+  }
 }
 
 function SetupNewMenuItem(folder, numSelected, isServer, serverType, specialFolder)
@@ -465,7 +480,7 @@ function SendMailTo(fullAddress, aEvent)
 
   var headerParser = MailServices.headerParser;
   var addresses = headerParser.makeFromDisplayAddress(fullAddress);
-  fields.to = headerParser.makeMimeHeader(addresses, 1);
+  fields.to = headerParser.makeMimeHeader([addresses[0]]);
   params.type = Ci.nsIMsgCompType.New;
 
   // If aEvent is passed, check if Shift key was pressed for composition in
@@ -679,14 +694,8 @@ function CheckForMessageIdInFolder(folder, messageId)
     dump("Failed to find message-id in folder!");
   }
 
-  if (!gMailSession)
-  {
-    gMailSession = Cc["@mozilla.org/messenger/services/session;1"]
-                     .getService(Ci.nsIMsgMailSession);
-  }
-
   const nsMsgFolderFlags = Ci.nsMsgFolderFlags;
-  if (!gMailSession.IsFolderOpenInWindow(folder) &&
+  if (!MailServices.mailSession.IsFolderOpenInWindow(folder) &&
       !(folder.flags & (nsMsgFolderFlags.Trash | nsMsgFolderFlags.Inbox)))
   {
     folder.msgDatabase = null;

@@ -5,10 +5,10 @@
 
 /* import-globals-from ../../../test/resources/logHelper.js */
 /* import-globals-from ../../../test/resources/asyncTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 
 var gMsgImapInboxFolder;
 
@@ -36,8 +36,7 @@ var tests = [
       let now = new Date();
       let dateInSeconds = now.getSeconds();
       let cutOffDateInSeconds = dateInSeconds - 5 * 60 * 24;
-      while (enumerator.hasMoreElements()) {
-        let header = enumerator.getNext();
+      for (let header of enumerator) {
         if (header instanceof Ci.nsIMsgDBHdr) {
           if (header.dateInSeconds < cutOffDateInSeconds) {
             Assert.equal(header.getStringProperty("pendingRemoval"), "1");

@@ -2,11 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* global MozElements, MozXULElement, Services, timeIndicator */
+/* global calendarNavigationBar, MozElements, MozXULElement, Services, timeIndicator */
 
 "use strict";
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 // Wrap in a block to prevent leaking to window scope.
 {
@@ -26,15 +26,29 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
       super.connectedCallback();
 
       const row = `
-        <row class="calendar-month-view-grid-row" flex="1">
-          <calendar-month-day-box/>
-          <calendar-month-day-box/>
-          <calendar-month-day-box/>
-          <calendar-month-day-box/>
-          <calendar-month-day-box/>
-          <calendar-month-day-box/>
-          <calendar-month-day-box/>
-        </row>
+        <html:tr class="calendar-month-view-grid-row">
+          <html:td>
+            <calendar-month-day-box/>
+          </html:td>
+          <html:td>
+            <calendar-month-day-box/>
+          </html:td>
+          <html:td>
+            <calendar-month-day-box/>
+          </html:td>
+          <html:td>
+            <calendar-month-day-box/>
+          </html:td>
+          <html:td>
+            <calendar-month-day-box/>
+          </html:td>
+          <html:td>
+            <calendar-month-day-box/>
+          </html:td>
+          <html:td>
+            <calendar-month-day-box/>
+          </html:td>
+        </html:tr>
         `;
 
       this.appendChild(
@@ -43,28 +57,14 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
                 flex="1">
             <hbox class="labeldaybox labeldaybox-container"
                   equalsize="always"/>
-            <grid class="monthgrid"
-                  flex="1">
-              <columns class="monthgridcolumns"
-                       equalsize="always">
-                <column class="calendar-month-view-grid-column" flex="1"/>
-                <column class="calendar-month-view-grid-column" flex="1"/>
-                <column class="calendar-month-view-grid-column" flex="1"/>
-                <column class="calendar-month-view-grid-column" flex="1"/>
-                <column class="calendar-month-view-grid-column" flex="1"/>
-                <column class="calendar-month-view-grid-column" flex="1"/>
-                <column class="calendar-month-view-grid-column" flex="1"/>
-              </columns>
-              <rows class="monthgridrows"
-                    equalsize="always">
-                ${row}
-                ${row}
-                ${row}
-                ${row}
-                ${row}
-                ${row}
-              </rows>
-            </grid>
+            <html:table class="monthgrid">
+              ${row}
+              ${row}
+              ${row}
+              ${row}
+              ${row}
+              ${row}
+            </html:table>
           </vbox>
         `)
       );
@@ -214,13 +214,9 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
       return this.querySelector(".monthgrid");
     }
 
-    get monthgridrows() {
-      return this.querySelector(".monthgridrows");
-    }
-
     // calICalendarView Methods
 
-    setSelectedItems(count, items, suppressEvent) {
+    setSelectedItems(items, suppressEvent) {
       if (this.mSelectedItems.length) {
         for (const item of this.mSelectedItems) {
           const oldboxes = this.findDayBoxesForItem(item);
@@ -253,9 +249,8 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
         this.setDateRange(date.startOfMonth, date.endOfMonth);
         this.selectedDay = date;
       } else {
-        this.refresh();
         // Refresh the selected day if it doesn't appear in the view.
-        this.selectedDay = this.selectedDay;
+        this.refresh();
       }
     }
 
@@ -293,7 +288,7 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
 
       // Update the navigation bar only when changes are related to the current view.
       if (this.isVisible()) {
-        cal.navigationBar.setDateRange(startDate, endDate);
+        calendarNavigationBar.setDateRange(startDate, endDate);
       }
 
       // Check whether view range has been changed since last call to relayout().
@@ -308,9 +303,8 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
       }
     }
 
-    getDateList(count) {
+    getDateList() {
       if (!this.mStartDate || !this.mEndDate) {
-        count.value = 0;
         return [];
       }
 
@@ -322,7 +316,6 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
         results.push(curDate.clone());
         curDate.day += 1;
       }
-      count.value = results.length;
       return results;
     }
 
@@ -403,9 +396,9 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
      */
     relayout() {
       // Adjust headers based on the starting day of the week, if necessary.
-      if (this.labeldaybox.firstChild.weekDay != this.weekStartOffset) {
-        for (let i = 0; i < this.labeldaybox.childNodes.length; i++) {
-          this.labeldaybox.childNodes[i].weekDay = (i + this.weekStartOffset) % 7;
+      if (this.labeldaybox.firstElementChild.weekDay != this.weekStartOffset) {
+        for (let i = 0; i < this.labeldaybox.children.length; i++) {
+          this.labeldaybox.children[i].weekDay = (i + this.weekStartOffset) % 7;
         }
       }
 
@@ -431,37 +424,35 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
 
       // This gets set to true, telling us to collapse the rest of the rows.
       let finished = false;
-      const dateList = this.getDateList({});
+      const dateList = this.getDateList();
 
       // This allows finding the first column of dayboxes where to set the
       // week labels, taking into account whether days-off are displayed or not.
       let weekLabelColumnPos = -1;
 
-      const rows = this.monthgridrows.childNodes;
+      const rows = this.monthgrid.children;
 
       // Iterate through each monthgridrow and set up the day-boxes that
-      // are its child nodes.  Remember, childNodes is not a normal array,
+      // are its child nodes.  Remember, children is not a normal array,
       // so don't use the in operator if you don't want extra properties
       // coming out.
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         // If we've already assigned all of the day-boxes that we need, just
         // collapse the rest of the rows, otherwise expand them if needed.
+        row.toggleAttribute("hidden", finished);
         if (finished) {
-          row.setAttribute("collapsed", true);
           continue;
-        } else {
-          row.removeAttribute("collapsed");
         }
-        for (let j = 0; j < row.childNodes.length; j++) {
-          const daybox = row.childNodes[j];
+        for (let j = 0; j < row.children.length; j++) {
+          const daybox = row.children[j].firstElementChild;
           const date = dateList[dateBoxes.length];
 
           // Remove the attribute "relation" for all the column headers.
           // Consider only the first row index otherwise it will be
           // removed again afterwards the correct setting.
           if (i == 0) {
-            this.labeldaybox.childNodes[j].removeAttribute("relation");
+            this.labeldaybox.children[j].removeAttribute("relation");
           }
 
           daybox.setAttribute("context", this.getAttribute("context"));
@@ -492,7 +483,7 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
               break;
             case 0:
               daybox.setAttribute("relation", "today");
-              this.labeldaybox.childNodes[j].setAttribute("relation", "today");
+              this.labeldaybox.children[j].setAttribute("relation", "today");
               break;
             case 1:
               daybox.setAttribute("relation", "future");
@@ -578,11 +569,11 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
      * Hide the week numbers.
      */
     hideWeekNumbers() {
-      const rows = this.monthgridrows.childNodes;
+      const rows = this.monthgrid.children;
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        for (let j = 0; j < row.childNodes.length; j++) {
-          const daybox = row.childNodes[j];
+        for (let j = 0; j < row.children.length; j++) {
+          const daybox = row.children[j].firstElementChild;
           const weekLabel = daybox.querySelector("[data-label='week']");
           weekLabel.hidden = true;
         }
@@ -593,15 +584,17 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
      * Hide the days off.
      */
     hideDaysOff() {
-      const columns = this.querySelector(".monthgridcolumns").childNodes;
-      const headerkids = this.querySelector(".labeldaybox").childNodes;
+      const headerkids = this.querySelector(".labeldaybox").children;
+      const rows = this.monthgrid.children;
 
-      for (let i = 0; i < columns.length; i++) {
-        const dayForColumn = (i + this.mWeekStartOffset) % 7;
+      const lastColNum = rows[0].children.length - 1;
+      for (let colNum = 0; colNum <= lastColNum; colNum++) {
+        const dayForColumn = (colNum + this.mWeekStartOffset) % 7;
         const dayOff = this.mDaysOffArray.includes(dayForColumn);
-
-        columns[i].collapsed = dayOff && !this.mDisplayDaysOff;
-        headerkids[i].collapsed = dayOff && !this.mDisplayDaysOff;
+        headerkids[colNum].hidden = dayOff && !this.mDisplayDaysOff;
+        for (let row of rows) {
+          row.children[colNum].toggleAttribute("hidden", dayOff && !this.mDisplayDaysOff);
+        }
       }
     }
 
@@ -667,12 +660,11 @@ var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
         finishDate.day++;
       }
 
-      if (!targetDate.isDate) {
-        // Reset the time to 00:00, so that we really get all the boxes.
-        targetDate.hour = 0;
-        targetDate.minute = 0;
-        targetDate.second = 0;
-      }
+      // Reset the time to 00:00, so that we really get all the boxes.
+      targetDate.isDate = false;
+      targetDate.hour = 0;
+      targetDate.minute = 0;
+      targetDate.second = 0;
 
       if (targetDate.compare(finishDate) == 0) {
         // We have also to handle zero length events in particular for

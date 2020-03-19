@@ -3,15 +3,17 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* import-globals-from ../../lightning/content/messenger-overlay-sidebar.js */
-/* import-globals-from calendar-common-sets.js */
+/* import-globals-from calendar-command-controller.js */
 /* import-globals-from calendar-management.js */
 /* import-globals-from calendar-ui-utils.js */
 /* import-globals-from calendar-views-utils.js */
 /* globals PanelUI */
 
-var { fixIterator } = ChromeUtils.import("resource:///modules/iteratorUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { AppConstants } = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
+var { calendarDeactivator } = ChromeUtils.import(
+  "resource:///modules/calendar/calCalendarDeactivator.jsm"
+);
 
 /* exported commonInitCalendar, commonFinishCalendar */
 
@@ -31,7 +33,7 @@ async function commonInitCalendar() {
   // Make sure we update ourselves if the program stays open over midnight
   scheduleMidnightUpdate(refreshUIBits);
 
-  // Set up the command controller from calendar-common-sets.js
+  // Set up the command controller from calendar-command-controller.js
   injectCalendarCommandController();
 
   // Set up calendar appmenu buttons.
@@ -39,6 +41,9 @@ async function commonInitCalendar() {
 
   // Set up calendar menu items in the appmenu.
   setUpCalendarAppMenuItems();
+
+  // Set up calendar deactivation for this window.
+  calendarDeactivator.registerWindow(window);
 
   // Set up item and day selection listeners
   getViewDeck().addEventListener("dayselect", observeViewDaySelect);
@@ -107,7 +112,7 @@ var calendarWindowPrefs = {
   QueryInterface: ChromeUtils.generateQI([Ci.nsIObserver]),
 
   /** Initialize the preference observers */
-  init: function() {
+  init() {
     Services.prefs.addObserver("calendar.view.useSystemColors", this);
     Services.ww.registerNotification(this);
 
@@ -116,7 +121,7 @@ var calendarWindowPrefs = {
   },
 
   /**  Cleanup the preference observers */
-  cleanup: function() {
+  cleanup() {
     Services.prefs.removeObserver("calendar.view.useSystemColors", this);
     Services.ww.unregisterNotification(this);
   },
@@ -126,13 +131,13 @@ var calendarWindowPrefs = {
    *
    * @see nsIObserver
    */
-  observe: function(aSubject, aTopic, aData) {
+  observe(aSubject, aTopic, aData) {
     if (aTopic == "nsPref:changed") {
       switch (aData) {
         case "calendar.view.useSystemColors": {
           let attributeValue =
             Services.prefs.getBoolPref("calendar.view.useSystemColors", false) && "true";
-          for (let win of fixIterator(Services.ww.getWindowEnumerator())) {
+          for (let win of Services.ww.getWindowEnumerator()) {
             setElementValue(win.document.documentElement, attributeValue, "systemcolors");
           }
           break;
@@ -153,11 +158,9 @@ var calendarWindowPrefs = {
  * Set up calendar appmenu buttons by adding event listeners to the buttons.
  */
 function setUpCalendarAppMenuButtons() {
-  ["calendar-appmenu-button", "task-appmenu-button", "calendar-item-appmenu-button"].forEach(id => {
-    const button = document.getElementById(id);
-    button.addEventListener("mousedown", PanelUI);
-    button.addEventListener("keypress", PanelUI);
-  });
+  PanelUI.initAppMenuButton("calendar-appmenu-button", "calendar-toolbox");
+  PanelUI.initAppMenuButton("task-appmenu-button", "task-toolbox");
+  PanelUI.initAppMenuButton("calendar-item-appmenu-button", "event-toolbox");
 }
 
 /**
@@ -223,7 +226,7 @@ function migrateCalendarUI() {
       // we copy that custom set of toolbar items to the event/task tab
       // toolbar and add the app menu button and a spring for alignment.
       let xulStore = Services.xulStore;
-      let uri = "chrome://calendar/content/calendar-event-dialog.xul";
+      let uri = "chrome://calendar/content/calendar-event-dialog.xhtml";
 
       if (xulStore.hasValue(uri, "event-toolbar", "currentset")) {
         let windowSet = xulStore.getValue(uri, "event-toolbar", "currentset");
@@ -247,8 +250,8 @@ function migrateCalendarUI() {
       // Rename toolbar button id "button-save" to
       // "button-saveandclose" in customized toolbars
       let xulStore = Services.xulStore;
-      let windowUri = "chrome://calendar/content/calendar-event-dialog.xul";
-      let tabUri = "chrome://messenger/content/messenger.xul";
+      let windowUri = "chrome://calendar/content/calendar-event-dialog.xhtml";
+      let tabUri = "chrome://messenger/content/messenger.xhtml";
 
       if (xulStore.hasValue(windowUri, "event-toolbar", "currentset")) {
         let windowSet = xulStore.getValue(windowUri, "event-toolbar", "currentset");

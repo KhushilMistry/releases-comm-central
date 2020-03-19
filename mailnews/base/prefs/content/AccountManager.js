@@ -7,7 +7,7 @@
  * here's how this dialog works:
  * The main dialog contains a tree on the left (accounttree) and a
  * deck on the right. Each card in the deck on the right contains an
- * IFRAME which loads a particular preference document (such as am-main.xul)
+ * IFRAME which loads a particular preference document (such as am-main.xhtml)
  *
  * when the user clicks on items in the tree on the right, two things have
  * to be determined before the UI can be updated:
@@ -28,12 +28,13 @@
 /* import-globals-from accountUtils.js */
 /* import-globals-from am-prefs.js */
 /* import-globals-from amUtils.js */
+/* globals gSubDialog */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { BrowserUtils } = ChromeUtils.import(
   "resource://gre/modules/BrowserUtils.jsm"
 );
-var { Gloda } = ChromeUtils.import("resource:///modules/gloda/gloda.js");
+var { Gloda } = ChromeUtils.import("resource:///modules/gloda/Gloda.jsm");
 var { fixIterator } = ChromeUtils.import(
   "resource:///modules/iteratorUtils.jsm"
 );
@@ -47,11 +48,9 @@ var { cleanUpHostName, isLegalHostNameOrIP } = ChromeUtils.import(
   "resource:///modules/hostnameUtils.jsm"
 );
 
-document.addEventListener("dialogcancel", onNotAccept);
-document.addEventListener("dialogaccept", event => {
-  if (!onAccept(true)) {
-    event.preventDefault();
-  }
+document.addEventListener("prefchange", event => {
+  onAccept(true);
+  event.stopPropagation();
 });
 
 // If Local directory has changed the app needs to restart. Once this is set
@@ -134,16 +133,12 @@ function updateElementWithKeys(account, element, type) {
 // called when the whole document loads
 // perform initialization here
 function onLoad() {
-  var selectedServer;
-  var selectPage = null;
+  let selectedServer = document.documentElement.server;
+  let selectPage = document.documentElement.selectPage || null;
 
   // Arguments can have two properties: (1) "server," the nsIMsgIncomingServer
   // to select initially and (2) "selectPage," the page for that server to that
   // should be selected.
-  if ("arguments" in window && window.arguments[0]) {
-    selectedServer = window.arguments[0].server;
-    selectPage = window.arguments[0].selectPage;
-  }
 
   accountArray = {};
   gGenericAttributeTypes = {};
@@ -152,9 +147,23 @@ function onLoad() {
 
   setTimeout(selectServer, 0, selectedServer, selectPage);
 
-  // Make sure the account manager window fits the screen.
-  document.getElementById("accountManager").style.maxHeight =
-    window.screen.availHeight - 30 + "px";
+  let contentFrame = document.getElementById("contentFrame");
+  contentFrame.addEventListener("load", event => {
+    let inputElements = contentFrame.contentDocument.querySelectorAll(
+      "checkbox, input, menulist, textarea, radiogroup, richlistbox"
+    );
+    for (let input of inputElements) {
+      if (input.localName == "input" || input.localName == "textarea") {
+        input.addEventListener("change", event => {
+          onAccept(true);
+        });
+      } else {
+        input.addEventListener("command", event => {
+          onAccept(true);
+        });
+      }
+    }
+  });
 }
 
 function onUnload() {
@@ -165,14 +174,14 @@ function selectServer(server, selectPageId) {
   let childrenNode = document.getElementById("account-tree-children");
 
   // Default to showing the first account.
-  let accountNode = childrenNode.firstChild;
+  let accountNode = childrenNode.firstElementChild;
 
   // Find the tree-node for the account we want to select
   if (server) {
-    for (let i = 0; i < childrenNode.childNodes.length; i++) {
-      let account = childrenNode.childNodes[i]._account;
+    for (let i = 0; i < childrenNode.children.length; i++) {
+      let account = childrenNode.children[i]._account;
       if (account && server == account.incomingServer) {
-        accountNode = childrenNode.childNodes[i];
+        accountNode = childrenNode.children[i];
         // Make sure all the panes of the account to be selected are shown.
         accountNode.setAttribute("open", "true");
         break;
@@ -199,7 +208,7 @@ function selectServer(server, selectPageId) {
   accountTree.view.selection.select(index);
   accountTree.ensureRowIsVisible(index);
 
-  let lastItem = accountNode.lastChild.lastChild;
+  let lastItem = accountNode.lastElementChild.lastElementChild;
   if (lastItem.localName == "treeitem") {
     index = accountTree.view.getIndexOfItem(lastItem);
   }
@@ -681,9 +690,7 @@ function checkUserServerChanges(showAlert) {
   if (!checkDirectoryIsUsable(dir)) {
     //          return false; // Temporarily disable this. Just show warning but do not block. See bug 921371.
     Cu.reportError(
-      `Local directory ${dir.path} of account ${
-        currentAccount.key
-      } is not safe to use. Consider changing it.`
+      `Local directory ${dir.path} of account ${currentAccount.key} is not safe to use. Consider changing it.`
     );
   }
 
@@ -798,18 +805,25 @@ function markDefaultServer(newDefault, oldDefault) {
   }
 
   let accountTree = document.getElementById("account-tree-children");
-  for (let accountNode of accountTree.childNodes) {
+  for (let accountNode of accountTree.children) {
     if (newDefault && newDefault == accountNode._account) {
-      let props = accountNode.firstChild.firstChild.getAttribute("properties");
-      accountNode.firstChild.firstChild.setAttribute(
+      let props = accountNode.firstElementChild.firstElementChild.getAttribute(
+        "properties"
+      );
+      accountNode.firstElementChild.firstElementChild.setAttribute(
         "properties",
         props + " isDefaultServer-true"
       );
     }
     if (oldDefault && oldDefault == accountNode._account) {
-      let props = accountNode.firstChild.firstChild.getAttribute("properties");
+      let props = accountNode.firstElementChild.firstElementChild.getAttribute(
+        "properties"
+      );
       props = props.replace(/isDefaultServer-true/, "");
-      accountNode.firstChild.firstChild.setAttribute("properties", props);
+      accountNode.firstElementChild.firstElementChild.setAttribute(
+        "properties",
+        props
+      );
     }
   }
 }
@@ -828,12 +842,12 @@ function setAccountLabel(aAccountKey, aAccountNode, aLabel) {
     // is already on another tree item (account) than the one we want to change.
     // So find the proper node using the account key.
     let accountTree = document.getElementById("account-tree-children");
-    for (let accountNode of accountTree.childNodes) {
+    for (let accountNode of accountTree.children) {
       if (
         "_account" in accountNode &&
         accountNode._account.key == aAccountKey
       ) {
-        aAccountNode = accountNode.firstChild.firstChild;
+        aAccountNode = accountNode.firstElementChild.firstElementChild;
         break;
       }
     }
@@ -875,9 +889,9 @@ function onRemoveAccount(event) {
   let serverList = [];
   let accountTreeNode = document.getElementById("account-tree-children");
   // build the list of servers in the account tree (order is important)
-  for (let i = 0; i < accountTreeNode.childNodes.length; i++) {
-    if ("_account" in accountTreeNode.childNodes[i]) {
-      let curServer = accountTreeNode.childNodes[i]._account.incomingServer;
+  for (let i = 0; i < accountTreeNode.children.length; i++) {
+    if ("_account" in accountTreeNode.children[i]) {
+      let curServer = accountTreeNode.children[i]._account.incomingServer;
       if (!serverList.includes(curServer)) {
         serverList.push(curServer);
       }
@@ -905,32 +919,34 @@ function onRemoveAccount(event) {
     result: false,
   };
 
-  window.openDialog(
-    "chrome://messenger/content/removeAccount.xul",
-    "removeAccount",
-    "chrome,titlebar,modal,centerscreen,resizable=no",
-    removeArgs
+  let onCloseDialog = function() {
+    // If result is true, the account was removed.
+    if (!removeArgs.result) {
+      return;
+    }
+
+    // clear cached data out of the account array
+    currentAccount = currentPageId = null;
+    if (serverId in accountArray) {
+      delete accountArray[serverId];
+    }
+
+    if (serverIndex >= 0 && serverIndex < serverList.length) {
+      selectServer(serverList[serverIndex], null);
+    }
+
+    // Either the default account was deleted so there is a new one
+    // or the default account was not changed. Either way, there is
+    // no need to unmark the old one.
+    markDefaultServer(MailServices.accounts.defaultAccount, null);
+  };
+
+  gSubDialog.open(
+    "chrome://messenger/content/removeAccount.xhtml",
+    "resizable=no",
+    removeArgs,
+    onCloseDialog
   );
-
-  // If result is true, the account was removed.
-  if (!removeArgs.result) {
-    return;
-  }
-
-  // clear cached data out of the account array
-  currentAccount = currentPageId = null;
-  if (serverId in accountArray) {
-    delete accountArray[serverId];
-  }
-
-  if (serverIndex >= 0 && serverIndex < serverList.length) {
-    selectServer(serverList[serverIndex], null);
-  }
-
-  // Either the default account was deleted so there is a new one
-  // or the default account was not changed. Either way, there is
-  // no need to unmark the old one.
-  markDefaultServer(MailServices.accounts.defaultAccount, null);
 }
 
 function saveAccount(accountValues, account) {
@@ -1055,7 +1071,7 @@ function saveAccount(accountValues, account) {
         {}
       );
       if (!review) {
-        onAccountTreeSelect("am-junk.xul", account);
+        onAccountTreeSelect("am-junk.xhtml", account);
         return false;
       }
     }
@@ -1099,7 +1115,7 @@ function initAccountActionsButtons(menupopup) {
     document.getElementById("accountActionsDropdownRemove")
   );
 
-  updateBlockedItems(menupopup.childNodes, true);
+  updateBlockedItems(menupopup.children, true);
 }
 
 /**
@@ -1309,7 +1325,7 @@ function pageURL(pageId) {
     // we could compare against "main","server","copies","offline","addressing",
     // "smtp" and "advanced" first to save the work, but don't,
     // as some of these might be turned into extensions (for thunderbird)
-    let packageName = pageId.split("am-")[1].split(".xul")[0];
+    let packageName = pageId.split("am-")[1].split(".xhtml")[0];
     chromePackageName = MailServices.accounts.getChromePackageName(packageName);
   } catch (ex) {
     chromePackageName = "messenger";
@@ -1713,12 +1729,15 @@ var gAccountTree = {
       return bundle.getString(aString);
     }
     var panels = [
-      { string: getString("prefPanel-server"), src: "am-server.xul" },
-      { string: getString("prefPanel-copies"), src: "am-copies.xul" },
-      { string: getString("prefPanel-synchronization"), src: "am-offline.xul" },
-      { string: getString("prefPanel-diskspace"), src: "am-offline.xul" },
-      { string: getString("prefPanel-addressing"), src: "am-addressing.xul" },
-      { string: getString("prefPanel-junk"), src: "am-junk.xul" },
+      { string: getString("prefPanel-server"), src: "am-server.xhtml" },
+      { string: getString("prefPanel-copies"), src: "am-copies.xhtml" },
+      {
+        string: getString("prefPanel-synchronization"),
+        src: "am-offline.xhtml",
+      },
+      { string: getString("prefPanel-diskspace"), src: "am-offline.xhtml" },
+      { string: getString("prefPanel-addressing"), src: "am-addressing.xhtml" },
+      { string: getString("prefPanel-junk"), src: "am-junk.xhtml" },
     ];
 
     let accounts = allAccountsSorted(false);
@@ -1797,7 +1816,7 @@ var gAccountTree = {
               let title = bundle.GetStringFromName("prefPanel-" + svc.name);
               panelsToKeep.push({
                 string: title,
-                src: "am-" + svc.name + ".xul",
+                src: "am-" + svc.name + ".xhtml",
               });
             }
           } catch (e) {
@@ -1878,7 +1897,7 @@ var gAccountTree = {
     let treecell = document.createXULElement("treecell");
     treerow.appendChild(treecell);
     treecell.setAttribute("label", getString("prefPanel-smtp"));
-    treeitem.setAttribute("PageTag", "am-smtp.xul");
+    treeitem.setAttribute("PageTag", "am-smtp.xhtml");
     treecell.setAttribute(
       "properties",
       "folderNameCol isServer-true serverType-smtp"

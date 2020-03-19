@@ -8,7 +8,6 @@
 #include "nsAbOSXUtils.h"
 #include "nsAbQueryStringToExpression.h"
 #include "nsArrayEnumerator.h"
-#include "nsAutoPtr.h"
 #include "nsCOMArray.h"
 #include "nsEnumeratorUtils.h"
 #include "nsIAbDirectoryQueryProxy.h"
@@ -525,6 +524,10 @@ nsAbOSXDirectory::Init(const char *aUri) {
     if (!mIsQueryURI) AssertCard(abManager, card);
   }
 
+  if (isRootOSXDirectory) {
+    AssertChildNodes();
+  }
+
   return NS_OK;
 
   NS_OBJC_END_TRY_ABORT_BLOCK_NSRESULT;
@@ -672,7 +675,7 @@ nsresult nsAbOSXDirectory::Update() {
     AssignToString(stringValue, m_ListDirName);
     nsCOMPtr<nsISupports> supports = do_QueryInterface(static_cast<nsIAbDirectory *>(this), &rv);
     NS_ENSURE_SUCCESS(rv, rv);
-    abManager->NotifyItemPropertyChanged(supports, "DirName", oldValue.get(), m_ListDirName.get());
+    abManager->NotifyItemPropertyChanged(supports, "DirName", oldValue, m_ListDirName);
   }
 
   if (groups) {
@@ -1167,7 +1170,7 @@ nsresult nsAbOSXDirectory::DeleteUid(const nsACString &aUid) {
 
   // Iterate backwards in case we remove something
   while (addressCount--) {
-    nsCOMPtr<nsIAbItem> abItem(do_QueryElementAt(m_AddressList, addressCount, &rv));
+    nsCOMPtr<nsISupports> abItem(do_QueryElementAt(m_AddressList, addressCount, &rv));
     if (NS_FAILED(rv)) continue;
 
     nsCOMPtr<nsIAbDirectory> directory(do_QueryInterface(abItem, &rv));

@@ -11,11 +11,16 @@
 
 var EXPORTED_SYMBOLS = ["MailMigrator"];
 
+ChromeUtils.defineModuleGetter(
+  this,
+  "AddrBookDirectory",
+  "resource:///modules/AddrBookDirectory.jsm"
+);
 const { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
 const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-const { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.js");
+const { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.jsm");
 
 var MailMigrator = {
   /**
@@ -92,6 +97,17 @@ var MailMigrator = {
     }
   },
 
+  _migrateXULStoreForDocument(fromURL, toURL) {
+    Array.from(Services.xulStore.getIDsEnumerator(fromURL)).forEach(id => {
+      Array.from(Services.xulStore.getAttributeEnumerator(fromURL, id)).forEach(
+        attr => {
+          let value = Services.xulStore.getValue(fromURL, id, attr);
+          Services.xulStore.setValue(toURL, id, attr, value);
+        }
+      );
+    });
+  },
+
   /* eslint-disable complexity */
   /**
    * Determine if the UI has been upgraded in a way that requires us to reset
@@ -100,10 +116,10 @@ var MailMigrator = {
   _migrateUI() {
     // The code for this was ported from
     // mozilla/browser/components/nsBrowserGlue.js
-    const UI_VERSION = 17;
-    const MESSENGER_DOCURL = "chrome://messenger/content/messenger.xul";
+    const UI_VERSION = 19;
+    const MESSENGER_DOCURL = "chrome://messenger/content/messenger.xhtml";
     const MESSENGERCOMPOSE_DOCURL =
-      "chrome://messenger/content/messengercompose/messengercompose.xul";
+      "chrome://messenger/content/messengercompose/messengercompose.xhtml";
     const UI_VERSION_PREF = "mail.ui-rdf.version";
     let currentUIVersion = Services.prefs.getIntPref(UI_VERSION_PREF, 0);
 
@@ -134,7 +150,7 @@ var MailMigrator = {
       // UI versions below 5 could only exist in an old profile with localstore.rdf
       // file used for the XUL store. Since TB55 this file is no longer read.
       // Since UI version 5, the xulstore.json file is being used, so we only
-      // support those version here, see bug 1371898.
+      // support those versions here, see bug 1371898.
 
       // In UI version 6, we move the otherActionsButton button to the
       // header-view-toolbar.
@@ -248,7 +264,7 @@ var MailMigrator = {
         }
       }
 
-      // Untangled starting in Paragraph mode from Enter key preference
+      // Untangle starting in Paragraph mode from Enter key preference.
       if (currentUIVersion < 13) {
         Services.prefs.setBoolPref(
           "mail.compose.default_to_paragraph",
@@ -283,7 +299,7 @@ var MailMigrator = {
               );
               origin = origin.replace(
                 "chrome://messenger/content/?",
-                "chrome://messenger/content/"
+                "chrome://messenger/content/messenger.xhtml"
               );
               Services.perms.addFromPrincipal(
                 Services.scriptSecurityManager.createContentPrincipal(
@@ -401,6 +417,58 @@ var MailMigrator = {
             "currentset",
             cs
           );
+        }
+      }
+
+      if (currentUIVersion < 18) {
+        for (let url of [
+          "chrome://calendar/content/calendar-event-dialog-attendees.xul",
+          "chrome://calendar/content/calendar-event-dialog.xul",
+          "chrome://messenger/content/addressbook/addressbook.xul",
+          "chrome://messenger/content/messageWindow.xhtml",
+          "chrome://messenger/content/messenger.xul",
+          "chrome://messenger/content/messengercompose/messengercompose.xul",
+        ]) {
+          this._migrateXULStoreForDocument(
+            url,
+            url.replace(/\.xul$/, ".xhtml")
+          );
+        }
+      }
+
+      if (currentUIVersion < 19) {
+        // Clear socks proxy values if they were shared from http, to prevent
+        // websocket breakage after bug 1577862 (see bug 1606679).
+        if (
+          Services.prefs.getBoolPref(
+            "network.proxy.share_proxy_settings",
+            false
+          ) &&
+          Services.prefs.getIntPref("network.proxy.type", 0) == 1
+        ) {
+          let httpProxy = Services.prefs.getCharPref("network.proxy.http", "");
+          let httpPort = Services.prefs.getIntPref(
+            "network.proxy.http_port",
+            0
+          );
+          let socksProxy = Services.prefs.getCharPref(
+            "network.proxy.socks",
+            ""
+          );
+          let socksPort = Services.prefs.getIntPref(
+            "network.proxy.socks_port",
+            0
+          );
+          if (httpProxy && httpProxy == socksProxy && httpPort == socksPort) {
+            Services.prefs.setCharPref(
+              "network.proxy.socks",
+              Services.prefs.getCharPref("network.proxy.backup.socks", "")
+            );
+            Services.prefs.setIntPref(
+              "network.proxy.socks_port",
+              Services.prefs.getIntPref("network.proxy.backup.socks_port", 0)
+            );
+          }
         }
       }
 
@@ -675,38 +743,164 @@ var MailMigrator = {
   },
 
   /**
-   * Migrate address books away from Mork. In time this will do actual
-   * migration, but for now, just set the default pref back to what it was.
+   * Migrate address books from Mork to JS/SQLite.
+   *
+   * All Mork address books found in the prefs are converted to JS/SQLite
+   * address books and the prefs updated. Migrated Mork files in the profile
+   * are renamed with the extension ".mab.bak" to avoid confusion.
    */
-  _migrateAddressBooks() {
-    let pab = Services.dirsvc.get("ProfD", Ci.nsIFile);
-    pab.append("abook.mab");
-    if (pab.exists()) {
-      let defaultBranch = Services.prefs.getDefaultBranch("");
-      defaultBranch.setIntPref("ldap_2.servers.pab.dirType", 2);
-      defaultBranch.setStringPref("ldap_2.servers.pab.filename", "abook.mab");
-      defaultBranch.setIntPref("ldap_2.servers.history.dirType", 2);
-      defaultBranch.setStringPref(
-        "ldap_2.servers.history.filename",
-        "history.mab"
-      );
-      defaultBranch.setStringPref(
-        "mail.collect_addressbook",
-        "moz-abmdbdirectory://history.mab"
-      );
-      defaultBranch.setStringPref(
-        "mail.server.default.whiteListAbURI",
-        "moz-abmdbdirectory://abook.mab"
-      );
+  async _migrateAddressBooks() {
+    async function migrateBook(fileName, notFoundThrows = true) {
+      let oldFile = profileDir.clone();
+      oldFile.append(`${fileName}.mab`);
+      if (!oldFile.exists()) {
+        if (notFoundThrows) {
+          throw Cr.NS_ERROR_NOT_AVAILABLE;
+        }
+        return;
+      }
+
+      console.log(`Creating new ${fileName}.sqlite`);
+      let newBook = new AddrBookDirectory();
+      newBook.init(`jsaddrbook://${fileName}.sqlite`);
+
+      let database = Cc[
+        "@mozilla.org/addressbook/carddatabase;1"
+      ].createInstance(Ci.nsIAddrDatabase);
+      database.dbPath = oldFile;
+      database.openMDB(oldFile, false);
+
+      let directory = Cc[
+        "@mozilla.org/addressbook/directoryproperty;1"
+      ].createInstance(Ci.nsIAbDirectory);
+
+      let cardMap = new Map();
+      for (let card of database.enumerateCards(directory)) {
+        if (!card.isMailList) {
+          cardMap.set(card.localId, card);
+        }
+      }
+      if (cardMap.size > 0) {
+        await newBook._bulkAddCards(cardMap.values());
+
+        for (let card of database.enumerateCards(directory)) {
+          if (card.isMailList) {
+            let mailList = Cc[
+              "@mozilla.org/addressbook/directoryproperty;1"
+            ].createInstance(Ci.nsIAbDirectory);
+            mailList.isMailList = true;
+            mailList.dirName = card.displayName;
+            mailList.listNickName = card.getProperty("NickName", "");
+            mailList.description = card.getProperty("Notes", "");
+            mailList = newBook.addMailList(mailList);
+
+            for (let listCard of database.enumerateListAddresses(
+              directory,
+              card.localId
+            )) {
+              listCard.QueryInterface(Ci.nsIAbCard);
+              if (cardMap.has(listCard.localId)) {
+                mailList.addCard(cardMap.get(listCard.localId));
+              }
+            }
+          }
+        }
+      }
+
+      database.closeMDB(false);
+      database.forceClosed();
+
+      let backupFile = profileDir.clone();
+      backupFile.append(`${fileName}.mab.bak`);
+      backupFile.createUnique(Ci.nsIFile.NORMAL_FILE_TYPE, 0o644);
+      console.log(`Renaming ${fileName}.mab to ${backupFile.leafName}`);
+      oldFile.renameTo(profileDir, backupFile.leafName);
     }
+
+    let profileDir = Services.dirsvc.get("ProfD", Ci.nsIFile);
+    for (let name of Services.prefs.getChildList("ldap_2.servers.")) {
+      try {
+        if (name.endsWith(".uri")) {
+          let uri = Services.prefs.getStringPref(name);
+          if (uri.startsWith("ldap://") || uri.startsWith("ldaps://")) {
+            let prefName = name.substring(0, name.length - 4);
+            let fileName = Services.prefs.getStringPref(
+              `${prefName}.filename`,
+              ""
+            );
+            if (fileName.endsWith(".mab")) {
+              fileName = fileName.replace(/\.mab$/, "");
+              Services.prefs.setStringPref(
+                `${prefName}.filename`,
+                `${fileName}.sqlite`
+              );
+              await migrateBook(fileName);
+            }
+          }
+        } else if (
+          name.endsWith(".dirType") &&
+          Services.prefs.getIntPref(name) == 2
+        ) {
+          let prefName = name.substring(0, name.length - 8);
+          let fileName = Services.prefs.getStringPref(`${prefName}.filename`);
+          fileName = fileName.replace(/\.mab$/, "");
+
+          Services.prefs.setIntPref(`${prefName}.dirType`, 101);
+          Services.prefs.setStringPref(
+            `${prefName}.filename`,
+            `${fileName}.sqlite`
+          );
+          if (Services.prefs.prefHasUserValue(`${prefName}.uri`)) {
+            Services.prefs.setStringPref(
+              `${prefName}.uri`,
+              `jsaddrbook://${fileName}.sqlite`
+            );
+          }
+          await migrateBook(fileName);
+        }
+      } catch (ex) {
+        Cu.reportError(ex);
+      }
+    }
+
+    try {
+      await migrateBook("abook", false);
+    } catch (ex) {
+      Cu.reportError(ex);
+    }
+    try {
+      await migrateBook("history", false);
+    } catch (ex) {
+      Cu.reportError(ex);
+    }
+
+    for (let prefName of [
+      "mail.collect_addressbook",
+      "mail.server.default.whiteListAbURI",
+    ]) {
+      try {
+        if (Services.prefs.prefHasUserValue(prefName)) {
+          let uri = Services.prefs.getStringPref(prefName);
+          uri = uri.replace(
+            /^moz-abmdbdirectory:\/\/(.*).mab$/,
+            "jsaddrbook://$1.sqlite"
+          );
+          Services.prefs.setStringPref(prefName, uri);
+        }
+      } catch (ex) {
+        Cu.reportError(ex);
+      }
+    }
+
+    Services.obs.notifyObservers(null, "addrbook-reload");
   },
 
   /**
    * Perform any migration work that needs to occur once the user profile has
    * been loaded.
    */
-  migrateAtProfileStartup() {
-    this._migrateAddressBooks();
+  async migrateAtProfileStartup() {
+    await this._migrateAddressBooks();
     this._migrateUI();
     this._migrateRSS();
   },

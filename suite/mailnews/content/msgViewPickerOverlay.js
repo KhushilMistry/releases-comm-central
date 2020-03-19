@@ -39,12 +39,8 @@ function ViewChange(aValue, aLabel)
       LaunchCustomizeDialog();
     else
     {
-      // Thunderbird uses the folder pane for this.
-      if ("gFolderTreeController" in window)
-        gFolderTreeController.newVirtualFolder(gCurrentViewLabel,
-                                               gSaveDefaultSVTerms);
-      else
-        openNewVirtualFolderDialogWithArgs(gCurrentViewLabel, gSaveDefaultSVTerms);
+      gFolderTreeController.newVirtualFolder(gCurrentViewLabel,
+                                             gSaveDefaultSVTerms);
     }
     return;
   }
@@ -391,7 +387,7 @@ function RefreshTagsPopup(aMenupopup)
   var currentTagKey = isNaN(gCurrentViewValue) ? gCurrentViewValue.substr(kViewTagMarker.length) : "";
   var tagService = Cc["@mozilla.org/messenger/tagservice;1"]
                      .getService(Ci.nsIMsgTagService);
-  var tagArray = tagService.getAllTags({});
+  var tagArray = tagService.getAllTags();
   for (var i = 0; i < tagArray.length; ++i)
   {
     var tagInfo = tagArray[i];

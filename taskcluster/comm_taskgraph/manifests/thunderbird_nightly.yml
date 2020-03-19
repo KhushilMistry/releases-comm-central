@@ -10,7 +10,7 @@
 # `s3_bucket_paths`       -- prefix to be used per product to correctly access our S3 buckets
 # `default_locales`       -- list of locales to be used when composing upstream artifacts or the list of
 #                      destinations. If given an empty locale, it uses these locales instead.
-# `tasktype_map`          -- mapping between task reference and task type, particularly usefule when
+# `tasktype_map`          -- mapping between task reference and task type, particularly useful when
 #                      composing the upstreamArtifacts for scriptworker.
 # `platform_names`        -- various platform mappings used in reckoning artifacts or other paths
 # `default`               -- a default entry, which the mappings extend and override in such a way that
@@ -391,31 +391,20 @@ mapping:
                 default:
                     - ${year}/${month}/${upload_date}-${branch}-l10n
                     - latest-${branch}-l10n
-    gdata-provider.xpi:
+    ${partial}:
         <<: *default
-        description: "Google data provider XPI (en-US only)"
-        all_locales: false  # Uses default_locale only
+        description: "Partials MAR files to serve as updates"
+        all_locales: true
         from:
-            - build
-        only_for_platforms:
-            - linux64-shippable
-        pretty_name: gdata-provider.${locale}.xpi
-        checksums_path: gdata-provider.${locale}.xpi
+            - partials-signing
+        partials_only: true
+        pretty_name: thunderbird-${branch}-${version}-${filename_platform}-${locale}-${from_buildid}-${buildid}.partial.mar
+        checksums_path: thunderbird-${branch}-${version}-${filename_platform}-${locale}-${from_buildid}-${buildid}.partial.mar
+        update_balrog_manifest: true
+        from_buildid: ${from_buildid}
         destinations:
-            - ${year}/${month}/${upload_date}-${branch}
-            - latest-${branch}
-            - latest-${branch}-l10n
-    lightning.xpi:
-        <<: *default
-        description: "Lightning XPI (en-US only)"
-        all_locales: false  # Uses default_locale only
-        from:
-            - build
-        only_for_platforms:
-            - linux64-shippable
-        pretty_name: lightning.${locale}.xpi
-        checksums_path: lightning.${locale}.xpi
-        destinations:
-            - ${year}/${month}/${upload_date}-${branch}
-            - latest-${branch}
-            - latest-${branch}-l10n
+            by-locale:
+                en-US:
+                    - partials/${year}/${month}/${upload_date}-${branch}
+                default:
+                    - partials/${year}/${month}/${upload_date}-${branch}-l10n

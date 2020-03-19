@@ -8,7 +8,6 @@
 */
 
 #include "prprf.h"
-#include "mozilla/Logging.h"
 #include "msgCore.h"
 #include "nsMsgMaildirStore.h"
 #include "nsIMsgFolder.h"
@@ -36,6 +35,8 @@
 #include "nsIMsgFilterPlugin.h"
 #include "nsLocalUndoTxn.h"
 #include "nsIMessenger.h"
+#include "mozilla/Logging.h"
+#include "mozilla/UniquePtr.h"
 
 static mozilla::LazyLogModule MailDirLog("MailDirStore");
 
@@ -94,7 +95,7 @@ nsresult nsMsgMaildirStore::AddSubFolders(nsIMsgFolder *parent, nsIFile *path,
       currentFile->IsDirectory(&isDirectory);
       // Make sure this really is a mail folder dir (i.e., a directory that
       // contains cur and tmp sub-dirs, and not a .sbd or .mozmsgs dir).
-      if (isDirectory && !nsShouldIgnoreFile(leafName))
+      if (isDirectory && !nsShouldIgnoreFile(leafName, currentFile))
         currentDirEntries.AppendObject(currentFile);
     }
   }
@@ -247,7 +248,7 @@ NS_IMETHODIMP nsMsgMaildirStore::CreateFolder(nsIMsgFolder *aParent,
       aParent->UpdateSummaryTotals(true);
     } else {
       MOZ_LOG(MailDirLog, mozilla::LogLevel::Info,
-              ("CreateFolder - failed creating db for new folder\n"));
+              ("CreateFolder - failed creating db for new folder"));
       path->Remove(true);  // recursive
       rv = NS_MSG_CANT_CREATE_FOLDER;
     }
@@ -520,8 +521,7 @@ NS_IMETHODIMP nsMsgMaildirStore::CopyFolder(
       // The files have already been moved, so delete storage false
       msgParent->PropagateDelete(aSrcFolder, false, aMsgWindow);
       oldPath->Remove(true);
-      nsCOMPtr<nsIMsgDatabase> srcDB;  // we need to force closed the source db
-      aSrcFolder->Delete();
+      aSrcFolder->DeleteStorage();
 
       nsCOMPtr<nsIFile> parentPath;
       rv = msgParent->GetFilePath(getter_AddRefs(parentPath));
@@ -547,8 +547,7 @@ NS_IMETHODIMP nsMsgMaildirStore::CopyFolder(
       newMsgFolder->SetParent(nullptr);
       if (msgParent) {
         msgParent->PropagateDelete(newMsgFolder, false, aMsgWindow);
-        newMsgFolder->Delete();
-        newMsgFolder->ForceDBClosed();
+        newMsgFolder->DeleteStorage();
         AddDirectorySeparator(newPath);
         newPath->Remove(true);  // berkeley mailbox
       }
@@ -594,7 +593,7 @@ nsMsgMaildirStore::GetNewMsgOutputStream(nsIMsgFolder *aFolder,
   newFile->Exists(&exists);
   if (!exists) {
     MOZ_LOG(MailDirLog, mozilla::LogLevel::Info,
-            ("GetNewMsgOutputStream - tmp subfolder does not exist!!\n"));
+            ("GetNewMsgOutputStream - tmp subfolder does not exist!!"));
     rv = newFile->Create(nsIFile::DIRECTORY_TYPE, 0755);
     NS_ENSURE_SUCCESS(rv, rv);
   }
@@ -662,7 +661,7 @@ nsMsgMaildirStore::FinishNewMessage(nsIOutputStream *aOutputStream,
   nsAutoCString tmpName;
   aNewHdr->GetStringProperty("storeToken", getter_Copies(tmpName));
   if (tmpName.IsEmpty()) {
-    NS_ERROR("FinishNewMessage - no storeToken in msg hdr!!\n");
+    NS_ERROR("FinishNewMessage - no storeToken in msg hdr!!");
     return NS_ERROR_FAILURE;
   }
 
@@ -777,7 +776,7 @@ nsMsgMaildirStore::MoveNewlyDownloadedMessage(nsIMsgDBHdr *aHdr,
   nsAutoCString fileName;
   aHdr->GetStringProperty("storeToken", getter_Copies(fileName));
   if (fileName.IsEmpty()) {
-    NS_ERROR("FinishNewMessage - no storeToken in msg hdr!!\n");
+    NS_ERROR("FinishNewMessage - no storeToken in msg hdr!!");
     return NS_ERROR_FAILURE;
   }
 
@@ -912,7 +911,7 @@ nsMsgMaildirStore::GetMsgInputStream(nsIMsgFolder *aMsgFolder,
 
   if (aMsgToken.IsEmpty()) {
     MOZ_LOG(MailDirLog, mozilla::LogLevel::Info,
-            ("GetMsgInputStream - empty storeToken!!\n"));
+            ("GetMsgInputStream - empty storeToken!!"));
     return NS_ERROR_FAILURE;
   }
 
@@ -924,7 +923,7 @@ nsMsgMaildirStore::GetMsgInputStream(nsIMsgFolder *aMsgFolder,
   path->Exists(&exists);
   if (!exists) {
     MOZ_LOG(MailDirLog, mozilla::LogLevel::Info,
-            ("GetMsgInputStream - oops! cur subfolder does not exist!\n"));
+            ("GetMsgInputStream - oops! cur subfolder does not exist!"));
     rv = path->Create(nsIFile::DIRECTORY_TYPE, 0755);
     NS_ENSURE_SUCCESS(rv, rv);
   }
@@ -951,7 +950,7 @@ NS_IMETHODIMP nsMsgMaildirStore::DeleteMessages(nsIArray *aHdrArray) {
 
     if (fileName.IsEmpty()) {
       MOZ_LOG(MailDirLog, mozilla::LogLevel::Info,
-              ("DeleteMessages - empty storeToken!!\n"));
+              ("DeleteMessages - empty storeToken!!"));
       // Perhaps an offline store has not downloaded this particular message.
       continue;
     }
@@ -964,7 +963,7 @@ NS_IMETHODIMP nsMsgMaildirStore::DeleteMessages(nsIArray *aHdrArray) {
     path->Exists(&exists);
     if (!exists) {
       MOZ_LOG(MailDirLog, mozilla::LogLevel::Info,
-              ("DeleteMessages - file does not exist !!\n"));
+              ("DeleteMessages - file does not exist !!"));
       // Perhaps an offline store has not downloaded this particular message.
       continue;
     }
@@ -1052,7 +1051,7 @@ nsMsgMaildirStore::CopyMessages(bool aIsMove, nsIArray *aHdrArray,
   for (uint32_t i = 0; i < messageCount; i++) {
     nsCOMPtr<nsIMsgDBHdr> srcHdr = do_QueryElementAt(aHdrArray, i, &rv);
     if (NS_FAILED(rv)) {
-      MOZ_LOG(MailDirLog, mozilla::LogLevel::Info, ("srcHdr null\n"));
+      MOZ_LOG(MailDirLog, mozilla::LogLevel::Info, ("srcHdr null"));
       continue;
     }
     nsMsgKey srcKey;
@@ -1062,7 +1061,7 @@ nsMsgMaildirStore::CopyMessages(bool aIsMove, nsIArray *aHdrArray,
     srcHdr->GetStringProperty("storeToken", getter_Copies(fileName));
     if (fileName.IsEmpty()) {
       MOZ_LOG(MailDirLog, mozilla::LogLevel::Info,
-              ("GetMsgInputStream - empty storeToken!!\n"));
+              ("GetMsgInputStream - empty storeToken!!"));
       return NS_ERROR_FAILURE;
     }
 
@@ -1344,8 +1343,7 @@ NS_IMETHODIMP nsMsgMaildirStore::ChangeKeywords(nsIArray *aHdrArray,
   NS_ENSURE_SUCCESS(rv, rv);
   if (!messageCount) return NS_ERROR_INVALID_ARG;
 
-  nsAutoPtr<nsLineBuffer<char> > lineBuffer(new nsLineBuffer<char>);
-  NS_ENSURE_TRUE(lineBuffer, NS_ERROR_OUT_OF_MEMORY);
+  mozilla::UniquePtr<nsLineBuffer<char> > lineBuffer(new nsLineBuffer<char>);
 
   nsTArray<nsCString> keywordArray;
   ParseString(aKeywords, ' ', keywordArray);
@@ -1367,14 +1365,13 @@ NS_IMETHODIMP nsMsgMaildirStore::ChangeKeywords(nsIArray *aHdrArray,
     (void)message->GetStatusOffset(&statusOffset);
     uint64_t desiredOffset = statusOffset;
 
-    ChangeKeywordsHelper(message, desiredOffset, lineBuffer, keywordArray, aAdd,
-                         outputStream, seekableStream, inputStream);
+    ChangeKeywordsHelper(message, desiredOffset, *lineBuffer, keywordArray,
+                         aAdd, outputStream, seekableStream, inputStream);
     if (inputStream) inputStream->Close();
     // ### TODO - if growKeywords property is set on the message header,
     // we need to rewrite the message file with extra room for the keywords,
     // or schedule some sort of background task to do this.
   }
-  lineBuffer = nullptr;
   return NS_OK;
 }
 

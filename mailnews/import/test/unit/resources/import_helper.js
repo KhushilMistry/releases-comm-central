@@ -279,15 +279,14 @@ AbImportHelper.prototype = {
       var newAb = this.getAbByName(this.mAbName);
       Assert.ok(newAb !== null);
       Assert.ok(
-        newAb instanceof Ci.nsIAbDirectory &&
-          newAb.childCards instanceof Ci.nsISimpleEnumerator
+        newAb.QueryInterface(Ci.nsIAbDirectory) &&
+          newAb.childCards.QueryInterface(Ci.nsISimpleEnumerator)
       );
       // get the imported card(s) and check each one
-      var iter = newAb.childCards;
       var count = 0;
-      for (; iter.hasMoreElements(); count++) {
-        var importedCard = iter.getNext().QueryInterface(Ci.nsIAbCard);
+      for (let importedCard of newAb.childCards) {
         this.compareCards(this.mJsonCards[count], importedCard);
+        count++;
       }
       // make sure there are the same number of cards in the address book and
       // the JSON array
@@ -308,14 +307,9 @@ AbImportHelper.prototype = {
   getAbByName(aName) {
     Assert.ok(aName && aName.length > 0);
 
-    var iter = MailServices.ab.directories;
-    var data = null;
-    while (iter.hasMoreElements()) {
-      data = iter.getNext();
-      if (data instanceof Ci.nsIAbDirectory) {
-        if (data.dirName == aName) {
-          return data;
-        }
+    for (let data of MailServices.ab.directories) {
+      if (data.dirName == aName) {
+        return data;
       }
     }
     return null;
@@ -411,10 +405,8 @@ MailImportHelper.prototype = {
     Assert.equal(expectedFolder.leafName, actualFolder.name);
     let expectedSubFolderCount = 0;
 
-    let expectedEnumerator = expectedFolder.directoryEntries;
     let expectedSubFolders = [];
-    while (expectedEnumerator.hasMoreElements()) {
-      let entry = expectedEnumerator.nextFile;
+    for (let entry of expectedFolder.directoryEntries) {
       if (entry.isDirectory()) {
         expectedSubFolderCount++;
         expectedSubFolders.push(entry);
@@ -481,10 +473,7 @@ SettingsImportHelper.prototype = {
   },
 
   _ensureNoAccounts() {
-    let accounts = MailServices.accounts.accounts;
-
-    for (let i = 0; i < accounts.length; i++) {
-      let account = accounts.queryElementAt(i, Ci.nsIMsgAccount);
+    for (let account of MailServices.accounts.accounts) {
       MailServices.accounts.removeAccount(account);
     }
   },
@@ -572,9 +561,7 @@ SettingsImportHelper.prototype = {
   },
 
   checkResults() {
-    let accounts = MailServices.accounts.accounts;
-    for (let i = 0; i < accounts.length - 1; i++) {
-      let actualAccount = accounts.queryElementAt(i, Ci.nsIMsgAccount);
+    for (let actualAccount of MailServices.accounts.accounts) {
       if (this._isLocalMailAccount(actualAccount)) {
         continue;
       }
@@ -667,5 +654,3 @@ FiltersImportHelper.prototype = {
     }
   },
 };
-
-do_load_manifest("resources/TestMailImporter.manifest");

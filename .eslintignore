@@ -1,3 +1,6 @@
+# Temporarily disabled, see bug 1605845
+*.xhtml
+
 # Always ignore node_modules.
 **/node_modules/**/*.*
 
@@ -29,7 +32,7 @@ suite/**
 chat/chat-prefs.js
 # third-party code
 chat/modules/BigInteger.jsm
-chat/protocols/matrix/matrix-sdk/**
+chat/protocols/matrix/lib/**
 chat/protocols/twitter/twitter-text.jsm
 # preprocessed files
 chat/content/imtooltip.xml
@@ -61,12 +64,10 @@ editor/ui/texzilla/**
 mailnews/mailnews.js
 mailnews/extensions/dsn/content/dsn.js
 mailnews/extensions/mdn/content/mdn.js
-mailnews/extensions/smime/content/smime.js
 
 # mail exclusions
 mail/app/profile/all-thunderbird.js
 mail/app/profile/channel-prefs.js
-mail/app/profile/prefs.js
 mail/base/content/protovis-r2.6-modded.js
 mail/branding/nightly/thunderbird-branding.js
 mail/branding/thunderbird/thunderbird-branding.js
@@ -75,9 +76,13 @@ mail/branding/thunderbird/thunderbird-branding.js
 # code as a .jsm (schema.jsm)
 mail/components/enterprisepolicies/schemas/schema.jsm
 mail/components/im/all-im.js
+mail/extensions/am-e2e/prefs/e2e-prefs.js
 mail/locales/en-US/all-l10n.js
 mail/components/compose/texzilla/**
 mail/components/compose/composer.js
+
+# exclude MailConstants.jsm because: #filter subtitution
+mail/base/modules/MailConstants.jsm
 
 # calendar/ exclusions
 
@@ -87,4 +92,4 @@ calendar/providers/gdata/defaults/preferences.js
 calendar/timezones/preferences.js
 
 # third party library
-calendar/base/modules/ical.js
+calendar/base/modules/Ical.jsm

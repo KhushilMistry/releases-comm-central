@@ -36,7 +36,19 @@
   width: 240px;
 }
 
-/* Subcategory title */
+/*
+  The stack has some very tall content but it shouldn't be taller than the
+  viewport (and we know the tall content will still be accessible via scrollbars
+  regardless if the stack has a shorter height). So we use min-height: 0 to allow
+  the stack to be smaller than its content height so it can fit the viewport size.
+*/
+#preferences-stack {
+  min-height: 0;
+}
+
+.main-content {
+  padding: 0;
+}
 
 /**
  * The first subcategory title for each category should not have margin-top.
@@ -48,8 +60,9 @@
   border-top: 1px solid var(--in-content-border-color);
 }
 
-groupbox[data-category] {
+fieldset[data-category] {
   margin: 0 0 32px;
+  padding: 0;
 }
 
 html|h1 {
@@ -59,15 +72,16 @@ html|h1 {
   line-height: 1.3em;
 }
 
-html|h2 {
+html|legend {
   margin: 16px 0 4px;
   font-size: 1.1em;
+  font-weight: 600;
+  line-height: 1.4em;
 }
 
-html|h3 {
-  font-size: 1em;
-  font-weight: 600;
-  margin: 4px 0 !important;
+html|th {
+  font-weight: normal;
+  text-align: start;
 }
 
 description,
@@ -100,8 +114,7 @@ tabpanel > hbox > description {
 
 /* Web search menulist */
 #defaultWebSearch > .menulist-label-box > .menulist-icon[src] {
-  margin-inline-start: 5px;
-  margin-inline-end: 8px;
+  margin-inline: 5px 8px;
   width: 16px;
   height: 16px;
 }
@@ -109,7 +122,7 @@ tabpanel > hbox > description {
 /* Category List */
 
 .paneSelector {
-  padding: 54px 0 0;
+  padding: 71px 0 0;
   margin: 0;
 }
 
@@ -122,10 +135,8 @@ radio[pane] {
   border-right-width: 0;
   border-left-width: 0;
   border-radius: 2px;
-  margin-top: 0;
-  margin-bottom: 0;
-  margin-inline-start: 34px;
-  margin-inline-end: 0;
+  margin-block: 0;
+  margin-inline: 34px 0;
   padding: 5px 10px;
   min-height: 40px;
   outline-offset: -1px;
@@ -209,8 +220,7 @@ radio[pane][selected] > .radio-check {
   }
 
   #preferencesContainer {
-    padding-inline-start: 15px;
-    padding-inline-end: 15px;
+    padding-inline: 15px;
   }
 }
 
@@ -254,7 +264,6 @@ html|input[type="number"].size5 {
 
 html|input[type="number"]::-moz-number-spin-box {
   margin-inline-start: 10px;
-  height: initial;
 }
 
 html|input[type="number"]::-moz-number-spin-up,
@@ -305,8 +314,7 @@ tab:-moz-focusring > .tab-middle {
 /* Applications Pane Styles */
 
 #filter {
-  margin-inline-start: 0;
-  margin-inline-end: 0;
+  margin-inline: 0;
 }
 
 /* XXX This style is for bug 740213 and should be removed once that
@@ -334,8 +342,7 @@ html|input.indent {
 .update-throbber {
   width: 16px;
   min-height: 16px;
-  margin-inline-start: 6px;
-  margin-inline-end: 4px;
+  margin-inline: 6px 4px;
   list-style-image: url("chrome://global/skin/icons/loading.png");
 }
 
@@ -348,9 +355,7 @@ html|input.indent {
 .updateSettingCrossUserWarningContainer {
   background: var(--in-content-warning-container);
   border-radius: 5px;
-  padding-inline: 8px;
-  padding-block-start: 2px;
-  padding-block-end: 8px;
+  padding: 2px 8px 8px;
   margin-block-end: 17px;
 }
 
@@ -393,8 +398,7 @@ html|input.indent {
  */
 
 #fontsTitle {
-  margin-top: 4px;
-  margin-bottom: 4px;
+  margin-block: 4px;
 }
 
 #defaultFontType,
@@ -407,13 +411,6 @@ html|input.indent {
 /**
  * toolkit element overrides
  */
-
-groupbox label:not(.menu-accel):not(.menu-iconic-accel):not(.menu-text):not(.menu-iconic-text):not(.menulist-label):not(.indent):not(.learnMore):not(.tail-with-learn-more),
-groupbox description {
-  /* !important needed to override toolkit !important rule */
-  margin-inline-start: 0 !important;
-  margin-inline-end: 0 !important;
-}
 
 richlistbox {
   -moz-appearance: none;
@@ -444,8 +441,7 @@ richlistbox:focus > richlistitem[selected="true"] {
 }
 
 #defaultWebSearch {
-  margin-inline-start: 0;
-  margin-inline-end: 4px;
+  margin-inline: 0 4px;
 }
 
 #defaultFontSize,
@@ -458,8 +454,7 @@ richlistbox:focus > richlistitem[selected="true"] {
 }
 
 #defaultMessengerLanguage {
-  margin-inline-start: 0;
-  margin-inline-end: 4px;
+  margin-inline: 0 4px;
   min-width: 20em;
 }
 
@@ -552,6 +547,8 @@ richlistbox:focus > richlistitem[selected="true"] {
   background: none !important;
   min-width: 0;
   min-height: auto;
+  padding-inline: 0;
+  margin-inline: 0 8px;
 }
 
 .dialogFrame {

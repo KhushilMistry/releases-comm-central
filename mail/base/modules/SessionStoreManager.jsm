@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = ["SessionStoreManager"];
+const EXPORTED_SYMBOLS = ["SessionStoreManager"];
 
 const { JSONFile } = ChromeUtils.import("resource://gre/modules/JSONFile.jsm");
 const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
@@ -110,7 +110,7 @@ var SessionStoreManager = {
 
     for (var i = 0; i < this._initialState.windows.length; ++i) {
       aWindow.open(
-        "chrome://messenger/content/messenger.xul",
+        "chrome://messenger/content/messenger.xhtml",
         "_blank",
         "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar"
       );
@@ -162,9 +162,7 @@ var SessionStoreManager = {
 
     // XXX we'd like to support other window types in future, but for now
     // only get the 3pane windows.
-    let enumerator = Services.wm.getEnumerator("mail:3pane");
-    while (enumerator.hasMoreElements()) {
-      let win = enumerator.getNext();
+    for (let win of Services.wm.getEnumerator("mail:3pane")) {
       if (
         win &&
         "complete" == win.document.readyState &&
@@ -246,9 +244,8 @@ var SessionStoreManager = {
     if (!this._shutdownStateSaved) {
       // determine whether aWindow is the last open window
       let lastWindow = true;
-      let enumerator = Services.wm.getEnumerator("mail:3pane");
-      while (enumerator.hasMoreElements()) {
-        if (enumerator.getNext() != aWindow) {
+      for (let win of Services.wm.getEnumerator("mail:3pane")) {
+        if (win != aWindow) {
           lastWindow = false;
         }
       }

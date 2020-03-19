@@ -54,7 +54,7 @@ async function populateFingers(context, theirs, trust) {
 
   let opts = document.getElementById("verifiedOption");
   let verified = trust ? "yes" : "no";
-  for (let item of opts.menupopup.childNodes) {
+  for (let item of opts.menupopup.children) {
     if (verified === item.value) {
       opts.selectedItem = item;
       break;
@@ -169,11 +169,20 @@ var otrAuth = {
     if (mode === "ask") {
       let context = OTR.getContext(uiConv.target);
       OTR.abortSMP(context);
+      // Close the ask-auth notification if it was previously triggered.
+      OTR.notifyObservers(
+        {
+          context,
+        },
+        "otr:cancel-ask-auth"
+      );
     }
   },
 
   oninput(e) {
-    document.documentElement.getButton("accept").disabled = !e.value;
+    document
+      .getElementById("otrAuthDialog")
+      .getButton("accept").disabled = !e.value;
   },
 
   how() {

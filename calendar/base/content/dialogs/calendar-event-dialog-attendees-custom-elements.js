@@ -9,6 +9,7 @@
 // Wrap in a block to prevent leaking to window scope.
 {
   const { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
+  const { MailUtils } = ChromeUtils.import("resource:///modules/MailUtils.jsm");
 
   /**
    * MozCalendarEventFreebusyTimebar is a widget showing the time slot labels - dates and a number of
@@ -45,7 +46,7 @@
 
       let template = this.getElementsByTagName("calendar-event-freebusy-day")[0];
       let parent = template.parentNode;
-      while (parent.childNodes.length > 1) {
+      while (parent.children.length > 1) {
         parent.lastChild.remove();
       }
 
@@ -79,7 +80,7 @@
       let template = this.getElementsByTagName("calendar-event-freebusy-day")[0];
 
       let parent = template.parentNode;
-      while (parent.childNodes.length > 1) {
+      while (parent.children.length > 1) {
         parent.lastChild.remove();
       }
 
@@ -105,7 +106,9 @@
      */
     get contentWidth() {
       let template = this.getElementsByTagName("calendar-event-freebusy-day")[0];
-      return template.nextSibling.getBoundingClientRect().x - template.getBoundingClientRect().x;
+      return (
+        template.nextElementSibling.getBoundingClientRect().x - template.getBoundingClientRect().x
+      );
     }
 
     /**
@@ -170,9 +173,9 @@
       let container = this.getElementsByTagName("calendar-event-scroll-container")[0];
       let date = this.mStartDate.clone();
       date.day += val;
-      let numChilds = container.content.childNodes.length;
+      let numChilds = container.content.children.length;
       for (let i = 0; i < numChilds; i++) {
-        let child = container.content.childNodes[i];
+        let child = container.content.children[i];
         child.date = date;
         date.day++;
       }
@@ -205,7 +208,7 @@
       let date = this.mStartDate.clone();
       let template = this.getElementsByTagName("calendar-event-freebusy-day")[0];
       let parent = template.parentNode;
-      for (let child of parent.childNodes) {
+      for (let child of parent.children) {
         child.startDate = this.mStartDate;
         child.endDate = this.mEndDate;
         child.date = date;
@@ -245,7 +248,7 @@
 
   /**
    * MozCalendarEventAttendeesList is a widget allowing adding and removing of attendees of an event.
-   * It shows if attendee if required or optional, the attendee status, type and adddress.
+   * It shows if attendee if required or optional, the attendee status, type and address.
    * It is typically found in the Invite Attendees dialog.
    *
    * @extends {MozElements.RichListBox}
@@ -339,7 +342,6 @@
           if (event.originalTarget.localName == "input") {
             let input = event.originalTarget;
 
-            input.setAttribute("autocompleteinput", input.id);
             this.mPopupOpen = true;
 
             switch (event.key) {
@@ -529,7 +531,7 @@
      */
     set ratio(val) {
       let rowcount = this.getRowCount();
-      this.scrollToIndex(Math.floor(rowcount * val));
+      this.ensureElementIsVisible(this.getItemAtIndex(Math.floor(rowcount * val)), true);
       return val;
     }
 
@@ -588,7 +590,7 @@
     }
 
     /**
-     * This trigger the continous update chain, which effectively calls this.onModify() on
+     * This trigger the continuous update chain, which effectively calls this.onModify() on
      * predefined time intervals [each second].
      */
     init() {
@@ -706,7 +708,7 @@
         newNode = listitem1.cloneNode(true);
 
         if (insertAfter) {
-          this.insertBefore(newNode, insertAfter.nextSibling);
+          this.insertBefore(newNode, insertAfter.nextElementSibling);
         } else if (nextDummy) {
           this.replaceChild(newNode, nextDummy);
         } else {
@@ -762,43 +764,7 @@
      */
     _resolveListByName(value) {
       let entries = MailServices.headerParser.makeFromDisplayAddress(value);
-      return entries.length ? this._findListInAddrBooks(entries[0].name) : null;
-    }
-
-    /**
-     * Finds list in the address books.
-     *
-     * @param {String} entryName        Value against which dirName is checked
-     * @returns {Object}                Found list or null
-     */
-    _findListInAddrBooks(entryname) {
-      let allAddressBooks = MailServices.ab.directories;
-
-      while (allAddressBooks.hasMoreElements()) {
-        let abDir = null;
-        try {
-          abDir = allAddressBooks.getNext().QueryInterface(Ci.nsIAbDirectory);
-        } catch (ex) {
-          cal.WARN("[eventDialog] Error Encountered" + ex);
-        }
-
-        if (abDir != null && abDir.supportsMailingLists) {
-          let childNodes = abDir.childNodes;
-          while (childNodes.hasMoreElements()) {
-            let dir = null;
-            try {
-              dir = childNodes.getNext().QueryInterface(Ci.nsIAbDirectory);
-            } catch (ex) {
-              cal.WARN("[eventDialog] Error Encountered" + ex);
-            }
-
-            if (dir && dir.isMailList && dir.dirName == entryname) {
-              return dir;
-            }
-          }
-        }
-      }
-      return null;
+      return entries.length ? MailUtils.findListInAddressBooks(entries[0].name) : null;
     }
 
     /**
@@ -910,10 +876,10 @@
             // row before the last row.
             let currentIndex = this.mMaxAttendees - 2;
             let template = this.querySelector(".addressingWidgetItem");
-            let currentNode = template.parentNode.childNodes[currentIndex];
+            let currentNode = template.parentNode.children[currentIndex];
             this._fillListItemWithEntry(currentNode, entries[0], currentIndex);
             entries.shift();
-            let nextNode = template.parentNode.childNodes[currentIndex + 1];
+            let nextNode = template.parentNode.children[currentIndex + 1];
             currentIndex++;
             for (let entry of entries) {
               currentNode = template.cloneNode(true);
@@ -923,7 +889,7 @@
             }
             this.mMaxAttendees += entries.length;
             for (let i = currentIndex; i < this.mMaxAttendees; i++) {
-              let row = template.parentNode.childNodes[i];
+              let row = template.parentNode.children[i];
               let textboxInput = row.querySelector(".textbox-addressingWidget");
               textboxInput.setAttribute("dirty", "true");
             }
@@ -1042,7 +1008,7 @@
       let listboxHeight = this.getBoundingClientRect().height;
 
       // Remove rows to remove scrollbar.
-      let kids = this.childNodes;
+      let kids = this.children;
       for (let i = kids.length - 1; this.mContentHeight > listboxHeight && i >= 0; --i) {
         if (kids[i].hasAttribute("_isDummyRow")) {
           this.mContentHeight -= this.mRowHeight;
@@ -1083,7 +1049,7 @@
      * @return {?Node}       Next row from the top down
      */
     getNextDummyRow() {
-      let kids = this.childNodes;
+      let kids = this.children;
       for (let i = 0; i < kids.length; ++i) {
         if (kids[i].hasAttribute("_isDummyRow")) {
           return kids[i];
@@ -1093,7 +1059,7 @@
     }
 
     /**
-     * Returns richlistitem at row numer `row`.
+     * Returns richlistitem at row number `row`.
      *
      * @returns {Element}       richlistitem
      */
@@ -1124,7 +1090,7 @@
           if (element.localName == "richlistitem") {
             ++row;
           }
-          element = element.previousSibling;
+          element = element.previousElementSibling;
         }
       }
       return row;
@@ -1187,7 +1153,7 @@
     }
 
     /**
-     * Sets foucs on the input element in the row `row`.
+     * Sets focus on the input element in the row `row`.
      *
      * @param {Element|Number} row      Row number or row
      */
@@ -1515,8 +1481,8 @@
     get contentWidth() {
       // Difference between the x coordinate of first and second child of hours node
       const diffX =
-        this.hoursNode.childNodes[1].getBoundingClientRect().x -
-        this.hoursNode.childNodes[0].getBoundingClientRect().x;
+        this.hoursNode.children[1].getBoundingClientRect().x -
+        this.hoursNode.children[0].getBoundingClientRect().x;
       return diffX * this.numHours;
     }
 
@@ -1565,8 +1531,8 @@
       let date = cal.dtz.jsDateToDateTime(new Date());
       date.hour = this.startHour;
       date.minute = 0;
-      if (this.hoursNode.childNodes.length <= 0) {
-        let template = document.createXULElement("text");
+      if (this.hoursNode.children.length <= 0) {
+        let template = document.createXULElement("label");
         template.className = "freebusy-grid";
         // TODO: hardcoded value
         let num_days = Math.max(2, (4 * this.zoomFactor) / 100);
@@ -1708,8 +1674,8 @@
      * Maps entries to the attributes of xul elements.
      */
     showState() {
-      for (let i = 0; i < this.hoursNode.childNodes.length; i++) {
-        let hour = this.hoursNode.childNodes[i];
+      for (let i = 0; i < this.hoursNode.children.length; i++) {
+        let hour = this.hoursNode.children[i];
         switch (this.state[i + this.offset]) {
           case Ci.calIFreeBusyInterval.FREE:
             hour.setAttribute("state", "free");
@@ -1801,7 +1767,7 @@
         const wrapper = document.createXULElement("box");
         wrapper.setAttribute("orient", "vertical");
 
-        this.text = document.createXULElement("text");
+        this.text = document.createXULElement("label");
         this.text.classList.add("freebusy-timebar-title");
         this.text.style.fontWeight = "bold";
 
@@ -1960,8 +1926,8 @@
       let step_in_minutes = Math.floor((60 * this.zoomFactor) / 100);
       let hours = this.box;
       date.hour = this.startHour;
-      if (hours.childNodes.length <= 0) {
-        let template = document.createXULElement("text");
+      if (hours.children.length <= 0) {
+        let template = document.createXULElement("label");
         template.className = "freebusy-timebar-hour";
         let count = Math.ceil(((this.endHour - this.startHour) * 60) / step_in_minutes);
         let remain = count;
@@ -2057,7 +2023,7 @@
       const frag = document.createDocumentFragment();
 
       while (this.hasChildNodes()) {
-        frag.appendChild(this.firstChild);
+        frag.appendChild(this.firstElementChild);
       }
 
       return frag;
@@ -2696,7 +2662,7 @@
      * @returns {Number}        Element index
      */
     set firstVisibleRow(val) {
-      this.scrollToIndex(val);
+      this.ensureElementIsVisible(this.getItemAtIndex(val), true);
       return val;
     }
 
@@ -2717,7 +2683,7 @@
      */
     set ratio(val) {
       let rowcount = this.getRowCount();
-      this.scrollToIndex(Math.floor(rowcount * val));
+      this.ensureElementIsVisible(this.getItemAtIndex(Math.floor(rowcount * val)), true);
       return val;
     }
 
@@ -3016,8 +2982,8 @@
       }
 
       // In case the new starttime happens to be scheduled on a different day, we also need to
-      // update the complete freebusy informations and appropriate underlying arrays holding the
-      // informaion.
+      // update the complete freebusy information and appropriate underlying arrays holding the
+      // information.
       if (this.mStartDate.day != startTime.day) {
         for (let i = 1; i <= this.mMaxFreeBusy; i++) {
           let fbelem = this.getFreeBusyElement(i);
@@ -3091,7 +3057,7 @@
      * @returns {?Element}       Next dummy row or null if there isn't any
      */
     getNextDummyRow() {
-      for (let kid of this.childNodes) {
+      for (let kid of this.children) {
         if (kid.hasAttribute("_isDummyRow")) {
           return kid;
         }
@@ -3132,7 +3098,7 @@
       let listboxHeight = this.getBoundingClientRect().height;
 
       // Remove rows to remove scrollbar
-      let kids = this.childNodes;
+      let kids = this.children;
       for (let i = kids.length - 1; this.mContentHeight > listboxHeight && i >= 0; --i) {
         if (kids[i].hasAttribute("_isDummyRow")) {
           this.mContentHeight -= this.mRowHeight;

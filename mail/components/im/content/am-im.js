@@ -99,9 +99,8 @@ var account = {
   },
 
   *getProtoOptions() {
-    let options = this.proto.getOptions();
-    while (options.hasMoreElements()) {
-      yield options.getNext();
+    for (let option of this.proto.getOptions()) {
+      yield option;
     }
   },
 
@@ -140,11 +139,11 @@ var account = {
   },
 
   viewFingerprintKeys() {
-    window.openDialog(
-      "chrome://chat/content/otr-finger.xul",
-      "",
-      "chrome,modal,titlebar,centerscreen",
-      this.account
+    let otrAccount = { account: this.account };
+    parent.gSubDialog.open(
+      "chrome://chat/content/otr-finger.xhtml",
+      null,
+      otrAccount
     );
   },
 };

@@ -12,7 +12,7 @@ kind-dependencies:
 
 transforms:
     - taskgraph.transforms.tests:transforms
-    - comm_taskgraph:tests_drop_1proc
+    - comm_taskgraph.transforms.tests:transforms
     - taskgraph.transforms.job:transforms
     - taskgraph.transforms.task:transforms
 
@@ -43,3 +43,15 @@ job-defaults:
             - comm/.gecko_rev.yml
             - comm/.taskcluster.yml
             - comm/moz.build
+    fetches:
+        toolchain:
+            by-test-platform:
+                win.*:
+                    - win32-fix-stacks
+                    - win32-minidump-stackwalk
+                macosx.*:
+                    - macosx64-fix-stacks
+                    - macosx64-minidump-stackwalk
+                default:
+                    - linux64-fix-stacks
+                    - linux64-minidump-stackwalk

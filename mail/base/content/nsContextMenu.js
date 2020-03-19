@@ -37,7 +37,7 @@ function nsContextMenu(aXulMenu, aIsShift) {
   this.target = null;
   this.menu = null;
   this.onTextInput = false;
-  this.onEditableArea = false;
+  this.onEditable = false;
   this.onImage = false;
   this.onLoadedImage = false;
   this.onCanvas = false;
@@ -78,16 +78,22 @@ nsContextMenu.prototype = {
   initMenu(aPopup, aIsShift) {
     this.menu = aPopup;
 
+    let target = this.menu.target || document.popupNode;
+    delete this.menu.target;
+
     // Get contextual info.
-    this.setTarget(document.popupNode);
-    this.setMessageTargets(document.popupNode);
+    this.setTarget(target);
+    this.setMessageTargets(target);
 
     if (!this.inThreadPane && this.messagepaneIsBlank) {
       this.shouldDisplay = false;
       return;
     }
 
-    this.isContentSelected = this.isContentSelection();
+    this.selectionInfo = BrowserUtils.getSelectionDetails(window);
+    this.isContentSelected = !this.selectionInfo.docSelectionIsCollapsed;
+    this.textSelected = this.selectionInfo.text;
+    this.isTextSelected = !!this.textSelected.length;
 
     this.hasPageMenu = false;
     if (!aIsShift) {
@@ -100,7 +106,6 @@ nsContextMenu.prototype = {
           ? document.getElementById("tabmail").currentTabInfo
           : undefined,
         isContentSelected: this.isContentSelected,
-        inFrame: this.inFrame,
         isTextSelected: this.isTextSelected,
         onTextInput: this.onTextInput,
         onLink: this.onLink,
@@ -108,20 +113,29 @@ nsContextMenu.prototype = {
         onVideo: this.onVideo,
         onAudio: this.onAudio,
         onCanvas: this.onCanvas,
-        onEditableArea: this.onEditableArea,
+        onEditable: this.onEditable,
         srcUrl: this.mediaURL,
-        pageUrl: this.browser ? this.browser.currentURI.spec : undefined,
+        linkText: this.onLink ? this.linkText() : undefined,
         linkUrl: this.linkURL,
         selectionText: this.isTextSelected
-          ? this.selectionInfo.text
+          ? this.selectionInfo.fullText
           : undefined,
       };
-      if (document.popupNode.closest("tree") == gFolderDisplay.tree) {
+      if (this.target) {
+        subject.inFrame =
+          this.target.ownerGlobal != this.target.ownerGlobal.top;
+        subject.frameUrl = this.target.ownerGlobal.location.href;
+        subject.pageUrl = this.target.ownerGlobal.top.location.href;
+        subject.principal = this.target.ownerDocument.nodePrincipal;
+      }
+      if (target.closest("tree") == gFolderDisplay.tree) {
         subject.displayedFolder = gFolderDisplay.view.displayedFolder;
         subject.selectedMessages = gFolderDisplay.selectedMessages;
       }
+      subject.context = subject;
       subject.wrappedJSObject = subject;
 
+      Services.obs.notifyObservers(subject, "on-prepare-contextmenu");
       Services.obs.notifyObservers(subject, "on-build-contextmenu");
     }
 
@@ -158,10 +172,7 @@ nsContextMenu.prototype = {
     let canSpell = gSpellChecker.canSpellCheck;
     let onMisspelling = gSpellChecker.overMisspelling;
     this.showItem("mailContext-spell-check-enabled", canSpell);
-    this.showItem(
-      "mailContext-spell-separator",
-      canSpell || this.onEditableArea
-    );
+    this.showItem("mailContext-spell-separator", canSpell || this.onEditable);
     if (canSpell) {
       document
         .getElementById("mailContext-spell-check-enabled")
@@ -197,7 +208,7 @@ nsContextMenu.prototype = {
       );
       gSpellChecker.addDictionaryListToMenu(dictMenu, dictSep);
       this.showItem("mailContext-spell-add-dictionaries-main", false);
-    } else if (this.onEditableArea) {
+    } else if (this.onEditable) {
       // when there is no spellchecker but we might be able to spellcheck
       // add the add to dictionaries item. This will ensure that people
       // with no dictionaries will be able to download them
@@ -605,7 +616,7 @@ nsContextMenu.prototype = {
     this.onLoadedImage = false;
     this.onMetaDataItem = false;
     this.onTextInput = false;
-    this.onEditableArea = false;
+    this.onEditable = false;
     this.imageURL = "";
     this.onLink = false;
     this.onVideo = false;
@@ -621,7 +632,7 @@ nsContextMenu.prototype = {
     // Set up early the right flags for editable / not editable.
     let editFlags = SpellCheckHelper.isEditable(this.target, window);
     this.onTextInput = (editFlags & SpellCheckHelper.TEXTINPUT) !== 0;
-    this.onEditableArea = (editFlags & SpellCheckHelper.EDITABLE) !== 0;
+    this.onEditable = (editFlags & SpellCheckHelper.EDITABLE) !== 0;
 
     // First, do checks for nodes that never have children.
     if (this.target.nodeType == Node.ELEMENT_NODE) {
@@ -647,7 +658,7 @@ nsContextMenu.prototype = {
         (SpellCheckHelper.INPUT | SpellCheckHelper.TEXTAREA)
       ) {
         if (!this.target.readOnly) {
-          this.onEditableArea = true;
+          this.onEditable = true;
           gSpellChecker.init(this.target.editor);
           gSpellChecker.initFromEvent(
             document.popupRangeParent,
@@ -1098,12 +1109,12 @@ nsContextMenu.prototype = {
   shouldShowSeparator(aSeparatorID) {
     var separator = document.getElementById(aSeparatorID);
     if (separator) {
-      var sibling = separator.previousSibling;
+      var sibling = separator.previousElementSibling;
       while (sibling && sibling.localName != "menuseparator") {
         if (sibling.getAttribute("hidden") != "true") {
           return true;
         }
-        sibling = sibling.previousSibling;
+        sibling = sibling.previousElementSibling;
       }
     }
     return false;
@@ -1115,7 +1126,7 @@ nsContextMenu.prototype = {
    * @param aPopup  The menu to check.
    */
   checkLastSeparator(aPopup) {
-    let sibling = aPopup.lastChild;
+    let sibling = aPopup.lastElementChild;
     while (sibling) {
       if (sibling.getAttribute("hidden") != "true") {
         if (sibling.localName == "menuseparator") {
@@ -1126,7 +1137,7 @@ nsContextMenu.prototype = {
         }
         return;
       }
-      sibling = sibling.previousSibling;
+      sibling = sibling.previousElementSibling;
     }
   },
 

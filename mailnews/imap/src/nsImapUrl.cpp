@@ -57,6 +57,7 @@ nsImapUrl::nsImapUrl() : mLock("nsImapUrl.mLock") {
   m_flags = 0;
   m_extraStatus = ImapStatusNone;
   m_onlineSubDirSeparator = '/';
+  m_imapAction = 0;
 
   // ** jt - the following are not ref counted
   m_copyState = nullptr;
@@ -626,7 +627,7 @@ NS_IMETHODIMP nsImapUrl::AddOnlineDirectoryIfNecessary(
         char delimiter = ns->GetDelimiter();
         if (delimiter && delimiter != kOnlineHierarchySeparatorUnknown) {
           // try to change the canonical online dir name to real dir name first
-          MsgReplaceChar(onlineDirWithDelimiter, '/', delimiter);
+          onlineDirWithDelimiter.ReplaceChar('/', delimiter);
           // make sure the last character is the delimiter
           if (onlineDirWithDelimiter.Last() != delimiter)
             onlineDirWithDelimiter += delimiter;
@@ -816,7 +817,7 @@ NS_IMETHODIMP nsImapUrl::AllocateCanonicalPath(const char *serverPath,
     // By definition, the online dir must be at the root.
     if (delimiterToUse && delimiterToUse != kOnlineHierarchySeparatorUnknown) {
       // try to change the canonical online dir name to real dir name first
-      MsgReplaceChar(onlineDir, '/', delimiterToUse);
+      onlineDir.ReplaceChar('/', delimiterToUse);
       // Add the delimiter
       if (onlineDir.Last() != delimiterToUse) onlineDir += delimiterToUse;
     }
@@ -983,8 +984,8 @@ nsImapUrl::GetMsgFile(nsIFile **aFile) {
 // this method is called from the UI thread..
 NS_IMETHODIMP nsImapUrl::GetMockChannel(nsIImapMockChannel **aChannel) {
   NS_ENSURE_ARG_POINTER(aChannel);
-  NS_WARNING_ASSERTION(NS_IsMainThread(),
-                       "should only access mock channel on ui thread");
+  MOZ_DIAGNOSTIC_ASSERT(NS_IsMainThread(),
+                        "should only access mock channel on ui thread");
   *aChannel = nullptr;
   nsCOMPtr<nsIImapMockChannel> channel(do_QueryReferent(m_channelWeakPtr));
   channel.forget(aChannel);
@@ -992,8 +993,8 @@ NS_IMETHODIMP nsImapUrl::GetMockChannel(nsIImapMockChannel **aChannel) {
 }
 
 NS_IMETHODIMP nsImapUrl::SetMockChannel(nsIImapMockChannel *aChannel) {
-  NS_WARNING_ASSERTION(NS_IsMainThread(),
-                       "should only access mock channel on ui thread");
+  MOZ_DIAGNOSTIC_ASSERT(NS_IsMainThread(),
+                        "should only access mock channel on ui thread");
   m_channelWeakPtr = do_GetWeakReference(aChannel);
   return NS_OK;
 }

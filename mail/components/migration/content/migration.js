@@ -19,14 +19,12 @@ var MigrationWizard = {
   _autoMigrate: null,
 
   init() {
-    document.documentElement.addEventListener(
-      "wizardback",
-      this.onBack.bind(this)
-    );
-    document.documentElement.addEventListener(
-      "wizardcancel",
-      this.onCancel.bind(this)
-    );
+    document
+      .querySelector("wizard")
+      .addEventListener("wizardback", this.onBack.bind(this));
+    document
+      .querySelector("wizard")
+      .addEventListener("wizardcancel", this.onCancel.bind(this));
 
     let importSourcePage = document.getElementById("importSource");
     importSourcePage.addEventListener(
@@ -77,7 +75,7 @@ var MigrationWizard = {
     Services.obs.addObserver(this, "Migration:Ended");
     Services.obs.addObserver(this, "Migration:Progress");
 
-    this._wiz = document.documentElement;
+    this._wiz = document.querySelector("wizard");
 
     if ("arguments" in window && !window.arguments[3]) {
       this._source = window.arguments[0];
@@ -126,7 +124,7 @@ var MigrationWizard = {
 
     // Figure out what source apps are are available to import from:
     var group = document.getElementById("importSourceGroup");
-    for (let childNode of group.childNodes) {
+    for (let childNode of group.children) {
       let suffix = childNode.id;
       if (suffix != "nothing") {
         var contractID = kProfileMigratorContractIDPrefix + suffix;
@@ -141,7 +139,7 @@ var MigrationWizard = {
     }
 
     var firstNonDisabled = null;
-    for (let childNode of group.childNodes) {
+    for (let childNode of group.children) {
       if (!childNode.hidden && !childNode.disabled) {
         firstNonDisabled = childNode;
         break;
@@ -167,7 +165,7 @@ var MigrationWizard = {
       .id;
 
     if (newSource == "nothing") {
-      document.documentElement.cancel();
+      document.querySelector("wizard").cancel();
       return;
     }
 
@@ -204,7 +202,7 @@ var MigrationWizard = {
     // Disabling this for now, since we ask about import sources in automigration
     // too and don't want to disable the back button
     // if (this._autoMigrate)
-    //   document.documentElement.getButton("back").disabled = true;
+    //   document.querySelector("wizard").getButton("back").disabled = true;
 
     var profiles = document.getElementById("profiles");
     while (profiles.hasChildNodes()) {
@@ -225,7 +223,7 @@ var MigrationWizard = {
 
     profiles.selectedItem = this._selectedProfile
       ? document.getElementById(this._selectedProfile)
-      : profiles.firstChild;
+      : profiles.firstElementChild;
   },
 
   onSelectProfilePageRewound() {
@@ -276,8 +274,8 @@ var MigrationWizard = {
   onImportItemsPageAdvanced() {
     var dataSources = document.getElementById("dataSources");
     this._itemsFlags = 0;
-    for (var i = 0; i < dataSources.childNodes.length; ++i) {
-      var checkbox = dataSources.childNodes[i];
+    for (var i = 0; i < dataSources.children.length; ++i) {
+      var checkbox = dataSources.children[i];
       if (checkbox.localName == "checkbox" && checkbox.checked) {
         this._itemsFlags |= parseInt(checkbox.id);
       }

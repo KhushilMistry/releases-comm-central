@@ -8,13 +8,13 @@
  *  the the view and controller.
  *
  * Because much of the work related to faceting is not UI-specific, we try and
- *  push as much of it into mailnews/db/gloda/facet.js.  In some cases we may
+ *  push as much of it into mailnews/db/gloda/Facet.jsm.  In some cases we may
  *  get it wrong and it may eventually want to migrate.
  */
 
-var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 var { StringBundle } = ChromeUtils.import(
-  "resource:///modules/StringBundle.js"
+  "resource:///modules/StringBundle.jsm"
 );
 var { PluralForm } = ChromeUtils.import(
   "resource://gre/modules/PluralForm.jsm"
@@ -25,12 +25,12 @@ var { MailServices } = ChromeUtils.import(
 );
 var { TagUtils } = ChromeUtils.import("resource:///modules/TagUtils.jsm");
 var { logObject, logException } = ChromeUtils.import(
-  "resource:///modules/errUtils.js"
+  "resource:///modules/ErrUtils.jsm"
 );
 
-var { Gloda } = ChromeUtils.import("resource:///modules/gloda/public.js");
+var { Gloda } = ChromeUtils.import("resource:///modules/gloda/GlodaPublic.jsm");
 var { FacetDriver, FacetUtils } = ChromeUtils.import(
-  "resource:///modules/gloda/facet.js"
+  "resource:///modules/gloda/Facet.jsm"
 );
 
 var glodaFacetStrings = new StringBundle(
@@ -60,7 +60,7 @@ const QueryExplanation = {
       return span;
     };
 
-    const searchLabel = glodaFacetStrings.get("glodaFacetView.search.label");
+    const searchLabel = glodaFacetStrings.get("glodaFacetView.search.label2");
     spanify(searchLabel, "explanation-fulltext-label");
 
     const criteriaText = glodaFacetStrings.get(
@@ -89,7 +89,7 @@ const QueryExplanation = {
         return span;
       };
 
-      let label = glodaFacetStrings.get("glodaFacetView.search.label");
+      let label = glodaFacetStrings.get("glodaFacetView.search.label2");
       spanify(label, "explanation-query-label");
 
       let constraintStrings = [];
@@ -696,7 +696,7 @@ var FacetContext = {
           // otherwise, update
           faceter.xblNode.orderedGroups = faceter.orderedGroups;
           faceter.xblNode.build(false);
-          faceter.xblNode.style.display = "block";
+          faceter.xblNode.removeAttribute("style");
         }
       }
     }
@@ -726,22 +726,19 @@ var FacetContext = {
     showLoading.style.display = "none"; // Hide spinner, we're done thinking.
 
     let showEmpty = document.getElementById("showEmpty");
-    let dateToggle = document.getElementById("date-toggle");
+    let showAll = document.getElementById("gloda-showall");
     // Check for no messages at all.
     if (this._activeSet.length == 0) {
       showEmpty.style.display = "block";
-      dateToggle.style.display = "none";
+      showAll.style.display = "none";
     } else {
       showEmpty.style.display = "none";
-      dateToggle.style.display = "block";
+      showAll.style.display = "block";
     }
 
     let showMore = document.getElementById("showMore");
-    if (this._activeSet.length > numMessageToShow) {
-      showMore.style.display = "block";
-    } else {
-      showMore.style.display = "none";
-    }
+    showMore.style.display =
+      this._activeSet.length > numMessageToShow ? "block" : "none";
   },
 
   showMore() {
@@ -788,7 +785,7 @@ var FacetContext = {
     };
     facetDate.addEventListener("transitionend", listener, { once: true });
     facetDate.removeAttribute("hide");
-    document.getElementById("date-toggle").removeAttribute("tucked");
+    document.getElementById("date-toggle").setAttribute("checked", "true");
     Services.prefs.setBoolPref("gloda.facetview.hidetimeline", false);
   },
 
@@ -799,7 +796,7 @@ var FacetContext = {
     }
     facetDate.style.overflow = "hidden";
     facetDate.setAttribute("hide", "true");
-    document.getElementById("date-toggle").setAttribute("tucked", "true");
+    document.getElementById("date-toggle").removeAttribute("checked");
     Services.prefs.setBoolPref("gloda.facetview.hidetimeline", true);
   },
 

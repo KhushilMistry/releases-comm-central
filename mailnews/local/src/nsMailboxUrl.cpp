@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -510,10 +510,9 @@ NS_IMETHODIMP nsMailboxUrl::SetCharsetOverRide(const char *aCharacterSet) {
   return NS_OK;
 }
 
-/* void setMoveCopyMsgKeys (out nsMsgKey keysToFlag, in long numKeys); */
-NS_IMETHODIMP nsMailboxUrl::SetMoveCopyMsgKeys(nsMsgKey *keysToFlag,
-                                               int32_t numKeys) {
-  m_keys.ReplaceElementsAt(0, m_keys.Length(), keysToFlag, numKeys);
+NS_IMETHODIMP nsMailboxUrl::SetMoveCopyMsgKeys(
+    const nsTArray<nsMsgKey> &keysToFlag) {
+  m_keys = keysToFlag;
   if (!m_keys.IsEmpty() && m_messageKey == nsMsgKey_None)
     m_messageKey = m_keys[0];
   return NS_OK;

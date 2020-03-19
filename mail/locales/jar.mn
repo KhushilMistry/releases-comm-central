@@ -14,6 +14,7 @@
   # and remove the following otr/ lines.
   messenger/otr/am-im-otr.ftl                                           (../../chat/content/otr/am-im-otr.ftl)
   messenger/otr/finger.ftl                                              (../../chat/content/otr/finger.ftl)
+  messenger/otr/finger-sync.ftl                                         (../../chat/content/otr/finger-sync.ftl)
   messenger/otr/add-finger.ftl                                          (../../chat/content/otr/add-finger.ftl)
   messenger/otr/auth.ftl                                                (../../chat/content/otr/auth.ftl)
   messenger/otr/chat.ftl                                                (../../chat/content/otr/chat.ftl)
@@ -74,6 +75,7 @@
   locale/@AB_CD@/messenger/smtpEditOverlay.dtd                          (%chrome/messenger/smtpEditOverlay.dtd)
   locale/@AB_CD@/messenger/am-smime.dtd                                 (%chrome/messenger/am-smime.dtd)
   locale/@AB_CD@/messenger/am-smime.properties                          (%chrome/messenger/am-smime.properties)
+  locale/@AB_CD@/messenger/am-e2e.properties                            (%chrome/messenger/am-e2e.properties)
   locale/@AB_CD@/messenger/removeAccount.dtd                            (%chrome/messenger/removeAccount.dtd)
   locale/@AB_CD@/messenger/removeAccount.properties                     (%chrome/messenger/removeAccount.properties)
   locale/@AB_CD@/messenger/messenger.properties                         (%chrome/messenger/messenger.properties)
@@ -88,7 +90,6 @@
   locale/@AB_CD@/messenger/msgHdrViewOverlay.dtd                        (%chrome/messenger/msgHdrViewOverlay.dtd)
   locale/@AB_CD@/messenger/editContactOverlay.dtd                       (%chrome/messenger/editContactOverlay.dtd)
   locale/@AB_CD@/messenger/editContactOverlay.properties                (%chrome/messenger/editContactOverlay.properties)
-  locale/@AB_CD@/messenger/extensionsOverlay.properties                 (%chrome/messenger/extensionsOverlay.properties)
   locale/@AB_CD@/messenger/mailEditorOverlay.dtd                        (%chrome/messenger/mailEditorOverlay.dtd)
   locale/@AB_CD@/messenger/msgSynchronize.dtd                           (%chrome/messenger/msgSynchronize.dtd)
   locale/@AB_CD@/messenger/offline.properties                           (%chrome/messenger/offline.properties)
@@ -241,7 +242,6 @@
   locale/@AB_CD@/messenger-newsblog/am-newsblog.dtd                     (%chrome/messenger-newsblog/am-newsblog.dtd)
 % locale messenger-smime @AB_CD@ %locale/@AB_CD@/messenger-smime/
   locale/@AB_CD@/messenger-smime/msgCompSMIMEOverlay.dtd                (%chrome/messenger-smime/msgCompSMIMEOverlay.dtd)
-  locale/@AB_CD@/messenger-smime/msgCompSMIMEOverlay.properties         (%chrome/messenger-smime/msgCompSMIMEOverlay.properties)
   locale/@AB_CD@/messenger-smime/msgReadSMIMEOverlay.dtd                (%chrome/messenger-smime/msgReadSMIMEOverlay.dtd)
   locale/@AB_CD@/messenger-smime/msgReadSMIMEOverlay.properties         (%chrome/messenger-smime/msgReadSMIMEOverlay.properties)
   locale/@AB_CD@/messenger-smime/msgCompSecurityInfo.dtd                (%chrome/messenger-smime/msgCompSecurityInfo.dtd)
@@ -255,4 +255,3 @@
   locale/@AB_CD@/mozldap/ldap.properties                                (%chrome/mozldap/ldap.properties)
 % locale communicator @AB_CD@ %locale/@AB_CD@/communicator/
   locale/@AB_CD@/communicator/utilityOverlay.dtd                        (%chrome/communicator/utilityOverlay.dtd)
-

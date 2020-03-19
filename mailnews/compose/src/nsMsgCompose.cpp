@@ -22,14 +22,12 @@
 #include "nsMimeTypes.h"
 #include "nsICharsetConverterManager.h"
 #include "nsTextFormatter.h"
-#include "nsIPlaintextEditor.h"
 #include "nsIHTMLEditor.h"
 #include "nsIEditor.h"
 #include "plstr.h"
 #include "prmem.h"
 #include "nsIDocShell.h"
 #include "nsAbBaseCID.h"
-#include "nsIAbMDBDirectory.h"
 #include "nsCExternalHandlerService.h"
 #include "nsIMIMEService.h"
 #include "nsIDocShellTreeItem.h"
@@ -68,15 +66,18 @@
 #include "mozilla/mailnews/MimeHeaderParser.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/ErrorResult.h"
+#include "mozilla/Telemetry.h"
 #include "mozilla/dom/HTMLAnchorElement.h"
 #include "mozilla/dom/HTMLImageElement.h"
 #include "mozilla/dom/Selection.h"
+#include "mozilla/Utf8.h"
 #include "nsStreamConverter.h"
 #include "nsIObserverService.h"
 #include "nsIProtocolHandler.h"
 #include "nsContentUtils.h"
 #include "nsIFileURL.h"
 #include "nsTextNode.h"  // from dom/base
+#include "nsIParserUtils.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -587,6 +588,13 @@ static void remove_plaintext_tag(nsString &body) {
   }
 }
 
+static void remove_conditional_CSS(const nsAString &in, nsAString &out) {
+  nsCOMPtr<nsIParserUtils> parserUtils =
+      do_GetService(NS_PARSERUTILS_CONTRACTID);
+  parserUtils->Sanitize(in, nsIParserUtils::SanitizerRemoveOnlyConditionalCSS,
+                        out);
+}
+
 MOZ_CAN_RUN_SCRIPT_BOUNDARY NS_IMETHODIMP
 nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
                                           nsString &aSignature, bool aQuoted,
@@ -611,7 +619,6 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
 
   // Now, insert it into the editor...
   RefPtr<HTMLEditor> htmlEditor = m_editor->AsHTMLEditor();
-  nsCOMPtr<nsIPlaintextEditor> textEditor(do_QueryInterface(m_editor));
   int32_t reply_on_top = 0;
   bool sig_bottom = true;
   m_identity->GetReplyOnTop(&reply_on_top);
@@ -634,7 +641,7 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
       m_identity->GetReplyOnTop(&reply_on_top);
       if (reply_on_top == 1) {
         // HTML editor eats one line break but not a whole paragraph.
-        if (aHTMLEditor && !paragraphMode) textEditor->InsertLineBreak();
+        if (aHTMLEditor && !paragraphMode) htmlEditor->InsertLineBreak();
 
         // add one newline if a signature comes before the quote, two otherwise
         bool includeSignature = true;
@@ -649,10 +656,10 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
         if (!paragraphMode || !aHTMLEditor) {
           if (includeSignature && !sig_bottom &&
               ((NS_SUCCEEDED(rv) && attachFile) || !prefSigText.IsEmpty()))
-            textEditor->InsertLineBreak();
+            htmlEditor->InsertLineBreak();
           else {
-            textEditor->InsertLineBreak();
-            textEditor->InsertLineBreak();
+            htmlEditor->InsertLineBreak();
+            htmlEditor->InsertLineBreak();
           }
         }
       }
@@ -675,7 +682,7 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
 
     mInsertingQuotedContent = false;
 
-    (void)TagEmbeddedObjects(m_editor);
+    (void)TagEmbeddedObjects(htmlEditor);
 
     if (!aSignature.IsEmpty()) {
       // we cannot add it on top earlier, because TagEmbeddedObjects will mark
@@ -685,12 +692,12 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
       if (aHTMLEditor)
         htmlEditor->InsertHTML(aSignature);
       else {
-        textEditor->InsertLineBreak();
+        htmlEditor->InsertLineBreak();
         InsertDivWrappedTextAtSelection(aSignature,
                                         NS_LITERAL_STRING("moz-signature"));
       }
 
-      if (sigOnTop) m_editor->EndOfDocument();
+      if (sigOnTop) htmlEditor->EndOfDocument();
     }
   } else {
     if (aHTMLEditor) {
@@ -705,22 +712,30 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
         // <HTML><BODY><BR><BR> + forwarded header + header table.
         // Note: We only do this when we prepare the message to be forwarded,
         // a re-opened saved draft of a forwarded message does not repeat this.
-        nsString newBody(aBuf);
         nsString divTag;
         divTag.AssignLiteral("<div class=\"moz-forward-container\">");
-        newBody.Insert(divTag, sizeof(MIME_FORWARD_HTML_PREFIX) - 1 - 8);
-        remove_plaintext_tag(newBody);
+        aBuf.Insert(divTag, sizeof(MIME_FORWARD_HTML_PREFIX) - 1 - 8);
+      }
+      remove_plaintext_tag(aBuf);
+
+      bool stripConditionalCSS = mozilla::Preferences::GetBool(
+          "mail.html_sanitize.drop_conditional_css", true);
+
+      if (stripConditionalCSS) {
+        nsString newBody;
+        remove_conditional_CSS(aBuf, newBody);
         htmlEditor->RebuildDocumentFromSource(newBody);
       } else {
         htmlEditor->RebuildDocumentFromSource(aBuf);
       }
+
       mInsertingQuotedContent = false;
 
       // When forwarding a message as inline, or editing as new (which could
       // contain unsanitized remote content), tag any embedded objects
       // with moz-do-not-send=true so they don't get attached upon send.
       if (isForwarded || mType == nsIMsgCompType::EditAsNew)
-        (void)TagEmbeddedObjects(m_editor);
+        (void)TagEmbeddedObjects(htmlEditor);
 
       if (!aSignature.IsEmpty()) {
         if (isForwarded && sigOnTop) {
@@ -734,16 +749,16 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
           MoveToEndOfDocument();
         }
         htmlEditor->InsertHTML(aSignature);
-        if (isForwarded && sigOnTop) m_editor->EndOfDocument();
+        if (isForwarded && sigOnTop) htmlEditor->EndOfDocument();
       } else
-        m_editor->EndOfDocument();
+        htmlEditor->EndOfDocument();
     } else {
       bool sigOnTopInserted = false;
       if (isForwarded && sigOnTop && !aSignature.IsEmpty()) {
-        textEditor->InsertLineBreak();
+        htmlEditor->InsertLineBreak();
         InsertDivWrappedTextAtSelection(aSignature,
                                         NS_LITERAL_STRING("moz-signature"));
-        m_editor->EndOfDocument();
+        htmlEditor->EndOfDocument();
         sigOnTopInserted = true;
       }
 
@@ -783,7 +798,7 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
 
           // Position into the div, so out content goes there.
           RefPtr<Selection> selection;
-          m_editor->GetSelection(getter_AddRefs(selection));
+          htmlEditor->GetSelection(getter_AddRefs(selection));
           rv = selection->Collapse(divElem, 0);
           NS_ENSURE_SUCCESS(rv, rv);
         }
@@ -792,7 +807,6 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
         NS_ENSURE_SUCCESS(rv, rv);
 
         if (isForwarded) {
-          nsCOMPtr<nsIEditor> editor(m_editor);  // Strong reference.
           // Special treatment for forwarded messages: Part 2.
           if (sigOnTopInserted) {
             // Sadly the M-C editor inserts a <br> between the <div> for the
@@ -803,14 +817,14 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
             if (brBeforeDiv) {
               tagLocalName = brBeforeDiv->LocalName();
               if (tagLocalName.EqualsLiteral("br")) {
-                rv = editor->DeleteNode(brBeforeDiv);
+                rv = htmlEditor->DeleteNode(brBeforeDiv);
                 NS_ENSURE_SUCCESS(rv, rv);
               }
             }
           }
 
           // Clean up the <br> we inserted.
-          rv = editor->DeleteNode(extraBr);
+          rv = htmlEditor->DeleteNode(extraBr);
           NS_ENSURE_SUCCESS(rv, rv);
         }
 
@@ -823,7 +837,7 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
       }
 
       if ((!isForwarded || !sigOnTop) && !aSignature.IsEmpty()) {
-        textEditor->InsertLineBreak();
+        htmlEditor->InsertLineBreak();
         InsertDivWrappedTextAtSelection(aSignature,
                                         NS_LITERAL_STRING("moz-signature"));
       }
@@ -831,13 +845,13 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
   }
 
   if (aBuf.IsEmpty())
-    m_editor->BeginningOfDocument();
+    htmlEditor->BeginningOfDocument();
   else {
     switch (reply_on_top) {
       // This should set the cursor after the body but before the sig
       case 0: {
-        if (!textEditor) {
-          m_editor->BeginningOfDocument();
+        if (!htmlEditor) {
+          htmlEditor->BeginningOfDocument();
           break;
         }
 
@@ -849,14 +863,14 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
         // get parent and offset of mailcite
         rv = GetNodeLocation(nodeInserted, address_of(parent), &offset);
         if (NS_FAILED(rv) || (!parent)) {
-          m_editor->BeginningOfDocument();
+          htmlEditor->BeginningOfDocument();
           break;
         }
 
         // get selection
-        m_editor->GetSelection(getter_AddRefs(selection));
+        htmlEditor->GetSelection(getter_AddRefs(selection));
         if (!selection) {
-          m_editor->BeginningOfDocument();
+          htmlEditor->BeginningOfDocument();
           break;
         }
 
@@ -864,7 +878,7 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
         selection->Collapse(parent, offset + 1);
 
         // insert a break at current selection
-        if (!paragraphMode || !aHTMLEditor) textEditor->InsertLineBreak();
+        if (!paragraphMode || !aHTMLEditor) htmlEditor->InsertLineBreak();
 
         // i'm not sure if you need to move the selection back to before the
         // break. expirement.
@@ -874,7 +888,7 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
       }
 
       case 2: {
-        nsCOMPtr<nsIEditor> editor(m_editor);  // Strong reference.
+        nsCOMPtr<nsIEditor> editor(htmlEditor);  // Strong reference.
         editor->SelectAll();
         break;
       }
@@ -888,14 +902,14 @@ nsMsgCompose::ConvertAndLoadComposeWindow(nsString &aPrefix, nsString &aBuf,
   }
 
   nsCOMPtr<nsISelectionController> selCon;
-  m_editor->GetSelectionController(getter_AddRefs(selCon));
+  htmlEditor->GetSelectionController(getter_AddRefs(selCon));
 
   if (selCon)
     selCon->ScrollSelectionIntoView(
         nsISelectionController::SELECTION_NORMAL,
         nsISelectionController::SELECTION_ANCHOR_REGION, true);
 
-  m_editor->EnableUndo(true);
+  htmlEditor->EnableUndo(true);
   SetBodyModified(false);
 
 #ifdef MSGCOMP_TRACE_PERFORMANCE
@@ -982,6 +996,14 @@ nsMsgCompose::Initialize(nsIMsgComposeParams *aParams,
 
   rv = composeService->DetermineComposeHTML(m_identity, format, &m_composeHTML);
   NS_ENSURE_SUCCESS(rv, rv);
+
+#ifndef MOZ_SUITE
+  if (m_composeHTML) {
+    Telemetry::ScalarAdd(Telemetry::ScalarID::TB_COMPOSE_FORMAT_HTML, 1);
+  } else {
+    Telemetry::ScalarAdd(Telemetry::ScalarID::TB_COMPOSE_FORMAT_PLAIN_TEXT, 1);
+  }
+#endif
 
   if (composeFields) {
     nsAutoCString draftId;  // will get set for drafts and templates
@@ -1249,6 +1271,9 @@ NS_IMETHODIMP nsMsgCompose::SendMsg(MSG_DeliverMode deliverMode,
     m_compFields->GetBody(msgBody);
   }
   if (!msgBody.IsEmpty()) {
+    // Ensure body ends in CRLF to avoid SMTP server timeout when sent.
+    if (!StringEndsWith(msgBody, NS_LITERAL_STRING("\r\n")))
+      msgBody.AppendLiteral("\r\n");
     bool isAsciiOnly = mozilla::IsAsciiNullTerminated(
         static_cast<const char16_t *>(msgBody.get()));
     // Convert body to mail charset
@@ -1312,7 +1337,7 @@ NS_IMETHODIMP nsMsgCompose::SendMsg(MSG_DeliverMode deliverMode,
 
           mProgress->OpenProgressDialog(
               m_window, aMsgWindow,
-              "chrome://messenger/content/messengercompose/sendProgress.xul",
+              "chrome://messenger/content/messengercompose/sendProgress.xhtml",
               false, params);
         }
       }
@@ -1361,7 +1386,7 @@ NS_IMETHODIMP nsMsgCompose::SendMsg(MSG_DeliverMode deliverMode,
         else {
           // Replace any dot with underscore to stop vCards
           // generating false positives with some heuristic scanners
-          MsgReplaceChar(userid, '.', '_');
+          userid.ReplaceChar('.', '_');
           userid.AppendLiteral(".vcf");
           attachment->SetName(NS_ConvertASCIItoUTF16(userid));
         }
@@ -1556,8 +1581,6 @@ MOZ_CAN_RUN_SCRIPT_BOUNDARY NS_IMETHODIMP nsMsgCompose::InitEditor(
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rv), "SetForceCharacterSet() failed");
   }
 
-  // This is what used to be done in mDocumentListener,
-  //   nsMsgDocumentStateListener::NotifyDocumentCreated()
   bool quotingToFollow = false;
   GetQuotingToFollow(&quotingToFollow);
   if (quotingToFollow)
@@ -2030,7 +2053,7 @@ nsresult nsMsgCompose::CreateMessage(const char *originalMsgURI,
             attachment->SetSize(messageSize);
 
             // change all '.' to '_'  see bug #271211
-            MsgReplaceChar(sanitizedSubj, ".", '_');
+            sanitizedSubj.ReplaceChar(".", '_');
             if (addExtension) sanitizedSubj.AppendLiteral(".eml");
             attachment->SetName(sanitizedSubj);
             attachment->SetUrl(nsDependentCString(uri));
@@ -2506,7 +2529,8 @@ QuotingOutputStreamListener::OnStopRequest(nsIRequest *request,
           }
         }
       }
-      if (type == nsIMsgCompType::ReplyToSender ||
+      if (type == nsIMsgCompType::ReplyToSenderAndGroup ||
+          type == nsIMsgCompType::ReplyToSender ||
           type == nsIMsgCompType::Reply) {
         if (isReplyToSelf) {
           // Cast to concrete class. We *only* what to change m_identity, not
@@ -2835,8 +2859,7 @@ MOZ_CAN_RUN_SCRIPT nsresult QuotingOutputStreamListener::InsertToCompose(
     compose->SetInsertingQuotedContent(true);
     if (!mCitePrefix.IsEmpty()) {
       if (!aHTMLEditor) mCitePrefix.AppendLiteral("\n");
-      nsCOMPtr<nsIPlaintextEditor> textEditor(do_QueryInterface(aEditor));
-      if (textEditor) textEditor->InsertText(mCitePrefix);
+      if (aEditor) aEditor->InsertText(mCitePrefix);
     }
 
     RefPtr<mozilla::HTMLEditor> htmlEditor = aEditor->AsHTMLEditor();
@@ -2852,8 +2875,7 @@ MOZ_CAN_RUN_SCRIPT nsresult QuotingOutputStreamListener::InsertToCompose(
   }
 
   if (aEditor) {
-    nsCOMPtr<nsIPlaintextEditor> textEditor = do_QueryInterface(aEditor);
-    if (textEditor) {
+    if (aEditor) {
       RefPtr<Selection> selection;
       nsCOMPtr<nsINode> parent;
       int32_t offset;
@@ -2869,7 +2891,7 @@ MOZ_CAN_RUN_SCRIPT nsresult QuotingOutputStreamListener::InsertToCompose(
         // place selection after mailcite
         selection->Collapse(parent, offset + 1);
         // insert a break at current selection
-        textEditor->InsertLineBreak();
+        aEditor->InsertLineBreak();
         selection->Collapse(parent, offset + 1);
       }
       nsCOMPtr<nsISelectionController> selCon;
@@ -3597,7 +3619,7 @@ nsresult nsMsgComposeSendListener::RemoveDraftOrTemplate(nsIMsgCompose *compObj,
           nsMsgKey messageID = srcStr.ToInteger(&err);
           if (messageID != nsMsgKey_None) {
             rv = imapFolder->StoreImapFlags(kImapMsgDeletedFlag, true,
-                                            &messageID, 1, nullptr);
+                                            {messageID}, nullptr);
           }
         }
       }
@@ -3834,7 +3856,7 @@ nsresult nsMsgCompose::LoadDataFromFile(nsIFile *file, nsString &sigData,
   bool removeSigCharset = !sigEncoding.IsEmpty() && m_composeHTML;
 
   if (sigEncoding.IsEmpty()) {
-    if (aAllowUTF8 && MsgIsUTF8(nsDependentCString(readBuf))) {
+    if (aAllowUTF8 && mozilla::IsUtf8(nsDependentCString(readBuf))) {
       sigEncoding.AssignLiteral("UTF-8");
     } else if (sigEncoding.IsEmpty() && aAllowUTF16 && readSize % 2 == 0 &&
                readSize >= 2 &&
@@ -4273,8 +4295,7 @@ nsresult nsMsgCompose::BuildBodyMessageAndSignature() {
   // mailtourl, do the same.
   if (m_composeHTML &&
       (mType == nsIMsgCompType::New || mType == nsIMsgCompType::MailToUrl))
-    MsgReplaceSubstring(body, NS_LITERAL_STRING("\n"),
-                        NS_LITERAL_STRING("<br>"));
+    body.ReplaceSubstring(NS_LITERAL_STRING("\n"), NS_LITERAL_STRING("<br>"));
 
   // Restore flowed text wrapping for Drafts/Templates.
   // Look for unquoted lines - if we have an unquoted line
@@ -4366,7 +4387,7 @@ nsresult nsMsgCompose::AttachmentPrettyName(const nsACString &scheme,
                                             nsACString &_retval) {
   nsresult rv;
 
-  if (MsgLowerCaseEqualsLiteral(StringHead(scheme, 5), "file:")) {
+  if (StringHead(scheme, 5).LowerCaseEqualsLiteral("file:")) {
     nsCOMPtr<nsIFile> file;
     rv = NS_GetFileFromURLSpec(scheme, getter_AddRefs(file));
     NS_ENSURE_SUCCESS(rv, rv);
@@ -4392,8 +4413,7 @@ nsresult nsMsgCompose::AttachmentPrettyName(const nsACString &scheme,
   } else {
     _retval.Assign(scheme);
   }
-  if (MsgLowerCaseEqualsLiteral(StringHead(scheme, 5), "http:"))
-    _retval.Cut(0, 7);
+  if (StringHead(scheme, 5).LowerCaseEqualsLiteral("http:")) _retval.Cut(0, 7);
 
   return NS_OK;
 }
@@ -4408,14 +4428,56 @@ nsresult nsMsgCompose::AttachmentPrettyName(const nsACString &scheme,
 nsresult nsMsgCompose::GetABDirAndMailLists(
     const nsACString &aDirUri, nsCOMArray<nsIAbDirectory> &aDirArray,
     nsTArray<nsMsgMailList> &aMailListArray) {
-  static bool collectedAddressbookFound;
-  if (aDirUri.EqualsLiteral(kMDBDirectoryRoot))
-    collectedAddressbookFound = false;
+  static bool collectedAddressbookFound = false;
 
   nsresult rv;
   nsCOMPtr<nsIAbManager> abManager =
       do_GetService(NS_ABMANAGER_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
+
+  if (aDirUri.Equals(kAllDirectoryRoot)) {
+    nsCOMPtr<nsISimpleEnumerator> enumerator;
+    rv = abManager->GetDirectories(getter_AddRefs(enumerator));
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    nsCOMPtr<nsISupports> supports;
+    nsCOMPtr<nsIAbDirectory> directory;
+    nsCString uri;
+    bool hasMore;
+
+    while (NS_SUCCEEDED(enumerator->HasMoreElements(&hasMore)) && hasMore) {
+      rv = enumerator->GetNext(getter_AddRefs(supports));
+      NS_ENSURE_SUCCESS(rv, rv);
+      directory = do_QueryInterface(supports);
+      if (directory) {
+        nsCString uri;
+        rv = directory->GetURI(uri);
+        NS_ENSURE_SUCCESS(rv, rv);
+
+        int32_t pos;
+        if (uri.EqualsLiteral(kPersonalAddressbookUri))
+          pos = 0;
+        else {
+          uint32_t count = aDirArray.Count();
+
+          if (uri.EqualsLiteral(kCollectedAddressbookUri)) {
+            collectedAddressbookFound = true;
+            pos = count;
+          } else {
+            if (collectedAddressbookFound && count > 1)
+              pos = count - 1;
+            else
+              pos = count;
+          }
+        }
+
+        aDirArray.InsertObjectAt(directory, pos);
+        rv = GetABDirAndMailLists(uri, aDirArray, aMailListArray);
+      }
+    }
+
+    return NS_OK;
+  }
 
   nsCOMPtr<nsIAbDirectory> directory;
   rv = abManager->GetDirectory(aDirUri, getter_AddRefs(directory));
@@ -4436,32 +4498,7 @@ nsresult nsMsgCompose::GetABDirAndMailLists(
           if (NS_SUCCEEDED(directory->GetIsMailList(&bIsMailList)) &&
               bIsMailList) {
             aMailListArray.AppendElement(directory);
-            continue;
           }
-
-          nsCString uri;
-          rv = directory->GetURI(uri);
-          NS_ENSURE_SUCCESS(rv, rv);
-
-          int32_t pos;
-          if (uri.EqualsLiteral(kPersonalAddressbookUri))
-            pos = 0;
-          else {
-            uint32_t count = aDirArray.Count();
-
-            if (uri.EqualsLiteral(kCollectedAddressbookUri)) {
-              collectedAddressbookFound = true;
-              pos = count;
-            } else {
-              if (collectedAddressbookFound && count > 1)
-                pos = count - 1;
-              else
-                pos = count;
-            }
-          }
-
-          aDirArray.InsertObjectAt(directory, pos);
-          rv = GetABDirAndMailLists(uri, aDirArray, aMailListArray);
         }
       }
     }
@@ -5384,11 +5421,9 @@ nsMsgCompose::SetIdentity(nsIMsgIdentity *aIdentity) {
 
     if (NS_SUCCEEDED(rv)) {
       if (m_composeHTML) {
-        nsCOMPtr<nsIHTMLEditor> htmlEditor(do_QueryInterface(editor));
-        rv = htmlEditor->InsertHTML(aSignature);
+        rv = MOZ_KnownLive(editor->AsHTMLEditor())->InsertHTML(aSignature);
       } else {
-        nsCOMPtr<nsIPlaintextEditor> textEditor(do_QueryInterface(editor));
-        rv = textEditor->InsertLineBreak();
+        rv = editor->InsertLineBreak();
         InsertDivWrappedTextAtSelection(aSignature,
                                         NS_LITERAL_STRING("moz-signature"));
       }

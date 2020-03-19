@@ -97,10 +97,7 @@ Sanitizer.prototype = {
       clear() {
         if (this.range) {
           // Iterate through the cookies and delete any created after our cutoff.
-          var cookiesEnum = Services.cookies.enumerator;
-          while (cookiesEnum.hasMoreElements()) {
-            var cookie = cookiesEnum.getNext().QueryInterface(Ci.nsICookie);
-
+          for (let cookie of Services.cookies.cookies) {
             if (cookie.creationTime > this.range[0]) {
               // This cookie was created after our cutoff, clear it
               Services.cookies.remove(
@@ -250,7 +247,7 @@ Sanitizer.__defineGetter__("prefs", function() {
 Sanitizer.showUI = function(aParentWindow) {
   Services.ww.openWindow(
     AppConstants.platform == "macosx" ? null : aParentWindow,
-    "chrome://messenger/content/sanitize.xul",
+    "chrome://messenger/content/sanitize.xhtml",
     "Sanitize",
     "chrome,titlebar,dialog,centerscreen,modal",
     null

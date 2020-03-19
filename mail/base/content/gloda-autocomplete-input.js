@@ -6,7 +6,6 @@
 /* global MozXULElement */
 
 /* import-globals-from mailWindow.js */
-/* import-globals-from nsDragAndDrop.js */
 
 "use strict";
 
@@ -24,7 +23,7 @@ customElements.whenDefined("autocomplete-input").then(() => {
     "resource://gre/modules/AppConstants.jsm"
   );
   const { GlodaMsgSearcher } = ChromeUtils.import(
-    "resource:///modules/gloda/msg_search.js"
+    "resource:///modules/gloda/GlodaMsgSearcher.jsm"
   );
   const { GlodaIMSearcher } = ChromeUtils.import(
     "resource:///modules/search_im.jsm"
@@ -47,14 +46,19 @@ customElements.whenDefined("autocomplete-input").then(() => {
       this.addEventListener(
         "drop",
         event => {
-          nsDragAndDrop.drop(event, this.searchInputDNDObserver);
+          this.searchInputDNDObserver.onDrop(event);
         },
         true
       );
 
       this.addEventListener("keypress", event => {
         if (event.keyCode == KeyEvent.DOM_VK_RETURN) {
-          this.doSearch();
+          // Trigger the click event if a popup result is currently selected.
+          if (this.popup.richlistbox.selectedIndex != -1) {
+            this.popup.onPopupClick(event);
+          } else {
+            this.doSearch();
+          }
           event.preventDefault();
           event.stopPropagation();
         }
@@ -91,20 +95,15 @@ customElements.whenDefined("autocomplete-input").then(() => {
 
       // @implements {nsIObserver}
       this.searchInputDNDObserver = {
-        onDrop: (aEvent, aXferData, aDragSession) => {
-          if (aXferData.data) {
+        onDrop: event => {
+          if (event.dataTransfer.types.includes("text/x-moz-address")) {
             this.focus();
-            this.value = aXferData.data;
+            this.value = event.dataTransfer.getData("text/unicode");
             // XXX for some reason the input field is _cleared_ even though
             // the search works.
             this.doSearch();
           }
-        },
-
-        getSupportedFlavours() {
-          let flavourSet = new FlavourSet();
-          flavourSet.appendFlavour("text/unicode");
-          return flavourSet;
+          event.stopPropagation();
         },
       };
 
@@ -222,6 +221,7 @@ customElements.whenDefined("autocomplete-input").then(() => {
         this.textObserver,
         "autocomplete-did-enter-text"
       );
+      this.hasConnected = false;
     }
   }
 

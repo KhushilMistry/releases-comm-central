@@ -17,13 +17,13 @@ var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 // Platform-specific includes
 var AboutSupportPlatform;
 if ("@mozilla.org/windows-registry-key;1" in Cc) {
-  let temp = ChromeUtils.import("resource:///modules/aboutSupportWin32.js");
+  let temp = ChromeUtils.import("resource:///modules/AboutSupportWin32.jsm");
   AboutSupportPlatform = temp.AboutSupportPlatform;
 } else if ("nsILocalFileMac" in Ci) {
-  let temp = ChromeUtils.import("resource:///modules/aboutSupportMac.js");
+  let temp = ChromeUtils.import("resource:///modules/AboutSupportMac.jsm");
   AboutSupportPlatform = temp.AboutSupportPlatform;
 } else {
-  let temp = ChromeUtils.import("resource:///modules/aboutSupportUnix.js");
+  let temp = ChromeUtils.import("resource:///modules/AboutSupportUnix.jsm");
   AboutSupportPlatform = temp.AboutSupportPlatform;
 }
 
@@ -90,9 +90,8 @@ var AboutSupport = {
    */
   getAccountDetails() {
     let accountDetails = [];
-    let accounts = MailServices.accounts.accounts;
 
-    for (let account of fixIterator(accounts, Ci.nsIMsgAccount)) {
+    for (let account of MailServices.accounts.accounts) {
       let server = account.incomingServer;
       accountDetails.push({
         key: account.key,
@@ -196,9 +195,9 @@ function createElement(tagName, textContent, opt_attributes, opt_copyData) {
   return elem;
 }
 
-function appendChildren(parentElem, childNodes) {
-  for (let i = 0; i < childNodes.length; i++) {
-    parentElem.appendChild(childNodes[i]);
+function appendChildren(parentElem, children) {
+  for (let i = 0; i < children.length; i++) {
+    parentElem.appendChild(children[i]);
   }
 }
 

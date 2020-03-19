@@ -6,10 +6,10 @@
 
 /* import-globals-from ../../../test/resources/logHelper.js */
 /* import-globals-from ../../../test/resources/asyncTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 
 Services.prefs.setCharPref(
   "mail.serverDefaultStoreContractID",
@@ -123,11 +123,9 @@ function* check_result() {
   Assert.ok(offlineStoreSize > gOfflineStoreSize);
 
   // Verify that the message headers have the offline flag set.
-  let msgEnumerator = IMAPPump.inbox.msgDatabase.EnumerateMessages();
   let offset = {};
   let size = {};
-  while (msgEnumerator.hasMoreElements()) {
-    let header = msgEnumerator.getNext();
+  for (let header of IMAPPump.inbox.msgDatabase.EnumerateMessages()) {
     // Verify that each message has been downloaded and looks OK.
     if (
       !(

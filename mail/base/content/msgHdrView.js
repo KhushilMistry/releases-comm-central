@@ -11,10 +11,13 @@
 /* import-globals-from folderDisplay.js */
 /* import-globals-from mailWindow.js */
 /* import-globals-from messageDisplay.js */
-/* import-globals-from nsDragAndDrop.js */
+/* global Enigmail */
 
 var { XPCOMUtils } = ChromeUtils.import(
   "resource://gre/modules/XPCOMUtils.jsm"
+);
+var { MailConstants } = ChromeUtils.import(
+  "resource:///modules/MailConstants.jsm"
 );
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { DisplayNameUtils } = ChromeUtils.import(
@@ -23,7 +26,9 @@ var { DisplayNameUtils } = ChromeUtils.import(
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
-var { GlodaUtils } = ChromeUtils.import("resource:///modules/gloda/utils.js");
+var { GlodaUtils } = ChromeUtils.import(
+  "resource:///modules/gloda/GlodaUtils.jsm"
+);
 var { Status: statusUtils } = ChromeUtils.import(
   "resource:///modules/imStatusUtils.jsm"
 );
@@ -843,7 +848,7 @@ function SetTagHeader() {
   }
 
   // get the list of known tags
-  var tagArray = MailServices.tags.getAllTags({});
+  var tagArray = MailServices.tags.getAllTags();
   var tagKeys = {};
   for (var tagInfo of tagArray) {
     if (tagInfo.tag) {
@@ -1644,7 +1649,7 @@ function onClickEmailPresence(event, emailAddressNode) {
       win.focus();
     } else {
       window.openDialog(
-        "chrome://messenger/content/",
+        "chrome://messenger/content/messenger.xhtml",
         "_blank",
         "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar",
         null,
@@ -1673,11 +1678,7 @@ function AddContact(emailAddressNode) {
   // leaving something else there).
   emailAddressNode.setAttribute("updatingUI", true);
 
-  let stillUsingMabFiles =
-    Services.prefs.getIntPref("ldap_2.servers.pab.dirType") == 2;
-  let kPersonalAddressbookURI = stillUsingMabFiles
-    ? "moz-abmdbdirectory://abook.mab"
-    : "jsaddrbook://abook.sqlite";
+  let kPersonalAddressbookURI = "jsaddrbook://abook.sqlite";
   let addressBook = MailServices.ab.getDirectory(kPersonalAddressbookURI);
 
   let card = Cc["@mozilla.org/addressbook/cardproperty;1"].createInstance(
@@ -1723,11 +1724,10 @@ function SendMailToNode(addressNode, aEvent) {
   fields.newsgroups = addressNode.getAttribute("newsgroup");
   if (addressNode.hasAttribute("fullAddress")) {
     let addresses = MailServices.headerParser.makeFromDisplayAddress(
-      addressNode.getAttribute("fullAddress"),
-      {}
+      addressNode.getAttribute("fullAddress")
     );
     if (addresses.length > 0) {
-      fields.to = MailServices.headerParser.makeMimeHeader(addresses, 1);
+      fields.to = MailServices.headerParser.makeMimeHeader([addresses[0]]);
     }
   }
 
@@ -2213,7 +2213,8 @@ AttachmentInfo.prototype = {
 function CanDetachAttachments() {
   var canDetach =
     !gFolderDisplay.selectedMessageIsNews &&
-    (!gFolderDisplay.selectedMessageIsImap || MailOfflineMgr.isOnline());
+    (!gFolderDisplay.selectedMessageIsImap || MailOfflineMgr.isOnline()) &&
+    !gMessageDisplay.isDummy; // We can't detach from loaded eml files yet.
   if (canDetach && "content-type" in currentHeaderData) {
     canDetach = !ContentTypeIsSMIME(
       currentHeaderData["content-type"].headerValue
@@ -2302,6 +2303,10 @@ function onShowAttachmentItemContextMenu() {
   );
   openFolderMenu.hidden = !allSelectedFile;
   openFolderMenu.disabled = allSelectedDeleted;
+
+  if (MailConstants.MOZ_OPENPGP) {
+    Enigmail.hdrView.onShowAttachmentContextMenu();
+  }
 }
 
 /**
@@ -2953,9 +2958,7 @@ function getIconForAttachment(attachment) {
   if (attachment.isDeleted) {
     return "chrome://messenger/skin/icons/attachment-deleted.png";
   }
-  return `moz-icon://${attachment.name}?size=16&amp;contentType=${
-    attachment.contentType
-  }`;
+  return `moz-icon://${attachment.name}?size=16&amp;contentType=${attachment.contentType}`;
 }
 
 /**
@@ -2975,8 +2978,8 @@ function FillAttachmentListPopup(aEvent, aPopup) {
 // Public method used to clear the file attachment menu
 function ClearAttachmentMenu(popup) {
   if (popup) {
-    while (popup.firstChild.localName == "menu") {
-      popup.firstChild.remove();
+    while (popup.firstElementChild.localName == "menu") {
+      popup.firstElementChild.remove();
     }
   }
 }
@@ -3009,7 +3012,7 @@ function addAttachmentToPopup(popup, attachment, attachmentIndex) {
 
   // find the separator
   var indexOfSeparator = 0;
-  while (popup.childNodes[indexOfSeparator].localName != "menuseparator") {
+  while (popup.children[indexOfSeparator].localName != "menuseparator") {
     indexOfSeparator++;
   }
   // We increment the attachmentIndex here since we only use it for the
@@ -3038,7 +3041,7 @@ function addAttachmentToPopup(popup, attachment, attachmentIndex) {
   // Due to Bug #314228, we must append our menupopup to the new attachment
   // menu item before we inserting the attachment menu into the popup. If we
   // don't, our attachment menu items will not show up.
-  item = popup.insertBefore(item, popup.childNodes[indexOfSeparator]);
+  item = popup.insertBefore(item, popup.children[indexOfSeparator]);
 
   if (attachment.isExternalAttachment) {
     if (!attachment.hasFile) {
@@ -3223,7 +3226,6 @@ function HandleMultipleAttachments(attachments, action) {
   switch (action) {
     case "save":
       messenger.saveAllAttachments(
-        attachmentContentTypeArray.length,
         attachmentContentTypeArray,
         attachmentUrlArray,
         attachmentDisplayNameArray,
@@ -3238,7 +3240,6 @@ function HandleMultipleAttachments(attachments, action) {
         attachments[0].detach(true);
       } else {
         messenger.detachAllAttachments(
-          attachmentContentTypeArray.length,
           attachmentContentTypeArray,
           attachmentUrlArray,
           attachmentDisplayNameArray,
@@ -3249,7 +3250,6 @@ function HandleMultipleAttachments(attachments, action) {
       return;
     case "delete":
       messenger.detachAllAttachments(
-        attachmentContentTypeArray.length,
         attachmentContentTypeArray,
         attachmentUrlArray,
         attachmentDisplayNameArray,
@@ -3381,29 +3381,25 @@ function ClearAttachmentList() {
   }
 }
 
-var attachmentListDNDObserver = {
-  onDragStart(aEvent, aAttachmentData, aDragAction) {
-    let target = aEvent.target;
-
+let attachmentListDNDObserver = {
+  onDragStart(event) {
+    let target = event.target;
     if (target.localName == "richlistitem") {
-      let selection = target.parentNode.selectedItems;
-      aAttachmentData.data = new TransferDataSet();
-      for (let item of selection) {
-        let transferData = CreateAttachmentTransferData(item.attachment);
-        if (transferData) {
-          aAttachmentData.data.push(transferData);
-        }
+      let attachments = [];
+      for (let item of target.parentNode.selectedItems) {
+        attachments.push(item.attachment);
       }
+      setupDataTransfer(event, attachments);
     }
+    event.stopPropagation();
   },
 };
 
-var attachmentNameDNDObserver = {
-  onDragStart(aEvent, aAttachmentData, aDragAction) {
-    var attachmentList = document.getElementById("attachmentList");
-    aAttachmentData.data = CreateAttachmentTransferData(
-      attachmentList.getItemAtIndex(0).attachment
-    );
+let attachmentNameDNDObserver = {
+  onDragStart(event) {
+    let attachmentList = document.getElementById("attachmentList");
+    setupDataTransfer(event, [attachmentList.getItemAtIndex(0).attachment]);
+    event.stopPropagation();
   },
 };
 
@@ -3509,12 +3505,14 @@ ConversationOpener.prototype = {
     let glodaEnabled = Services.prefs.getBoolPref(
       "mailnews.database.global.indexer.enabled"
     );
-
-    if (glodaEnabled && gFolderDisplay.selectedCount > 0) {
-      let message = gFolderDisplay.selectedMessage;
-      return Gloda.isMessageIndexed(message);
+    if (!glodaEnabled) {
+      return false;
     }
-    return false;
+    let message = gFolderDisplay.selectedMessage;
+    if (!message) {
+      return false;
+    }
+    return Gloda.isMessageIndexed(message);
   },
   onItemsAdded(aItems) {},
   onItemsModified(aItems) {},

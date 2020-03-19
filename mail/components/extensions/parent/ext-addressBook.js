@@ -8,9 +8,10 @@ var { MailServices } = ChromeUtils.import(
 );
 
 const AB_WINDOW_TYPE = "mail:addressbook";
-const AB_WINDOW_URI = "chrome://messenger/content/addressbook/addressbook.xul";
+const AB_WINDOW_URI =
+  "chrome://messenger/content/addressbook/addressbook.xhtml";
 
-const kPABDirectory = 2; // defined in nsDirPrefs.h
+const kJSDirectory = 101; // defined in nsDirPrefs.h
 
 // nsIAbCard.idl contains a list of properties that Thunderbird uses. Extensions are not
 // restricted to using only these properties, but the following properties cannot
@@ -225,7 +226,9 @@ var addressBookCache = new (class extends EventEmitter {
 
   // nsIAbListener
   onItemAdded(parent, item) {
-    parent.QueryInterface(Ci.nsIAbDirectory);
+    if (parent) {
+      parent.QueryInterface(Ci.nsIAbDirectory);
+    } // Otherwise item is a new address book and we don't use parent.
 
     if (item instanceof Ci.nsIAbDirectory) {
       item.QueryInterface(Ci.nsIAbDirectory);
@@ -265,7 +268,9 @@ var addressBookCache = new (class extends EventEmitter {
   }
   // nsIAbListener
   onItemRemoved(parent, item) {
-    parent = parent.QueryInterface(Ci.nsIAbDirectory);
+    if (parent) {
+      parent = parent.QueryInterface(Ci.nsIAbDirectory);
+    } // Otherwise item is a removed address book and we don't use parent.
 
     if (item instanceof Ci.nsIAbDirectory) {
       item.QueryInterface(Ci.nsIAbDirectory);
@@ -463,14 +468,7 @@ this.addressBook = class extends ExtensionAPI {
           );
         },
         create({ name }) {
-          let dirName = MailServices.ab.newAddressBook(
-            name,
-            "",
-            Services.prefs.getIntPref(
-              "mail.addr_book.newDirType",
-              kPABDirectory
-            )
-          );
+          let dirName = MailServices.ab.newAddressBook(name, "", kJSDirectory);
           let directory = MailServices.ab.getDirectoryFromId(dirName);
           return directory.UID;
         },
@@ -478,9 +476,17 @@ this.addressBook = class extends ExtensionAPI {
           let node = addressBookCache.findAddressBookById(id);
           node.item.dirName = name;
         },
-        delete(id) {
+        async delete(id) {
           let node = addressBookCache.findAddressBookById(id);
+          let deletePromise = new Promise(resolve => {
+            let listener = () => {
+              addressBookCache.off("address-book-deleted", listener);
+              resolve();
+            };
+            addressBookCache.on("address-book-deleted", listener);
+          });
           MailServices.ab.deleteAddressBook(node.item.URI);
+          await deletePromise;
         },
 
         onCreated: new EventManager({
@@ -701,7 +707,8 @@ this.addressBook = class extends ExtensionAPI {
         },
         delete(id) {
           let node = addressBookCache.findMailingListById(id);
-          MailServices.ab.deleteAddressBook(node.item.URI);
+          let parentNode = addressBookCache.findAddressBookById(node.parentId);
+          parentNode.item.deleteDirectory(node.item);
         },
 
         listMembers(id) {

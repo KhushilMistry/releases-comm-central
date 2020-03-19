@@ -43,11 +43,11 @@ add_task(async function test_update_preferences_ui() {
   }
   await new Promise(resolve => setTimeout(resolve));
 
-  let updateRadioGroup = prefsDocument.getElementById("updateRadioGroup");
+  let setting = prefsDocument.getElementById("updateSettingsContainer");
   is(
-    updateRadioGroup.hidden,
+    setting.hidden,
     true,
-    "Update choices should be diabled when app update is locked by policy"
+    "Update choices should be disabled when app update is locked by policy"
   );
 
   tabmail.closeTab(prefsTabMode.tabs[0]);
@@ -82,12 +82,12 @@ add_task(async function test_update_about_ui() {
 function waitForAboutDialog() {
   return new Promise(resolve => {
     var listener = {
-      onOpenWindow: aXULWindow => {
+      onOpenWindow: aAppWindow => {
         Services.wm.removeListener(listener);
 
         async function aboutDialogOnLoad() {
           domwindow.removeEventListener("load", aboutDialogOnLoad, true);
-          let chromeURI = "chrome://messenger/content/aboutDialog.xul";
+          let chromeURI = "chrome://messenger/content/aboutDialog.xhtml";
           is(
             domwindow.document.location.href,
             chromeURI,
@@ -96,10 +96,10 @@ function waitForAboutDialog() {
           resolve(domwindow);
         }
 
-        var domwindow = aXULWindow.docShell.domWindow;
+        var domwindow = aAppWindow.docShell.domWindow;
         domwindow.addEventListener("load", aboutDialogOnLoad, true);
       },
-      onCloseWindow: aXULWindow => {},
+      onCloseWindow: aAppWindow => {},
     };
 
     Services.wm.addListener(listener);

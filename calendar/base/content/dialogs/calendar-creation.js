@@ -4,7 +4,7 @@
 
 /* exported openLocalCalendar */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 /**
  * Shows the filepicker and creates a new calendar with a local file using the ICS
@@ -25,7 +25,7 @@ function openLocalCalendar() {
     }
 
     let calMgr = cal.getCalendarManager();
-    let calendars = calMgr.getCalendars({});
+    let calendars = calMgr.getCalendars();
     let calendar = calendars.find(x => x.uri.equals(picker.fileURL));
     if (!calendar) {
       calendar = calMgr.createCalendar("ics", picker.fileURL);

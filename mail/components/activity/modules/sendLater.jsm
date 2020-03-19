@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = ["sendLaterModule"];
+const EXPORTED_SYMBOLS = ["sendLaterModule"];
 
 var nsActProcess = Components.Constructor(
   "@mozilla.org/activity-process;1",
@@ -22,7 +22,7 @@ var nsActWarning = Components.Constructor(
 );
 
 const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 
 /**
  * This really, really, sucks. Due to mailnews widespread use of

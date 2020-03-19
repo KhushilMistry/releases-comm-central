@@ -11,8 +11,8 @@
  *   foo MODE -o
  * foo knows that it has mode +h, but bar does not know foo has +h set.
  *
- *   http://wiki.inspircd.org/Modules/2.1/namesx
- *   http://ircv3.atheme.org/extensions/multi-prefix-3.1
+ *   https://docs.inspircd.org/2/modules/namesx/
+ *   https://ircv3.net/specs/extensions/multi-prefix-3.1
  */
 
 this.EXPORTED_SYMBOLS = ["isupportNAMESX", "capMultiPrefix"];
@@ -44,10 +44,16 @@ var capMultiPrefix = {
   commands: {
     "multi-prefix": function(aMessage) {
       // Request to use multi-prefix if it is supported.
-      if (aMessage.cap.subcommand == "LS") {
+      if (
+        aMessage.cap.subcommand === "LS" ||
+        aMessage.cap.subcommand === "NEW"
+      ) {
         this.addCAP("multi-prefix");
         this.sendMessage("CAP", ["REQ", "multi-prefix"]);
-      } else if (aMessage.cap.subcommand == "ACK") {
+      } else if (
+        aMessage.cap.subcommand === "ACK" ||
+        aMessage.cap.subcommand === "NAK"
+      ) {
         this.removeCAP("multi-prefix");
       } else {
         return false;

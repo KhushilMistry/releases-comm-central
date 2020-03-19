@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,6 @@
 #include "mozilla/mailnews/Services.h"
 #include "mozilla/DebugOnly.h"
 #include "nsMemory.h"
-#include "nsAutoPtr.h"
 #include "nsCOMPtr.h"
 #include "nsIMsgHeaderParser.h"
 
@@ -38,8 +37,9 @@ void MakeMimeAddress(const nsAString &aName, const nsAString &aEmail,
 
   nsCOMPtr<msgIAddressObject> address;
   headerParser->MakeMailboxObject(aName, aEmail, getter_AddRefs(address));
-  msgIAddressObject *obj = address;
-  headerParser->MakeMimeHeader(&obj, 1, full);
+  nsTArray<RefPtr<msgIAddressObject>> addresses;
+  addresses.AppendElement(address);
+  headerParser->MakeMimeHeader(addresses, full);
 }
 
 void MakeDisplayAddress(const nsAString &aName, const nsAString &aEmail,
@@ -70,16 +70,14 @@ nsCOMArray<msgIAddressObject> DecodedHeader(const nsAString &aHeader) {
   }
   nsCOMPtr<nsIMsgHeaderParser> headerParser(services::GetHeaderParser());
   NS_ENSURE_TRUE(headerParser, retval);
-  msgIAddressObject **addresses = nullptr;
-  uint32_t length;
-  nsresult rv =
-      headerParser->ParseDecodedHeader(aHeader, false, &length, &addresses);
+  nsTArray<RefPtr<msgIAddressObject>> addresses;
+  nsresult rv = headerParser->ParseDecodedHeader(aHeader, false, addresses);
   MOZ_ASSERT(NS_SUCCEEDED(rv), "Javascript jsmime returned an error!");
-  if (NS_SUCCEEDED(rv) && length > 0 && addresses) {
-    // retval.Adopt(addresses, length);
-    retval.Clear();
-    retval.AppendElements(addresses, length);
-    free(addresses);
+  if (NS_SUCCEEDED(rv) && addresses.Length() > 0) {
+    retval.SetCapacity(addresses.Length());
+    for (auto &addr : addresses) {
+      retval.AppendElement(addr);
+    }
   }
   return retval;
 }
@@ -92,16 +90,15 @@ nsCOMArray<msgIAddressObject> EncodedHeader(const nsACString &aHeader,
   }
   nsCOMPtr<nsIMsgHeaderParser> headerParser(services::GetHeaderParser());
   NS_ENSURE_TRUE(headerParser, retval);
-  msgIAddressObject **addresses = nullptr;
-  uint32_t length;
-  nsresult rv = headerParser->ParseEncodedHeader(aHeader, aCharset, false,
-                                                 &length, &addresses);
+  nsTArray<RefPtr<msgIAddressObject>> addresses;
+  nsresult rv =
+      headerParser->ParseEncodedHeader(aHeader, aCharset, false, addresses);
   MOZ_ASSERT(NS_SUCCEEDED(rv), "This should never fail!");
-  if (NS_SUCCEEDED(rv) && length > 0 && addresses) {
-    // retval.Adopt(addresses, length);
-    retval.Clear();
-    retval.AppendElements(addresses, length);
-    free(addresses);
+  if (NS_SUCCEEDED(rv) && addresses.Length() > 0) {
+    retval.SetCapacity(addresses.Length());
+    for (auto &addr : addresses) {
+      retval.AppendElement(addr);
+    }
   }
   return retval;
 }
@@ -113,15 +110,14 @@ nsCOMArray<msgIAddressObject> EncodedHeaderW(const nsAString &aHeader) {
   }
   nsCOMPtr<nsIMsgHeaderParser> headerParser(services::GetHeaderParser());
   NS_ENSURE_TRUE(headerParser, retval);
-  msgIAddressObject **addresses = nullptr;
-  uint32_t length;
-  nsresult rv = headerParser->ParseEncodedHeaderW(aHeader, &length, &addresses);
+  nsTArray<RefPtr<msgIAddressObject>> addresses;
+  nsresult rv = headerParser->ParseEncodedHeaderW(aHeader, addresses);
   MOZ_ASSERT(NS_SUCCEEDED(rv), "This should never fail!");
-  if (NS_SUCCEEDED(rv) && length > 0 && addresses) {
-    // retval.Adopt(addresses, length);
-    retval.Clear();
-    retval.AppendElements(addresses, length);
-    free(addresses);
+  if (NS_SUCCEEDED(rv) && addresses.Length() > 0) {
+    retval.SetCapacity(addresses.Length());
+    for (auto &addr : addresses) {
+      retval.AppendElement(addr);
+    }
   }
   return retval;
 }

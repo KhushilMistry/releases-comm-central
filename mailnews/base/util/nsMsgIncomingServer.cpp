@@ -894,7 +894,7 @@ nsMsgIncomingServer::GetLocalDatabaseType(nsACString &aResult) {
 
 NS_IMETHODIMP
 nsMsgIncomingServer::GetAccountManagerChrome(nsAString &aResult) {
-  aResult.AssignLiteral("am-main.xul");
+  aResult.AssignLiteral("am-main.xhtml");
   return NS_OK;
 }
 
@@ -1077,7 +1077,7 @@ nsresult nsMsgIncomingServer::InternalSetHostName(const nsACString &aHostname,
                                                   const char *prefName) {
   nsCString hostname;
   hostname = aHostname;
-  if (MsgCountChar(hostname, ':') == 1) {
+  if (hostname.CountChar(':') == 1) {
     int32_t colonPos = hostname.FindChar(':');
     nsAutoCString portString(Substring(hostname, colonPos));
     hostname.SetLength(colonPos);
@@ -1115,11 +1115,13 @@ nsMsgIncomingServer::OnUserOrHostNameChanged(const nsACString &oldName,
   rv = accountManager->NotifyServerChanged(this);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  // 4. Lastly, replace all occurrences of old name in the acct name with the
-  // new one.
+  // 4. Replace all occurrences of old name in the acct name with the new one.
   nsString acctName;
   rv = GetPrettyName(acctName);
   NS_ENSURE_SUCCESS(rv, rv);
+
+  // 5. Clear the clientid because the user or host have changed.
+  SetClientid(EmptyCString());
 
   // If new username contains @ then better do not update the account name.
   if (acctName.IsEmpty() || (!hostnameChanged && (atPos != kNotFound)))
@@ -1186,7 +1188,7 @@ NS_IMETHODIMP
 nsMsgIncomingServer::GetHostName(nsACString &aResult) {
   nsresult rv;
   rv = GetCharValue("hostname", aResult);
-  if (MsgCountChar(aResult, ':') == 1) {
+  if (aResult.CountChar(':') == 1) {
     // gack, we need to reformat the hostname - SetHostName will do that
     SetHostName(aResult);
     rv = GetCharValue("hostname", aResult);
@@ -1204,7 +1206,7 @@ nsMsgIncomingServer::GetRealHostName(nsACString &aResult) {
 
   if (aResult.IsEmpty()) return GetHostName(aResult);
 
-  if (MsgCountChar(aResult, ':') == 1) {
+  if (aResult.CountChar(':') == 1) {
     SetRealHostName(aResult);
     rv = GetCharValue("realhostname", aResult);
   }
@@ -1554,6 +1556,8 @@ NS_IMPL_SERVERPREF_STR(nsMsgIncomingServer, Username, "userName")
 NS_IMPL_SERVERPREF_INT(nsMsgIncomingServer, AuthMethod, "authMethod")
 NS_IMPL_SERVERPREF_INT(nsMsgIncomingServer, BiffMinutes, "check_time")
 NS_IMPL_SERVERPREF_STR(nsMsgIncomingServer, Type, "type")
+NS_IMPL_SERVERPREF_STR(nsMsgIncomingServer, Clientid, "clientid")
+NS_IMPL_SERVERPREF_BOOL(nsMsgIncomingServer, ClientidEnabled, "clientidEnabled")
 NS_IMPL_SERVERPREF_BOOL(nsMsgIncomingServer, DownloadOnBiff, "download_on_biff")
 NS_IMPL_SERVERPREF_BOOL(nsMsgIncomingServer, Valid, "valid")
 NS_IMPL_SERVERPREF_BOOL(nsMsgIncomingServer, EmptyTrashOnExit,
@@ -1639,6 +1643,14 @@ nsMsgIncomingServer::GetPasswordPromptRequired(bool *aPasswordIsRequired) {
   if (m_password.IsEmpty()) (void)GetPasswordWithoutUI();
 
   *aPasswordIsRequired = m_password.IsEmpty();
+  if (*aPasswordIsRequired) {
+    // Set *aPasswordIsRequired false if authMethod is oauth2.
+    int32_t authMethod = 0;
+    rv = GetAuthMethod(&authMethod);
+    if (NS_SUCCEEDED(rv) && authMethod == nsMsgAuthMethod::OAuth2) {
+      *aPasswordIsRequired = false;
+    }
+  }
   return rv;
 }
 
@@ -1962,7 +1974,7 @@ nsMsgIncomingServer::GetSpamFilterPlugin(nsIMsgFilterPlugin **aFilterPlugin) {
 // that destServer may not be "this"
 nsresult nsMsgIncomingServer::GetDeferredServers(
     nsIMsgIncomingServer *destServer,
-    nsCOMArray<nsIPop3IncomingServer> &aServers) {
+    nsTArray<RefPtr<nsIPop3IncomingServer>> &aServers) {
   nsresult rv;
   nsCOMPtr<nsIMsgAccountManager> accountManager =
       do_GetService(NS_MSGACCOUNTMANAGER_CONTRACTID, &rv);

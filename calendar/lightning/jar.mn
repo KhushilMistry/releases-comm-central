@@ -4,106 +4,44 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 lightning.jar:
-% override chrome://messagebody/skin/imip.css chrome://lightning/skin/imip.css
-% override chrome://messagebody/skin/calendar-event-dialog-attendees.png chrome://calendar-common/skin/calendar-event-dialog-attendees.png
-% overlay chrome://messenger/content/messenger.xul chrome://lightning/content/lightning-migration.xul
-% overlay chrome://messenger/content/messenger.xul chrome://lightning/content/lightning-item-panel.xul
-% overlay chrome://messenger/content/msgAccountCentral.xul chrome://lightning/content/messenger-overlay-accountCentral.xul
-% overlay chrome://messenger/content/messenger.xul chrome://lightning/content/messenger-overlay-sidebar.xul
-% overlay chrome://messenger/content/messageWindow.xul chrome://lightning/content/imip-bar-overlay.xul
-% overlay chrome://messenger/content/messageWindow.xul chrome://lightning/content/messenger-overlay-messageWindow.xul
-% overlay chrome://lightning/content/messenger-overlay-sidebar.xul chrome://lightning/content/imip-bar-overlay.xul
-% overlay chrome://communicator/content/pref/preferences.xul chrome://lightning/content/suite-overlay-preferences.xul application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
-% overlay about:addons chrome://lightning/content/suite-overlay-addons.xul application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
-% overlay chrome://mozapps/content/extensions/extensions.xul chrome://lightning/content/suite-overlay-addons.xul application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
-% overlay chrome://messenger/content/preferences/preferences.xul chrome://lightning/content/messenger-overlay-preferences.xul
-% overlay about:preferences chrome://lightning/content/messenger-overlay-preferences.xul
-% overlay chrome://lightning/content/messenger-overlay-sidebar.xul chrome://calendar/content/calendar-unifinder.xul
-% overlay chrome://lightning/content/messenger-overlay-sidebar.xul chrome://calendar/content/calendar-task-view.xul
-% overlay chrome://lightning/content/messenger-overlay-sidebar.xul chrome://calendar/content/today-pane.xul
-% overlay chrome://lightning/content/messenger-overlay-sidebar.xul chrome://lightning/content/suite-overlay-sidebar.xul application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
-% overlay chrome://calendar/content/calendarCreation.xul chrome://lightning/content/lightning-calendar-creation.xul
-% overlay chrome://calendar/content/calendar-properties-dialog.xul chrome://lightning/content/lightning-calendar-properties.xul
-% overlay chrome://lightning/content/lightning-calendar-creation.xul chrome://lightning/content/caldav-lightning-calendar-creation.xul
-% overlay chrome://lightning/content/lightning-calendar-properties.xul chrome://lightning/content/caldav-lightning-calendar-properties.xul
-% override chrome://lightning-common/skin/accountCentral.css chrome://lightning-common/skin/suite-accountCentral.css application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
+% override chrome://messagebody/skin/imip.css chrome://calendar/skin/imip.css
+% override chrome://messagebody/skin/calendar-event-dialog-attendees.png chrome://calendar/skin/shared/calendar-event-dialog-attendees.png
 % content lightning %content/
+    content/calendar-appmenu-panelviews.inc.xhtml          (content/calendar-appmenu-panelviews.inc.xhtml)
+    content/calendar-buttons-mail-toolbar.inc.xhtml        (content/calendar-buttons-mail-toolbar.inc.xhtml)
+    content/calendar-commands.inc.xhtml                    (content/calendar-commands.inc.xhtml)
+    content/calendar-context-menus-and-tooltips.inc.xhtml  (content/calendar-context-menus-and-tooltips.inc.xhtml)
+    content/calendar-keys.inc.xhtml                        (content/calendar-keys.inc.xhtml)
+    content/calendar-menu-events-tasks.inc.xhtml           (content/calendar-menu-events-tasks.inc.xhtml)
+    content/calendar-status-bar.inc.xhtml                  (content/calendar-status-bar.inc.xhtml)
+    content/calendar-tab-panels.inc.xhtml                  (content/calendar-tab-panels.inc.xhtml)
+    content/calendar-today-pane.inc.xhtml                  (content/calendar-today-pane.inc.xhtml)
+    content/calendar-view-menu.inc.xhtml                   (content/calendar-view-menu.inc.xhtml)
     content/html-item-editing/lightning-item-iframe.html   (content/html-item-editing/lightning-item-iframe.html)
     content/html-item-editing/react-code.js                (content/html-item-editing/react-code.js)
     content/imip-bar.js                                    (content/imip-bar.js)
-    content/imip-bar-overlay.xul                           (content/imip-bar-overlay.xul)
+    content/imip-bar-overlay.inc.xhtml                     (content/imip-bar-overlay.inc.xhtml)
     content/lightning-calendar-creation.js                 (content/lightning-calendar-creation.js)
-    content/lightning-calendar-creation.xul                (content/lightning-calendar-creation.xul)
     content/lightning-calendar-properties.js               (content/lightning-calendar-properties.js)
-    content/lightning-calendar-properties.xul              (content/lightning-calendar-properties.xul)
     content/lightning-invitation.xhtml                     (content/lightning-invitation.xhtml)
-    content/lightning-item-toolbar.xul                     (content/lightning-item-toolbar.xul)
-    content/lightning-item-panel.xul                       (content/lightning-item-panel.xul)
+*   content/lightning-item-panel.inc.xhtml                 (content/lightning-item-panel.inc.xhtml)
     content/lightning-item-panel.js                        (content/lightning-item-panel.js)
-    content/lightning-item-iframe.xul                      (content/lightning-item-iframe.xul)
+    content/lightning-item-iframe.xhtml                    (content/lightning-item-iframe.xhtml)
     content/lightning-item-iframe.js                       (content/lightning-item-iframe.js)
-    content/lightning-menus.xul                            (content/lightning-menus.xul)
-    content/lightning-migration.xul                        (content/lightning-migration.xul)
-    content/lightning-toolbar.xul                          (content/lightning-toolbar.xul)
     content/lightning-utils.js                             (content/lightning-utils.js)
-    content/messenger-overlay-accountCentral.xul           (content/messenger-overlay-accountCentral.xul)
-    content/messenger-overlay-messageWindow.xul            (content/messenger-overlay-messageWindow.xul)
     content/messenger-overlay-sidebar.js                   (content/messenger-overlay-sidebar.js)
-    content/messenger-overlay-sidebar.xul                  (content/messenger-overlay-sidebar.xul)
     content/messenger-overlay-preferences.js               (content/messenger-overlay-preferences.js)
-*   content/messenger-overlay-preferences.xul              (content/messenger-overlay-preferences.xul)
-#ifdef MOZ_SUITE
-    content/suite-overlay-addons.xul                       (content/suite-overlay-addons.xul)
-    content/suite-overlay-preferences.xul                  (content/suite-overlay-preferences.xul)
-    content/suite-overlay-sidebar.js                       (content/suite-overlay-sidebar.js)
-    content/suite-overlay-sidebar.xul                      (content/suite-overlay-sidebar.xul)
-#endif
+*   content/messenger-overlay-preferences.inc.xhtml        (content/messenger-overlay-preferences.inc.xhtml)
     content/caldav-lightning-calendar-creation.js          (../providers/caldav/content/caldav-lightning-calendar-creation.js)
-    content/caldav-lightning-calendar-creation.xul         (../providers/caldav/content/caldav-lightning-calendar-creation.xul)
     content/caldav-lightning-calendar-properties.js        (../providers/caldav/content/caldav-lightning-calendar-properties.js)
-    content/caldav-lightning-calendar-properties.xul       (../providers/caldav/content/caldav-lightning-calendar-properties.xul)
     content/caldav-lightning-utils.js                      (../providers/caldav/content/caldav-lightning-utils.js)
-
-% skin lightning classic/1.0 %skin/linux/
-% skin lightning classic/1.0 %skin/osx/ os=Darwin
-% skin lightning classic/1.0 %skin/windows/ os=WINNT
-% skin lightning-common classic/1.0 %skin/lightning-common/
-% style chrome://messenger/content/messageWindow.xul chrome://lightning/skin/lightning.css
-% style chrome://messenger/content/customizeToolbar.xul chrome://lightning/skin/lightning-toolbar.css
-% style chrome://calendar/content/calendar-event-dialog.xul chrome://communicator/skin/communicator.css application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
-% style chrome://messenger/content/customizeToolbar.xul chrome://lightning-common/skin/lightning.css application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
-% style chrome://messenger/content/customizeToolbar.xul chrome://calendar-common/skin/dialogs/calendar-event-dialog.css application={92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}
-    skin/lightning-common/accountCentral.css               (themes/common/accountCentral.css)
-    skin/lightning-common/html-item-editing.css            (themes/common/html-item-editing.css)
-    skin/lightning-common/todayButton-arrow.svg            (themes/common/images/todayButton-arrow.svg)
-    skin/lightning-common/imip.css                         (themes/common/imip.css)
-    skin/lightning-common/lightning.css                    (themes/common/lightning.css)
-    skin/lightning-common/lightning-toolbar.css            (themes/common/lightning-toolbar.css)
-    skin/lightning-common/suite-accountCentral.css         (themes/common/suite-accountCentral.css)
-    skin/lightning-common/datetimepickers.css              (../resources/skin/datetimepickers.css)
-    skin/lightning-common/dialogOverlay.css                (../resources/skin/dialogOverlay.css)
-
-# Linux theme files
-    skin/linux/imip.css                                    (themes/linux/imip.css)
-    skin/linux/lightning.css                               (themes/linux/lightning.css)
-    skin/linux/lightning-toolbar.css                       (themes/linux/lightning-toolbar.css)
-
-# OS X theme files
-    skin/osx/imip.css                                      (themes/osx/imip.css)
-    skin/osx/lightning.css                                 (themes/osx/lightning.css)
-    skin/osx/lightning-toolbar.css                         (themes/osx/lightning-toolbar.css)
-
-# Windows theme files
-    skin/windows/imip.css                                  (themes/windows/imip.css)
-    skin/windows/lightning.css                             (themes/windows/lightning.css)
-    skin/windows/lightning-toolbar.css                     (themes/windows/lightning-toolbar.css)
 
 calendar.jar:
     content/calendarCreation.js                   (../resources/content/calendarCreation.js)
-    content/calendarCreation.xul                  (../resources/content/calendarCreation.xul)
+    content/calendarCreation.xhtml                (../resources/content/calendarCreation.xhtml)
     content/datetimepickers/datetimepickers.js    (../resources/content/datetimepickers/datetimepickers.js)
     content/mouseoverPreviews.js                  (../resources/content/mouseoverPreviews.js)
     content/publish.js                            (../resources/content/publish.js)
     content/publishDialog.js                      (../resources/content/publishDialog.js)
-    content/publishDialog.xul                     (../resources/content/publishDialog.xul)
+    content/publishDialog.xhtml                   (../resources/content/publishDialog.xhtml)
     content/sound.wav                             (../resources/content/sound.wav)

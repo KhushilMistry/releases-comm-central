@@ -2,15 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// mail/base/content/nsDragAndDrop.js
-/* globals FlavourSet, TransferData, MozElements */
-// imStatusSelector.js
+/* globals MozElements */
 /* globals statusSelector */
+/* globals MsgAccountManager */
 
 var { Services } = ChromeUtils.import("resource:///modules/imServices.jsm");
-var { fixIterator } = ChromeUtils.import(
-  "resource:///modules/iteratorUtils.jsm"
-);
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
@@ -49,13 +45,13 @@ var gAccountManager = {
   _connectedLabelInterval: 0,
 
   get msgNotificationBar() {
-    delete this.msgNotificationBar;
+    delete this._msgNotificationBar;
 
     let newNotificationBox = new MozElements.NotificationBox(element => {
       document.getElementById("accounts-notification-box").prepend(element);
     });
 
-    return (this.msgNotificationBar = newNotificationBox);
+    return (this._msgNotificationBar = newNotificationBox);
   },
 
   load() {
@@ -142,7 +138,9 @@ var gAccountManager = {
     }
 
     // The selected item is still selected
-    accountList.selectedItem.buttons.setFocus();
+    if (accountList.selectedItem) {
+      accountList.selectedItem.setFocus();
+    }
     accountList.ensureSelectedElementIsVisible();
 
     // We need to refresh the disabled menu items
@@ -273,7 +271,7 @@ var gAccountManager = {
       location: prplAccount.connectionTarget,
     };
     window.openDialog(
-      "chrome://pippki/content/exceptionDialog.xul",
+      "chrome://pippki/content/exceptionDialog.xhtml",
       "",
       "chrome,centerscreen,modal",
       params
@@ -357,14 +355,13 @@ var gAccountManager = {
   },
 
   new() {
-    this.openDialog("chrome://messenger/content/chat/imAccountWizard.xul");
+    this.openDialog("chrome://messenger/content/chat/imAccountWizard.xhtml");
   },
   edit() {
     // Find the nsIIncomingServer for the current imIAccount.
     let server = null;
     let imAccountId = this.accountList.selectedItem.account.numericId;
-    let mgr = MailServices.accounts;
-    for (let account of fixIterator(mgr.accounts, Ci.nsIMsgAccount)) {
+    for (let account of MailServices.accounts.accounts) {
       let incomingServer = account.incomingServer;
       if (!incomingServer || incomingServer.type != "im") {
         continue;
@@ -375,18 +372,7 @@ var gAccountManager = {
       }
     }
 
-    let win = Services.wm.getMostRecentWindow("mailnews:accountmanager");
-    if (win) {
-      win.focus();
-      win.selectServer(server);
-    } else {
-      window.openDialog(
-        "chrome://messenger/content/AccountManager.xul",
-        "AccountManager",
-        "chrome,centerscreen,modal,titlebar,resizable",
-        { server, selectPage: null }
-      );
-    }
+    MsgAccountManager(null, server);
   },
   autologin() {
     var elt = this.accountList.selectedItem;
@@ -443,12 +429,13 @@ var gAccountManager = {
     }
   },
   onContextMenuShowing() {
-    let targetElt = document.popupNode;
-    let isAccount = targetElt instanceof Ci.nsIDOMXULSelectControlItemElement;
+    let targetElt = document.popupNode.closest(
+      'richlistitem[is="chat-account-richlistitem"]'
+    );
     document.querySelectorAll(".im-context-account-item").forEach(e => {
-      e.hidden = !isAccount;
+      e.hidden = !targetElt;
     });
-    if (isAccount) {
+    if (targetElt) {
       let account = targetElt.account;
       let hiddenItems = {
         connect: !account.disconnected,
@@ -474,7 +461,7 @@ var gAccountManager = {
     setTimeout(
       function(aThis) {
         try {
-          aThis.accountList.selectedItem.buttons.setFocus();
+          aThis.accountList.selectedItem.setFocus();
         } catch (e) {
           /* Sometimes if the user goes too fast with VK_UP or VK_DOWN, the
            selectedItem doesn't have the expected binding attached */
@@ -559,9 +546,8 @@ var gAccountManager = {
   },
 
   *getAccounts() {
-    let accounts = Services.accounts.getAccounts();
-    while (accounts.hasMoreElements()) {
-      yield accounts.getNext();
+    for (let account of Services.accounts.getAccounts()) {
+      yield account;
     }
   },
 
@@ -656,7 +642,7 @@ var gAccountManager = {
 
     Services.accounts.processAutoLogin();
 
-    gAccountManager.accountList.selectedItem.buttons.setFocus();
+    gAccountManager.accountList.selectedItem.setFocus();
   },
   processCrashedAccountsLogin() {
     for (let acc in gAccountManager.getAccounts()) {
@@ -676,7 +662,7 @@ var gAccountManager = {
       notification.close();
     }
 
-    gAccountManager.accountList.selectedItem.buttons.setFocus();
+    gAccountManager.accountList.selectedItem.setFocus();
   },
   setOffline(aState) {
     this.isOffline = aState;
@@ -704,53 +690,57 @@ var gAMDragAndDrop = {
     return this.SCROLL_SPEED;
   },
 
-  onDragStart(aEvent, aTransferData, aAction) {
-    let accountElement = aEvent.explicitOriginalTarget;
-    // This stops the dragging session.
-    if (!(accountElement instanceof Ci.nsIDOMXULSelectControlItemElement)) {
-      throw new Error("Element is not draggable!");
+  onDragStart(event) {
+    let target = event.target;
+    if (target.nodeType != Node.ELEMENT_NODE) {
+      target = target.parentNode;
+    }
+    let accountElement = target.closest(
+      'richlistitem[is="chat-account-richlistitem"]'
+    );
+    if (!accountElement) {
+      return;
     }
     if (gAccountManager.accountList.itemCount == 1) {
       throw new Error("Can't drag while there is only one account!");
     }
 
-    // Transferdata is never used, but we need to transfer something.
-    aTransferData.data = new TransferData();
-    aTransferData.data.addDataForFlavour(
-      this.ACCOUNT_MIME_TYPE,
-      accountElement
-    );
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.dropEffect = "move";
+    event.dataTransfer.addElement(accountElement);
+    event.dataTransfer.setData(this.ACCOUNT_MIME_TYPE, accountElement);
+    event.stopPropagation();
   },
 
-  onDragOver(aEvent, aFlavour, aSession) {
-    let accountElement = aEvent.explicitOriginalTarget;
-    // We are dragging over the account manager, consider it is the same as
-    // the last element.
-    if (accountElement == gAccountManager.accountList) {
-      accountElement = gAccountManager.accountList.lastChild;
+  onDragOver(event) {
+    let target = event.target;
+    if (target.nodeType != Node.ELEMENT_NODE) {
+      target = target.parentNode;
+    }
+    let accountElement = target.closest(
+      'richlistitem[is="chat-account-richlistitem"]'
+    );
+    if (!accountElement) {
+      return;
     }
 
     // Auto scroll the account list if we are dragging at the top/bottom
-    this.checkForMagicScroll(aEvent.clientY);
+    this.checkForMagicScroll(event.clientY);
 
     // The hovered element has changed, change the border too
     if ("_accountElement" in this && this._accountElement != accountElement) {
       this.cleanBorders();
     }
 
-    if (!aSession.canDrop) {
-      aEvent.dataTransfer.dropEffect = "none";
-      return;
-    }
-    aEvent.dataTransfer.dropEffect = "move";
+    event.dataTransfer.dropEffect = "move";
 
     if (
-      aEvent.clientY <
+      event.clientY <
       accountElement.getBoundingClientRect().top +
         accountElement.clientHeight / 2
     ) {
       // we don't want the previous item to show its default bottom-border
-      let previousItem = accountElement.previousSibling;
+      let previousItem = accountElement.previousElementSibling;
       if (previousItem) {
         previousItem.style.borderBottom = "none";
       }
@@ -767,47 +757,40 @@ var gAMDragAndDrop = {
     }
 
     this._accountElement = accountElement;
+    event.stopPropagation();
+    event.preventDefault();
   },
 
-  cleanBorders(aIsEnd) {
+  cleanBorders(isEnd) {
     if (!this._accountElement) {
       return;
     }
-
     this._accountElement.removeAttribute("dragover");
     // reset the border of the previous element
-    let previousItem = this._accountElement.previousSibling;
+    let previousItem = this._accountElement.previousElementSibling;
     if (previousItem) {
       if (
-        aIsEnd &&
+        isEnd &&
         !previousItem.style.borderBottom &&
-        previousItem.previousSibling
+        previousItem.previousElementSibling
       ) {
-        previousItem = previousItem.previousSibling;
+        previousItem = previousItem.previousElementSibling;
       }
       previousItem.style.borderBottom = "";
     }
 
-    if (aIsEnd) {
+    if (isEnd) {
       delete this._accountElement;
     }
   },
 
-  canDrop(aEvent, aSession) {
-    let accountElement = aEvent.explicitOriginalTarget;
-    if (accountElement == gAccountManager.accountList) {
-      accountElement = gAccountManager.accountList.lastChild;
-    }
-    return accountElement != gAccountManager.accountList.selectedItem;
-  },
-
-  checkForMagicScroll(aClientY) {
+  checkForMagicScroll(clientY) {
     let accountList = gAccountManager.accountList;
     let listSize = accountList.getBoundingClientRect();
     let direction = 1;
-    if (aClientY < listSize.top + this.MAGIC_SCROLL_HEIGHT) {
+    if (clientY < listSize.top + this.MAGIC_SCROLL_HEIGHT) {
       direction = -1;
-    } else if (aClientY < listSize.bottom - this.MAGIC_SCROLL_HEIGHT) {
+    } else if (clientY < listSize.bottom - this.MAGIC_SCROLL_HEIGHT) {
       // We are not on a scroll zone
       return;
     }
@@ -815,13 +798,15 @@ var gAMDragAndDrop = {
     accountList.scrollTop += direction * this.SCROLL_SPEED;
   },
 
-  onDrop(aEvent, aTransferData, aSession) {
-    let accountElement = aEvent.explicitOriginalTarget;
-    if (accountElement == gAccountManager.accountList) {
-      accountElement = gAccountManager.accountList.lastChild;
+  onDrop(event) {
+    let target = event.target;
+    if (target.nodeType != Node.ELEMENT_NODE) {
+      target = target.parentNode;
     }
-
-    if (!aSession.canDrop) {
+    let accountElement = target.closest(
+      'richlistitem[is="chat-account-richlistitem"]'
+    );
+    if (!accountElement) {
       return;
     }
 
@@ -830,7 +815,7 @@ var gAMDragAndDrop = {
     let offset =
       accountList.getIndexOfItem(accountElement) - accountList.selectedIndex;
     let isDroppingAbove =
-      aEvent.clientY <
+      event.clientY <
       accountElement.getBoundingClientRect().top +
         accountElement.clientHeight / 2;
     if (offset > 0) {
@@ -839,15 +824,7 @@ var gAMDragAndDrop = {
       offset += !isDroppingAbove;
     }
     gAccountManager.moveCurrentItem(offset);
-  },
-
-  getSupportedFlavours() {
-    var flavours = new FlavourSet();
-    flavours.appendFlavour(
-      this.ACCOUNT_MIME_TYPE,
-      "nsIDOMXULSelectControlItemElement"
-    );
-    return flavours;
+    event.stopPropagation();
   },
 };
 

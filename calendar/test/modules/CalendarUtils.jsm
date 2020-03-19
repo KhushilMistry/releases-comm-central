@@ -49,6 +49,7 @@ this.EXPORTED_SYMBOLS = [
 var elementslib = ChromeUtils.import("resource://testing-common/mozmill/elementslib.jsm");
 var mozmill = ChromeUtils.import("resource://testing-common/mozmill/mozmill.jsm");
 var utils = ChromeUtils.import("resource://testing-common/mozmill/utils.jsm");
+var controller = ChromeUtils.import("resource://testing-common/mozmill/controller.jsm");
 
 var { close_pref_tab, open_pref_tab } = ChromeUtils.import(
   "resource://testing-common/mozmill/PrefTabHelpers.jsm"
@@ -116,8 +117,8 @@ var EVENTPATH = `
 `;
 // Used after "${EVENTPATH}/${getEventDetails([view])}/".
 var ALARM_ICON_PATH = `
-    anon({"class":"category-container-box"})/anon({"align":"center"})/
-    anon({"class":"alarm-icons-box"})/anon({"class":"reminder-icon"})
+    {"class":"category-container-box"}/{"align":"center"}/
+    {"class":"alarm-icons-box"}/{"class":"reminder-icon"}
 `;
 
 function setupModule() {
@@ -297,26 +298,26 @@ function goToDate(controller, year, month, day) {
  * Opens the event dialog by clicking on the (optional) box and executing the
  * body. The event dialog must be closed in the body function.
  *
- * @param controller    Main window controller
+ * @param mainWindowController - Main window controller
  * @param clickBox      The box to click on, or null if no box to click on.
  * @param body          The function to execute while the event dialog is open.
  */
-function invokeEventDialog(controller, clickBox, body) {
+async function invokeEventDialog(mainWindowController, clickBox, body) {
   if (clickBox) {
-    controller.waitForElement(clickBox);
-    controller.doubleClick(clickBox, 1, 1);
+    mainWindowController.waitForElement(clickBox);
+    mainWindowController.doubleClick(clickBox, 1, 1);
   }
 
-  controller.waitFor(
+  mainWindowController.waitFor(
     () => {
-      return mozmill.utils.getWindows("Calendar:EventDialog").length > 0;
+      return utils.getWindows("Calendar:EventDialog").length > 0;
     },
     "event-dialog did not load in time",
     MID_SLEEP
   );
 
-  let eventWindow = mozmill.utils.getWindows("Calendar:EventDialog")[0];
-  let eventController = new mozmill.controller.MozMillController(eventWindow);
+  let eventWindow = utils.getWindows("Calendar:EventDialog")[0];
+  let eventController = new controller.MozMillController(eventWindow);
   let iframe = eventController.window.document.getElementById("lightning-item-panel-iframe");
 
   eventController.waitFor(
@@ -331,10 +332,10 @@ function invokeEventDialog(controller, clickBox, body) {
   // something for helpersForController.
   let mockIframeController = { window: iframe.contentWindow };
 
-  body(eventController, mockIframeController);
+  await body(eventController, mockIframeController);
 
   // Wait for close.
-  controller.waitFor(() => mozmill.utils.getWindows("Calendar:EventDialog").length == 0);
+  mainWindowController.waitFor(() => utils.getWindows("Calendar:EventDialog").length == 0);
 }
 
 /**
@@ -361,32 +362,31 @@ function getEventBoxPath(controller, view, option, row, column, hour) {
   } else if (view == "day" || view == "week") {
     path += `
             /{"class":"mainbox"}/{"class":"scrollbox"}/{"class":"daybox"}/
-            [${column - 1}]/anon({"class":"multiday-column-box-stack"})
+            [${column - 1}]/{"class":"multiday-column-box-stack"}
         `;
 
     if (option == CANVAS_BOX) {
-      path += `/anon({"class":"multiday-column-bg-box"})/[${hour}]`;
+      path += `/{"class":"multiday-column-bg-box"}/[${hour}]`;
     } else {
       path += `
-                /anon({"class":"multiday-column-top-box"})/{"flex":"1"}/{"flex":"1"}/{"flex":"1"}
-            `;
-    }
-
-    return path;
-  } else {
-    path += `
-            /{"class":"mainbox"}/{"class":"monthgrid"}/
-            {"class":"monthgridrows"}/[${row - 1}]/[${column - 1}]
-        `;
-
-    if (option == CANVAS_BOX) {
-      path += `
-                /{"class":"calendar-day-items"}
+                /{"class":"multiday-column-top-box"}/{"flex":"1"}/{"flex":"1"}/{"flex":"1"}
             `;
     }
 
     return path;
   }
+  path += `
+            /{"class":"mainbox"}/{"class":"monthgrid"}/
+            [${row - 1}]/[${column - 1}]/[0]
+        `;
+
+  if (option == CANVAS_BOX) {
+    path += `
+                /{"class":"calendar-day-items"}
+            `;
+  }
+
+  return path;
 }
 
 /**
@@ -398,17 +398,16 @@ function getEventBoxPath(controller, view, option, row, column, hour) {
 function getEventDetails(view) {
   if (view == "day" || view == "week") {
     return `
-            anon({"flex":"1"})/anon({"class":"calendar-color-box"})/
-            {"class":"calendar-event-selection"}/anon({"class":"calendar-event-box-container"})/
-            {"class":"calendar-event-details"}
-        `;
-  } else {
-    return `
-            anon({"flex":"1"})/[0]/anon({"class":"calendar-color-box"})/
-            {"class":"calendar-event-selection"}/anon({"class":"calendar-event-box-container"})/
+            {"flex":"1"}/{"class":"calendar-color-box"}/
+            {"class":"calendar-event-selection"}/{"class":"calendar-event-box-container"}/
             {"class":"calendar-event-details"}
         `;
   }
+  return `
+            {"flex":"1"}/[0]/{"class":"calendar-color-box"}/
+            {"class":"calendar-event-selection"}/{"class":"calendar-event-box-container"}/
+            {"class":"calendar-event-details"}
+        `;
 }
 
 /**
@@ -470,7 +469,7 @@ function viewBack(controller, n) {
  * Closes all EventDialogs that may remain open after a failed test
  */
 function closeAllEventDialogs() {
-  for (let win of mozmill.utils.getWindows("Calendar:EventDialog")) {
+  for (let win of utils.getWindows("Calendar:EventDialog")) {
     close_window(win);
   }
 }
@@ -487,7 +486,7 @@ function deleteCalendars(controller, name) {
   let win = eid("messengerWindow").getNode().ownerGlobal;
   let manager = win.cal.getCalendarManager();
 
-  for (let calendar of manager.getCalendars({})) {
+  for (let calendar of manager.getCalendars()) {
     if (calendar.name == name) {
       manager.removeCalendar(calendar);
     }
@@ -523,13 +522,13 @@ function createCalendar(controller, name) {
  * @param data              (optional) dataset object
  *                              showReminders - False to disable reminders.
  *                              eMail - id of eMail account
- *                              network.format - ics/caldav/wcap
+ *                              network.format - ics/caldav
  *                              network.location - URI (undefined for local ICS)
  *                              network.offline - False to disable cache.
  */
 function handleNewCalendarWizard(wizard, name, data = undefined) {
   let { lookup: wizardlookup, eid: wizardId } = helpersForController(wizard);
-  let dlgButton = btn => wizard.window.document.documentElement.getButton(btn);
+  let dlgButton = btn => wizard.window.document.querySelector("wizard").getButton(btn);
   if (data == undefined) {
     data = {};
   }
@@ -537,7 +536,7 @@ function handleNewCalendarWizard(wizard, name, data = undefined) {
   // Choose network calendar if any network data is set.
   if (data.network) {
     let remoteOption = wizardlookup(`
-            /id("calendar-wizard")/{"pageid":"initialPage"}/id("calendar-type")/{"value":"remote"}
+            /id("calendar-wizard-window")/id("calendar-wizard")/{"id":"initialPage"}/id("calendar-type")/{"value":"remote"}
         `);
     wizard.waitForElement(remoteOption);
     wizard.radio(remoteOption);
@@ -548,7 +547,7 @@ function handleNewCalendarWizard(wizard, name, data = undefined) {
       data.network.format = "ics";
     }
     let formatOption = wizardlookup(`
-            /id("calendar-wizard")/{"pageid":"locationPage"}/[1]/[1]/[0]/
+            /id("calendar-wizard-window")/id("calendar-wizard")/{"id":"locationPage"}/[1]/[0]/[1]/
             id("calendar-format")/{"value":"${data.network.format}"}
         `);
     wizard.waitForElement(formatOption);
@@ -563,8 +562,8 @@ function handleNewCalendarWizard(wizard, name, data = undefined) {
     }
     wizard.type(
       wizardlookup(`
-            /id("calendar-wizard")/{"pageid":"locationPage"}/[1]/[1]/id("calendar-location-row")/
-            id("calendar-uri")
+            /id("calendar-wizard-window")/id("calendar-wizard")/{"id":"locationPage"}/[1]/id("calendar-location-row")/
+            id("calendar-uri-td")/{"class":"input-container"}/id("calendar-uri")
         `),
       data.network.location
     );

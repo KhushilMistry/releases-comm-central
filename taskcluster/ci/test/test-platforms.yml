@@ -23,7 +23,6 @@ linux64/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests
 
 linux64-shippable/opt:
@@ -32,7 +31,6 @@ linux64-shippable/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests
 
 linux64/debug:
@@ -40,7 +38,15 @@ linux64/debug:
     test-sets:
         - gtest-tests
         - marionette-tests
-        - mozmill-tests
+        - mochitest-tests
+        - xpcshell-tests
+
+linux32/opt:
+    build-platform: linux/opt
+    test-sets:
+        - gtest-tests
+        - marionette-tests
+        - mochitest-tests
         - xpcshell-tests
 
 linux32-shippable/opt:
@@ -49,7 +55,6 @@ linux32-shippable/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests
 
 linux32/debug:
@@ -57,7 +62,7 @@ linux32/debug:
     test-sets:
         - gtest-tests
         - marionette-tests
-        - mozmill-tests
+        - mochitest-tests
         - xpcshell-tests
 
 # Windows platforms (matching /windows.*/)
@@ -69,7 +74,6 @@ windows7-32/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests
 
 windows7-32-shippable/opt:
@@ -78,7 +82,6 @@ windows7-32-shippable/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests
 
 windows7-32/debug:
@@ -86,7 +89,7 @@ windows7-32/debug:
     test-sets:
         - gtest-tests
         - marionette-tests
-        - mozmill-tests
+        - mochitest-tests
         - xpcshell-tests
 
 # win64
@@ -96,7 +99,6 @@ windows10-64/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests
 
 windows10-64-shippable/opt:
@@ -105,7 +107,6 @@ windows10-64-shippable/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests
 
 windows10-64/debug:
@@ -113,17 +114,25 @@ windows10-64/debug:
     test-sets:
         - gtest-tests
         - marionette-tests
-        - mozmill-tests
+        - mochitest-tests
         - xpcshell-tests
 
 # MacOS X platforms (matching /macosx.*/)
+
+macosx1014-64/opt:
+    build-platform: macosx64/opt
+    test-sets:
+        - gtest-tests
+        - marionette-tests
+        - mochitest-tests
+        - xpcshell-tests
 
 macosx1014-64/debug:
     build-platform: macosx64/debug
     test-sets:
         - gtest-tests
         - marionette-tests
-        - mozmill-tests
+        - mochitest-tests
         - xpcshell-tests
 
 macosx1014-64-shippable/opt:
@@ -132,5 +141,4 @@ macosx1014-64-shippable/opt:
         - gtest-tests
         - marionette-tests
         - mochitest-tests
-        - mozmill-tests
         - xpcshell-tests

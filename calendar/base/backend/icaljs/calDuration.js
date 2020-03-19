@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { ICAL, unwrap } = ChromeUtils.import("resource://calendar/modules/ical.js");
+var { ICAL, unwrap } = ChromeUtils.import("resource:///modules/calendar/Ical.jsm");
 
 function calDuration(innerObject) {
   this.innerObject = innerObject || new ICAL.Duration();
@@ -21,10 +21,10 @@ calDuration.prototype = {
   },
 
   isMutable: true,
-  makeImmutable: function() {
+  makeImmutable() {
     this.isMutable = false;
   },
-  clone: function() {
+  clone() {
     return new calDuration(this.innerObject.clone());
   },
 
@@ -85,13 +85,13 @@ calDuration.prototype = {
     return this.innerObject.compare(val);
   }),
 
-  reset: function() {
+  reset() {
     this.innerObject.reset();
   },
-  normalize: function() {
+  normalize() {
     this.innerObject.normalize();
   },
-  toString: function() {
+  toString() {
     return this.innerObject.toString();
   },
 

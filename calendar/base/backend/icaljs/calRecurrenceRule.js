@@ -5,9 +5,9 @@
 /* import-globals-from calICALJSComponents.js */
 
 var { ICAL, unwrapSetter, unwrapSingle, wrapGetter } = ChromeUtils.import(
-  "resource://calendar/modules/ical.js"
+  "resource:///modules/calendar/Ical.jsm"
 );
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 function calRecurrenceRule(innerObject) {
   this.innerObject = innerObject || new ICAL.Recur();
@@ -29,10 +29,15 @@ calRecurrenceRule.prototype = {
   innerObject: null,
 
   isMutable: true,
-  makeImmutable: function() {
+  makeImmutable() {
     this.isMutable = false;
   },
-  clone: function() {
+  ensureMutable() {
+    if (!this.isMutable) {
+      throw Cr.NS_ERROR_OBJECT_IS_IMMUTABLE;
+    }
+  },
+  clone() {
     return new calRecurrenceRule(new ICAL.Recur(this.innerObject));
   },
 
@@ -41,13 +46,13 @@ calRecurrenceRule.prototype = {
     return this.innerObject.isFinite();
   },
 
-  getNextOccurrence: function(aStartTime, aRecId) {
+  getNextOccurrence(aStartTime, aRecId) {
     aStartTime = unwrapSingle(ICAL.Time, aStartTime);
     aRecId = unwrapSingle(ICAL.Time, aRecId);
     return wrapGetter(calDateTime, this.innerObject.getNextOccurrence(aStartTime, aRecId));
   },
 
-  getOccurrences: function(aStartTime, aRangeStart, aRangeEnd, aMaxCount, aCount) {
+  getOccurrences(aStartTime, aRangeStart, aRangeEnd, aMaxCount) {
     aStartTime = unwrapSingle(ICAL.Time, aStartTime);
     aRangeStart = unwrapSingle(ICAL.Time, aRangeStart);
     aRangeEnd = unwrapSingle(ICAL.Time, aRangeEnd);
@@ -68,7 +73,6 @@ calRecurrenceRule.prototype = {
 
       // If the start of the recurrence is past the end, we have no dates
       if (aStartTime.compare(dtend) >= 0) {
-        aCount.value = 0;
         return [];
       }
     }
@@ -100,7 +104,6 @@ calRecurrenceRule.prototype = {
       }
     }
 
-    aCount.value = occurrences.length;
     return occurrences;
   },
 
@@ -108,6 +111,7 @@ calRecurrenceRule.prototype = {
     return "RRULE:" + this.innerObject.toString() + ICAL.newLineChar;
   },
   set icalString(val) {
+    this.ensureMutable();
     this.innerObject = ICAL.Recur.fromString(val.replace(/^RRULE:/i, ""));
   },
 
@@ -117,6 +121,7 @@ calRecurrenceRule.prototype = {
     return new calIcalProperty(prop);
   },
   set icalProperty(rawval) {
+    this.ensureMutable();
     unwrapSetter(
       ICAL.Property,
       rawval,
@@ -131,6 +136,7 @@ calRecurrenceRule.prototype = {
     return this.innerObject.freq;
   },
   set type(val) {
+    this.ensureMutable();
     this.innerObject.freq = val;
   },
 
@@ -138,6 +144,7 @@ calRecurrenceRule.prototype = {
     return this.innerObject.interval;
   },
   set interval(val) {
+    this.ensureMutable();
     this.innerObject.interval = val;
   },
 
@@ -148,17 +155,18 @@ calRecurrenceRule.prototype = {
     return this.innerObject.count || -1;
   },
   set count(val) {
+    this.ensureMutable();
     this.innerObject.count = val && val > 0 ? val : null;
   },
 
   get untilDate() {
     if (this.innerObject.until) {
       return new calDateTime(this.innerObject.until);
-    } else {
-      return null;
     }
+    return null;
   },
   set untilDate(rawval) {
+    this.ensureMutable();
     unwrapSetter(
       ICAL.Time,
       rawval,
@@ -184,10 +192,11 @@ calRecurrenceRule.prototype = {
     return this.innerObject.wkst - 1;
   },
   set weekStart(val) {
+    this.ensureMutable();
     this.innerObject.wkst = val + 1;
   },
 
-  getComponent: function(aType, aCount) {
+  getComponent(aType) {
     let values = this.innerObject.getComponent(aType);
     if (aType == "BYDAY") {
       // BYDAY values are alphanumeric: SU, MO, TU, etc..
@@ -209,13 +218,10 @@ calRecurrenceRule.prototype = {
       }
     }
 
-    if (aCount) {
-      aCount.value = values.length;
-    }
     return values;
   },
 
-  setComponent: function(aType, aCount, aValues) {
+  setComponent(aType, aValues) {
     let values = aValues;
     if (aType == "BYDAY") {
       // BYDAY values are alphanumeric: SU, MO, TU, etc..

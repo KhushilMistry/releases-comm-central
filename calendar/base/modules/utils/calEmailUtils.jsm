@@ -3,9 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
-var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "cal", "resource://calendar/modules/calUtils.jsm", "cal");
+ChromeUtils.defineModuleGetter(this, "cal", "resource:///modules/calendar/calUtils.jsm");
 
 /*
  * Functions for processing email addresses and sending email
@@ -27,7 +26,7 @@ var calemail = {
    * @param {String} aBody            The encoded email body text.
    * @param {nsIMsgIdentity} aIdentity    The email identity to use for sending
    */
-  sendTo: function(aRecipient, aSubject, aBody, aIdentity) {
+  sendTo(aRecipient, aSubject, aBody, aIdentity) {
     let msgParams = Cc["@mozilla.org/messengercompose/composeparams;1"].createInstance(
       Ci.nsIMsgComposeParams
     );
@@ -53,10 +52,8 @@ var calemail = {
    *
    * @param {Function} aFunc       The function to be called for each identity and account
    */
-  iterateIdentities: function(aFunc) {
-    let accounts = MailServices.accounts.accounts;
-    for (let i = 0; i < accounts.length; ++i) {
-      let account = accounts.queryElementAt(i, Ci.nsIMsgAccount);
+  iterateIdentities(aFunc) {
+    for (let account of MailServices.accounts.accounts) {
       let identities = account.identities;
       for (let j = 0; j < identities.length; ++j) {
         let identity = identities.queryElementAt(j, Ci.nsIMsgIdentity);
@@ -73,7 +70,7 @@ var calemail = {
    * @param  {String} aId     The string to prepend the prefix if not already there
    * @return {String}         The string with prefix
    */
-  prependMailTo: function(aId) {
+  prependMailTo(aId) {
     return aId.replace(/^(?:mailto:)?(.*)@/i, "mailto:$1@");
   },
 
@@ -83,7 +80,7 @@ var calemail = {
    * @param  {String} aId     The string to remove the prefix from if any
    * @return {String}         The string without prefix
    */
-  removeMailTo: function(aId) {
+  removeMailTo(aId) {
     return aId.replace(/^mailto:/i, "");
   },
 
@@ -93,7 +90,7 @@ var calemail = {
    * @param  {calIAttendee[]} aAttendees          Array of calIAttendee's to check
    * @return {String}                             Valid string to use in a 'to' header of an email
    */
-  createRecipientList: function(aAttendees) {
+  createRecipientList(aAttendees) {
     let cbEmail = function(aVal) {
       let email = calemail.getAttendeeEmail(aVal, true);
       if (!email.length) {
@@ -115,7 +112,7 @@ var calemail = {
    * @param  {Boolean} aIncludeCn         Whether or not to return also the CN if available
    * @return {String}                     Valid email string or an empty string in case of error
    */
-  getAttendeeEmail: function(aAttendee, aIncludeCn) {
+  getAttendeeEmail(aAttendee, aIncludeCn) {
     // If the recipient id is of type urn, we need to figure out the email address, otherwise
     // we fall back to the attendee id
     let email = aAttendee.id.match(/^urn:/i) ? aAttendee.getProperty("EMAIL") || "" : aAttendee.id;
@@ -141,12 +138,12 @@ var calemail = {
    * @param {String} aRecipients      A comma-seperated list of e-mail addresses
    * @return {String}                 A validated comma-seperated list of e-mail addresses
    */
-  validateRecipientList: function(aRecipients) {
+  validateRecipientList(aRecipients) {
     let compFields = Cc["@mozilla.org/messengercompose/composefields;1"].createInstance(
       Ci.nsIMsgCompFields
     );
     // Resolve the list considering also configured common names
-    let members = compFields.splitRecipients(aRecipients, false, {});
+    let members = compFields.splitRecipients(aRecipients, false);
     let list = [];
     let prefix = "";
     for (let member of members) {
@@ -199,7 +196,7 @@ var calemail = {
    * @param {String[]} aAddresses         The list of addresses
    * @return {Boolean}                    True, if there is a match
    */
-  attendeeMatchesAddresses: function(aRefAttendee, aAddresses) {
+  attendeeMatchesAddresses(aRefAttendee, aAddresses) {
     let attId = aRefAttendee.id;
     if (!attId.match(/^mailto:/i)) {
       // Looks like its not a normal attendee, possibly urn:uuid:...

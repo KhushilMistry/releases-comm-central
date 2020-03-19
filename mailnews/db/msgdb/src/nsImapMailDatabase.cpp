@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -47,8 +47,8 @@ void nsImapMailDatabase::UpdateFolderFlag(
 // We override this to avoid our parent class (nsMailDatabase)'s
 // grabbing of the folder semaphore, and bailing on failure.
 NS_IMETHODIMP nsImapMailDatabase::DeleteMessages(
-    uint32_t aNumKeys, nsMsgKey *nsMsgKeys, nsIDBChangeListener *instigator) {
-  return nsMsgDatabase::DeleteMessages(aNumKeys, nsMsgKeys, instigator);
+    nsTArray<nsMsgKey> const &nsMsgKeys, nsIDBChangeListener *instigator) {
+  return nsMsgDatabase::DeleteMessages(nsMsgKeys, instigator);
 }
 
 nsresult nsImapMailDatabase::AdjustExpungedBytesOnDelete(nsIMsgDBHdr *msgHdr) {

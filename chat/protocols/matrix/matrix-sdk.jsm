@@ -9,88 +9,111 @@ const {
   setInterval,
   setTimeout,
 } = ChromeUtils.import("resource://gre/modules/Timer.jsm");
+const { scriptError } = ChromeUtils.import(
+  "resource:///modules/imXPCOMUtils.jsm"
+);
 
 const { Loader, Require, Module } = ChromeUtils.import(
   "resource://devtools/shared/base-loader.js"
 );
 
-this.EXPORTED_SYMBOLS = ["MatrixSDK"];
+this.EXPORTED_SYMBOLS = ["MatrixSDK", "getHttpUriForMxc"];
 
 // Set-up loading so require works properly in CommonJS modules.
+//
+// These are organized in a somewhat funky way:
+// * First they're ordered by module.
+// * Then they're ordered alphabetically by the destination file (e.g. this
+//   keeps all references to utils.js next to each other).
+// * They're then ordered by source, with the bare name first, then prefixed by
+//   ., then prefixed by .., etc.
 let matrixPath = "resource:///modules/matrix/";
 let loader = Loader({
   paths: {
-    "": matrixPath,
-    "../../utils": matrixPath + "utils.js",
-    "../content-repo": matrixPath + "content-repo.js",
-    "../deviceinfo": matrixPath + "crypto/deviceinfo.js",
-    "../models/event": matrixPath + "models/event.js",
-    "../models/room": matrixPath + "models/room.js",
-    "../models/user": matrixPath + "models/user.js",
-    "../olmlib": matrixPath + "crypto/olmlib.js",
-    "../utils": matrixPath + "utils.js",
-    "./../../utils": matrixPath + "utils.js",
-    "./OlmDevice": matrixPath + "crypto/OlmDevice.js",
-    "./algorithms": matrixPath + "crypto/algorithms/index.js",
-    "./base": matrixPath + "crypto/algorithms/base.js",
-    "./base-apis": matrixPath + "base-apis.js",
-    "./client": matrixPath + "client.js",
-    "./content-repo": matrixPath + "content-repo.js",
-    "./crypto": matrixPath + "crypto/index.js",
-    "./decode": matrixPath + "browserify/querystring/decode.js",
-    "./deviceinfo": matrixPath + "crypto/deviceinfo.js",
-    "./encode": matrixPath + "browserify/querystring/encode.js",
-    "./event": matrixPath + "models/event.js",
-    "./event-context": matrixPath + "models/event-content.js",
-    "./event-timeline": matrixPath + "models/event-timeline.js",
-    "./event-timeline-set": matrixPath + "models/event-timeline-set.js",
-    "./filter": matrixPath + "filter.js",
-    "./filter-component": matrixPath + "filter-component.js",
-    "./http-api": matrixPath + "http-api.js",
-    "./interactive-auth": matrixPath + "interactive-auth.js",
-    "./megolm": matrixPath + "crypto/algorithms/megolm.js",
-    "./models/event": matrixPath + "models/event.js",
-    "./models/event-timeline": matrixPath + "models/event-timeline.js",
-    "./models/event-timeline-set": matrixPath + "models/event-timeline-set.js",
-    "./models/room": matrixPath + "models/room.js",
-    "./models/room-member": matrixPath + "models/room-member.js",
-    "./models/room-state": matrixPath + "models/room-state.js",
-    "./models/search-result": matrixPath + "models/search-result.js",
-    "./models/user": matrixPath + "models/user.js",
-    "./olm": matrixPath + "crypto/algorithms/olm.js",
-    "./olmlib": matrixPath + "crypto/olmlib.js",
-    "./pushprocessor": matrixPath + "pushprocessor.js",
-    "./q": matrixPath + "q/q.js",
-    "./realtime-callbacks": matrixPath + "realtime-callbacks.js",
-    "./room-member": matrixPath + "models/room-member.js",
-    "./room-state": matrixPath + "models/room-state.js",
-    "./room-summary": matrixPath + "models/room-summary.js",
-    "./scheduler": matrixPath + "scheduler.js",
-    "./store/memory": matrixPath + "store/memory.js",
-    "./store/session/webstorage": matrixPath + "store/session/webstorage.js",
-    "./store/stub": matrixPath + "store/stub.js",
-    "./store/webstorage": matrixPath + "store/webstorage.js",
-    "./sync": matrixPath + "sync.js",
-    "./timeline-window": matrixPath + "timeline-window.js",
-    "./utils": matrixPath + "utils.js",
-    "./webrtc/call": matrixPath + "webrtc/call.js",
-    OlmDevice: matrixPath + "crypto/OlmDevice.js",
-    algorithms: matrixPath + "crypto/algorithms/index.js",
-    "another-json": matrixPath + "another_json/another-json.js",
-    base: matrixPath + "crypto/algorithms/base.js",
+    // Matrix SDK files.
+    "": matrixPath + "matrix_sdk/",
+    "../content-repo": matrixPath + "matrix_sdk/content-repo.js",
+    "../../errors": matrixPath + "matrix_sdk/errors.js",
+    "../indexeddb-helpers": matrixPath + "matrix_sdk/indexeddb-helpers.js",
+    "../../indexeddb-helpers": matrixPath + "matrix_sdk/indexeddb-helpers.js",
+    "../logger": matrixPath + "matrix_sdk/logger.js",
+    "../../logger": matrixPath + "matrix_sdk/logger.js",
+    "../randomstring": matrixPath + "matrix_sdk/randomstring.js",
+    "../ReEmitter": matrixPath + "matrix_sdk/ReEmitter.js",
+    "../sync-accumulator": matrixPath + "matrix_sdk/sync-accumulator.js",
+    "../utils": matrixPath + "matrix_sdk/utils.js",
+    "../utils.js": matrixPath + "matrix_sdk/utils.js",
+    "../../utils": matrixPath + "matrix_sdk/utils.js",
+
+    // crypto
+    "crypto/backup_password":
+      matrixPath + "matrix_sdk/crypto/backup_password.js",
+    deviceinfo: matrixPath + "matrix_sdk/crypto/deviceinfo.js",
+    "../deviceinfo": matrixPath + "matrix_sdk/crypto/deviceinfo.js",
+    DeviceList: matrixPath + "matrix_sdk/crypto/DeviceList.js",
+    "../DeviceList": matrixPath + "matrix_sdk/crypto/DeviceList.js",
+    crypto: matrixPath + "matrix_sdk/crypto/index.js",
+    olmlib: matrixPath + "matrix_sdk/crypto/olmlib.js",
+    "../olmlib": matrixPath + "matrix_sdk/crypto/olmlib.js",
+    "crypto/olmlib": matrixPath + "matrix_sdk/crypto/olmlib.js",
+    OlmDevice: matrixPath + "matrix_sdk/crypto/OlmDevice.js",
+    "crypto/recoverykey": matrixPath + "matrix_sdk/crypto/recoverykey.js",
+    OutgoingRoomKeyRequestManager:
+      matrixPath + "matrix_sdk/crypto/OutgoingRoomKeyRequestManager.js",
+    "crypto/RoomList": matrixPath + "matrix_sdk/crypto/RoomList.js",
+
+    // crypto/algorithms
+    base: matrixPath + "matrix_sdk/crypto/algorithms/base.js",
+    algorithms: matrixPath + "matrix_sdk/crypto/algorithms/index.js",
+    megolm: matrixPath + "matrix_sdk/crypto/algorithms/megolm.js",
+    olm: matrixPath + "matrix_sdk/crypto/algorithms/olm.js",
+
+    // crypto/store
+    "store/indexeddb-crypto-store":
+      matrixPath + "matrix_sdk/crypto/store/indexeddb-crypto-store.js",
+    "crypto/store/indexeddb-crypto-store":
+      matrixPath + "matrix_sdk/crypto/store/indexeddb-crypto-store.js",
+    "crypto/store/indexeddb-crypto-store-backend":
+      matrixPath + "matrix_sdk/crypto/store/indexeddb-crypto-store-backend.js",
+    "crypto/store/localStorage-crypto-store":
+      matrixPath + "matrix_sdk/crypto/store/localStorage-crypto-store.js",
+    "crypto/store/memory-crypto-store":
+      matrixPath + "matrix_sdk/crypto/store/memory-crypto-store.js",
+
+    // crypto/verification
+    Base: matrixPath + "matrix_sdk/crypto/verification/Base.js",
+    Error: matrixPath + "matrix_sdk/crypto/verification/Error.js",
+    "verification/Base": matrixPath + "matrix_sdk/crypto/verification/Base.js",
+    "verification/Error":
+      matrixPath + "matrix_sdk/crypto/verification/Error.js",
+    "verification/QRCode":
+      matrixPath + "matrix_sdk/crypto/verification/QRCode.js",
+    "verification/SAS": matrixPath + "matrix_sdk/crypto/verification/SAS.js",
+
+    // models
+    "../models/event": matrixPath + "matrix_sdk/models/event.js",
+    "../../models/event": matrixPath + "matrix_sdk/models/event.js",
+    "../lib/models/event": matrixPath + "matrix_sdk/models/event.js",
+    "../../lib/models/event": matrixPath + "matrix_sdk/models/event.js",
+    "../models/user": matrixPath + "matrix_sdk/models/user.js",
+
+    // Simple (one-file) dependencies.
+    "another-json": matrixPath + "another-json.js",
+    "base-x": matrixPath + "base_x/index.js",
+    bluebird: matrixPath + "bluebird.js",
     "browser-request": matrixPath + "browser_request/index.js",
-    crypto: matrixPath + "crypto/index.js",
-    decode: matrixPath + "browserify/querystring/decode.js",
-    deviceinfo: matrixPath + "crypto/deviceinfo.js",
-    encode: matrixPath + "browserify/querystring/encode.js",
-    events: matrixPath + "browserify/events.js",
-    megolm: matrixPath + "crypto/algorithms/megolm.js",
-    olm: matrixPath + "crypto/algorithms/olm.js",
-    olmlib: matrixPath + "crypto/olmlib.js",
-    punycode: matrixPath + "browserify/punycode.js",
-    q: matrixPath + "q/q.js",
-    querystring: matrixPath + "browserify/querystring/index.js",
-    url: matrixPath + "browserify/url.js",
+    bs58: matrixPath + "bs58/index.js",
+    "content-type": matrixPath + "content_type/index.js",
+    events: matrixPath + "events.js",
+
+    // unhomoglyph
+    unhomoglyph: matrixPath + "unhomoglyph/index.js",
+    "data.json": matrixPath + "unhomoglyph/data.json",
+
+    // Packages that are not included, but an alternate implementation is given.
+    loglevel: matrixPath + "loglevel.js",
+    "safe-buffer": matrixPath + "safe-buffer.js",
+    url: matrixPath + "url.js",
   },
   globals: {
     global: {
@@ -104,10 +127,19 @@ let loader = Loader({
     setTimeout,
     clearTimeout,
     location: { href: "" }, // workaround for browser-request's is_crossDomain
+
+    // Necessary for interacting with the logging framework.
+    scriptError,
+    imIDebugMessage: Ci.imIDebugMessage,
   },
 });
 
 let requirer = Module("matrix-module", "");
 let require = Require(loader, requirer);
+
+// The main entry point into the Matrix client.
 let MatrixSDK = require("matrix.js");
 MatrixSDK.request(require("browser-request"));
+
+// Helper functions.
+let getHttpUriForMxc = require("../content-repo").getHttpUriForMxc;

@@ -2,12 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = ["allContacts", "onlineContacts", "ChatCore"];
+const EXPORTED_SYMBOLS = ["allContacts", "onlineContacts", "ChatCore"];
 
 const { Services } = ChromeUtils.import("resource:///modules/imServices.jsm");
-const { fixIterator } = ChromeUtils.import(
-  "resource:///modules/iteratorUtils.jsm"
-);
 const { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
@@ -24,7 +21,7 @@ var ChatCore = {
     }
     this._initializing = true;
 
-    ChromeUtils.import("resource:///modules/index_im.jsm", null);
+    ChromeUtils.import("resource:///modules/index_im.jsm");
 
     Services.obs.addObserver(this, "browser-request");
     Services.obs.addObserver(this, "contact-signed-on");
@@ -49,11 +46,11 @@ var ChatCore = {
           // the user has used an older version of Thunderbird on a
           // profile with IM accounts. See bug 736035.
           let accountsById = {};
-          for (let account of fixIterator(Services.accounts.getAccounts())) {
+          for (let account of Services.accounts.getAccounts()) {
             accountsById[account.numericId] = account;
           }
           let mgr = MailServices.accounts;
-          for (let account of fixIterator(mgr.accounts, Ci.nsIMsgAccount)) {
+          for (let account of mgr.accounts) {
             let incomingServer = account.incomingServer;
             if (!incomingServer || incomingServer.type != "im") {
               continue;
@@ -99,7 +96,7 @@ var ChatCore = {
     if (aTopic == "browser-request") {
       Services.ww.openWindow(
         null,
-        "chrome://chat/content/browserRequest.xul",
+        "chrome://chat/content/browserRequest.xhtml",
         null,
         "chrome",
         aSubject

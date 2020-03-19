@@ -2,8 +2,8 @@
 
 /* Test of accessing over 2 GiB local folder. */
 
-/* import-globals-from ../../../test/resources/messageGenerator.js */
-load("../../../resources/messageGenerator.js");
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
+load("../../../resources/MessageGenerator.jsm");
 var bugmail10 = do_get_file("../../../data/bugmail10");
 
 Services.prefs.setCharPref(
@@ -68,9 +68,7 @@ function run_test() {
 
 // Get message whose offset is over 2 GiB.
 function getMessageHdr() {
-  let msgEnum = localAccountUtils.inboxFolder.msgDatabase.EnumerateMessages();
-  while (msgEnum.hasMoreElements()) {
-    let header = msgEnum.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+  for (let header of localAccountUtils.inboxFolder.msgDatabase.EnumerateMessages()) {
     if (header.messageOffset >= 0x80000000) {
       return header;
     }

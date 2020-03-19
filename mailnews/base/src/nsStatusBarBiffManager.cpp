@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -156,8 +156,8 @@ nsStatusBarBiffManager::OnItemRemoved(nsIMsgFolder *parentItem,
 NS_IMETHODIMP
 nsStatusBarBiffManager::OnItemPropertyChanged(nsIMsgFolder *item,
                                               const nsACString &property,
-                                              const char *oldValue,
-                                              const char *newValue) {
+                                              const nsACString &oldValue,
+                                              const nsACString &newValue) {
   return NS_OK;
 }
 
@@ -202,10 +202,9 @@ nsStatusBarBiffManager::OnItemBoolPropertyChanged(nsIMsgFolder *item,
 }
 
 NS_IMETHODIMP
-nsStatusBarBiffManager::OnItemUnicharPropertyChanged(nsIMsgFolder *item,
-                                                     const nsACString &property,
-                                                     const char16_t *oldValue,
-                                                     const char16_t *newValue) {
+nsStatusBarBiffManager::OnItemUnicharPropertyChanged(
+    nsIMsgFolder *item, const nsACString &property, const nsAString &oldValue,
+    const nsAString &newValue) {
   return NS_OK;
 }
 

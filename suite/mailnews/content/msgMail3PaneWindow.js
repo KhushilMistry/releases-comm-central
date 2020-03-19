@@ -216,9 +216,12 @@ var folderListener =
           }
           // Folder loading is over,
           // now issue quick search if there is an email address.
-          viewDebug("in folder loaded gVirtualFolderTerms = " + gVirtualFolderTerms + "\n");
-          viewDebug("in folder loaded gMsgFolderSelected = " +
-                    gMsgFolderSelected && gMsgFolderSelected.URI + "\n");
+          if (gVirtualFolderTerms)
+            viewDebug("in folder loaded gVirtualFolderTerms = " +
+                      gVirtualFolderTerms + "\n");
+          if (gMsgFolderSelected)
+            viewDebug("in folder loaded gMsgFolderSelected = " +
+                      gMsgFolderSelected.URI + "\n");
           if (rerootingFolder)
           {
             if (gSearchEmailAddress)
@@ -233,7 +236,8 @@ var folderListener =
               gDBView.viewFolder = gMsgFolderSelected;
               ViewChangeByFolder(gMsgFolderSelected);
             }
-            else if (gMsgFolderSelected.flags & nsMsgFolderFlags.Virtual)
+            else if (gMsgFolderSelected &&
+                     gMsgFolderSelected.flags & nsMsgFolderFlags.Virtual)
             {
               viewDebug("selected folder is virtual\n");
               gDefaultSearchViewTerms = null;
@@ -711,7 +715,6 @@ function OnLoadMessenger()
   InitMsgWindow();
   messenger.setWindow(window, msgWindow);
 
-  InitializeDataSources();
   InitPanes();
 
   MigrateJunkMailSettings();
@@ -832,32 +835,8 @@ function MailWindowIsClosing(aCancelQuit, aTopic, aData)
       aCancelQuit.data)
     return false;
 
-  let reallyClose = true;
-  let numtabs = GetTabMail().tabInfo.length;
-  if (numtabs > 1)
-  {
-    let shouldPrompt = Services.prefs.getBoolPref("browser.tabs.warnOnClose");
-    if (shouldPrompt)
-    {
-      // default to true: if it were false, we wouldn't get this far
-      let warnOnClose = {value: true};
-      let buttonPressed = Services.prompt.confirmEx(
-        window,
-        gMessengerBundle.getString('tabs.closeWarningTitle'),
-        gMessengerBundle.getFormattedString("tabs.closeWarning", [numtabs], 1),
-        (Services.prompt.BUTTON_TITLE_IS_STRING * Services.prompt.BUTTON_POS_0) +
-        (Services.prompt.BUTTON_TITLE_CANCEL * Services.prompt.BUTTON_POS_1),
-        gMessengerBundle.getString('tabs.closeButton'),
-        null,
-        null,
-        gMessengerBundle.getString('tabs.closeWarningPromptMe'),
-        warnOnClose);
-      reallyClose = (buttonPressed == 0);
-      // don't set the pref unless OK was pressed and it's false
-      if (reallyClose && !warnOnClose.value)
-        Services.prefs.setBoolPref("browser.tabs.warnOnClose", false);
-    }
-  }
+  let tabmail = GetTabMail();
+  let reallyClose = tabmail.warnAboutClosingTabs(tabmail.closingTabsEnum.ALL);
 
   if (!reallyClose && aTopic == "quit-application-requested")
     aCancelQuit.data = true;
@@ -962,21 +941,15 @@ function loadStartFolder(initialUri)
 
 function AddToSession()
 {
-  try {
-    var mailSession = Cc["@mozilla.org/messenger/services/session;1"]
-                        .getService(Ci.nsIMsgMailSession);
-    var nsIFolderListener = Ci.nsIFolderListener;
-    var notifyFlags = nsIFolderListener.intPropertyChanged | nsIFolderListener.event;
-    mailSession.AddFolderListener(folderListener, notifyFlags);
-  } catch (ex) {
-    dump("Error adding to session\n");
-  }
+  var nsIFolderListener = Ci.nsIFolderListener;
+  var notifyFlags = nsIFolderListener.intPropertyChanged |
+                    nsIFolderListener.event;
+  MailServices.mailSession.AddFolderListener(folderListener, notifyFlags);
 }
 
 function InitPanes()
 {
   OnLoadFolderPane();
-  OnLoadLocationTree();
   OnLoadThreadPane();
   SetupCommandUpdateHandlers();
 }
@@ -985,14 +958,6 @@ function UnloadPanes()
 {
   // Call to <mail3PaneWindowCommands.js>.
   UnloadCommandUpdateHandlers();
-}
-
-function InitializeDataSources()
-{
-  //Setup common mailwindow stuff.
-  AddDataSources();
-
-  SetupMoveCopyMenus('goMenu', accountManagerDataSource, folderDataSource);
 }
 
 function AddMutationObserver(callback)
@@ -1047,22 +1012,6 @@ function UpdateAttachmentCol()
   threadTree.setAttribute("noattachcol", attachmentCol.getAttribute("hidden"));
   threadTree.treeBoxObject.clearStyleAndImageCaches();
   return attachmentCol;
-}
-
-function OnLoadLocationTree()
-{
-  var locationTree = document.getElementById("folderLocationPopup").tree;
-  if (locationTree)
-  {
-    locationTree.database.AddDataSource(accountManagerDataSource);
-    locationTree.database.AddDataSource(folderDataSource);
-    locationTree.setAttribute("ref", "msgaccounts:/");
-  }
-}
-
-function OnLocationTreeSelect(menulist)
-{
-  SelectFolder(menulist.getAttribute('uri'));
 }
 
 function UpdateLocationBar(resource)
@@ -1224,6 +1173,13 @@ function TreeOnMouseDown(event)
     ChangeSelectionWithoutContentLoad(event, event.target.parentNode);
 }
 
+function FolderPaneContextMenuNewTab(event) {
+  var bgLoad = Services.prefs.getBoolPref("mail.tabs.loadInBackground");
+  if (event.shiftKey)
+    bgLoad = !bgLoad;
+  MsgOpenNewTabForFolder(bgLoad);
+}
+
 function FolderPaneOnClick(event)
 {
   // usually, we're only interested in tree content clicks, not scrollbars etc.
@@ -1235,7 +1191,7 @@ function FolderPaneOnClick(event)
   {
     if (AllowOpenTabOnMiddleClick())
     {
-      MsgOpenNewTabForFolder();
+      FolderPaneContextMenuNewTab(event);
       RestoreSelectionWithoutContentLoad(GetFolderTree());
       return;
     }
@@ -1269,7 +1225,7 @@ function FolderPaneDoubleClick(folderIndex, event)
   // We either open the folder in a tab or a new window...
   if (AllowOpenTabOnDoubleClick())
   {
-    MsgOpenNewTabForFolder();
+    FolderPaneContextMenuNewTab(event);
   }
   else
   {
@@ -1283,6 +1239,14 @@ function FolderPaneDoubleClick(folderIndex, event)
   // This will happen if we don't prevent the event from bubbling to the
   // default handler in tree.xml.
   event.stopPropagation();
+}
+
+function OpenMessageInNewTab(event) {
+  var bgLoad = Services.prefs.getBoolPref("mail.tabs.loadInBackground");
+  if (event.shiftKey)
+    bgLoad = !bgLoad;
+
+  MsgOpenNewTabForMessage(bgLoad);
 }
 
 function ChangeSelection(tree, newIndex)
@@ -1405,8 +1369,12 @@ function EnsureFolderIndex(builder, msgFolder)
 
 function SelectFolder(folderUri)
 {
-  var folderTree = GetFolderTree();
   let msgFolder = GetMsgFolderFromUri(folderUri);
+  SelectMsgFolder(msgFolder);
+}
+
+function SelectMsgFolder(msgFolder) {
+  var folderTree = GetFolderTree();
 
   // Before we can select a folder, we need to make sure it is "visible"
   // in the tree. To do that, we need to ensure that all its

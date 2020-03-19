@@ -1,117 +1,22 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * file, you can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "prprf.h"
+#include "nsImportAddressBooks.h"
+
 #include "plstr.h"
-#include "nsCOMPtr.h"
-#include "nsMsgUtils.h"
 #include "nsIImportService.h"
-#include "nsIImportAddressBooks.h"
-#include "nsIImportGeneric.h"
 #include "nsISupportsPrimitives.h"
 #include "nsIImportABDescriptor.h"
-#include "nsIImportFieldMap.h"
-#include "nsString.h"
-#include "nsIFile.h"
-#include "nsIAddrDatabase.h"
 #include "nsIAbManager.h"
-#include "nsIAbLDIFService.h"
 #include "nsAbBaseCID.h"
-#include "nsIStringBundle.h"
 #include "nsImportStringBundle.h"
 #include "nsTextFormatter.h"
-#include "nsServiceManagerUtils.h"
 #include "msgCore.h"
 #include "ImportDebug.h"
-#include "nsIAbMDBDirectory.h"
-#include "nsComponentManagerUtils.h"
-#include "nsIArray.h"
-#include "nsCOMArray.h"
 #include "nsArrayUtils.h"
-
-static void ImportAddressThread(void *stuff);
-
-class AddressThreadData;
-
-class nsImportGenericAddressBooks : public nsIImportGeneric {
- public:
-  nsImportGenericAddressBooks();
-
-  NS_DECL_THREADSAFE_ISUPPORTS
-
-  /* nsISupports GetData (in string dataId); */
-  NS_IMETHOD GetData(const char *dataId, nsISupports **_retval) override;
-
-  NS_IMETHOD SetData(const char *dataId, nsISupports *pData) override;
-
-  NS_IMETHOD GetStatus(const char *statusKind, int32_t *_retval) override;
-
-  NS_IMETHOD WantsProgress(bool *_retval) override;
-
-  NS_IMETHOD BeginImport(nsISupportsString *successLog,
-                         nsISupportsString *errorLog, bool *_retval) override;
-
-  NS_IMETHOD ContinueImport(bool *_retval) override;
-
-  NS_IMETHOD GetProgress(int32_t *_retval) override;
-
-  NS_IMETHOD CancelImport(void) override;
-
- private:
-  virtual ~nsImportGenericAddressBooks();
-  void GetDefaultLocation(void);
-  void GetDefaultBooks(void);
-  void GetDefaultFieldMap(void);
-
- public:
-  static void SetLogs(nsString &success, nsString &error,
-                      nsISupportsString *pSuccess, nsISupportsString *pError);
-  static void ReportError(const char16_t *pName, nsString *pStream,
-                          nsIStringBundle *aBundle);
-
- private:
-  nsCOMPtr<nsIImportAddressBooks> m_pInterface;
-  nsCOMPtr<nsIArray> m_Books;
-  nsCOMArray<nsIAddrDatabase> m_DBs;
-  nsCOMPtr<nsIFile> m_pLocation;
-  nsCOMPtr<nsIImportFieldMap> m_pFieldMap;
-  bool m_autoFind;
-  char16_t *m_description;
-  bool m_gotLocation;
-  bool m_found;
-  bool m_userVerify;
-  nsCOMPtr<nsISupportsString> m_pSuccessLog;
-  nsCOMPtr<nsISupportsString> m_pErrorLog;
-  uint32_t m_totalSize;
-  bool m_doImport;
-  AddressThreadData *m_pThreadData;
-  nsCString m_pDestinationUri;
-  nsCOMPtr<nsIStringBundle> m_stringBundle;
-};
-
-class AddressThreadData {
- public:
-  bool driverAlive;
-  bool threadAlive;
-  bool abort;
-  bool fatalError;
-  uint32_t currentTotal;
-  uint32_t currentSize;
-  nsCOMPtr<nsIArray> books;
-  nsCOMArray<nsIAddrDatabase> *dBs;
-  nsCOMPtr<nsIAbLDIFService> ldifService;
-  nsCOMPtr<nsIImportAddressBooks> addressImport;
-  nsCOMPtr<nsIImportFieldMap> fieldMap;
-  nsCOMPtr<nsISupportsString> successLog;
-  nsCOMPtr<nsISupportsString> errorLog;
-  nsCString pDestinationUri;
-  nsCOMPtr<nsIStringBundle> stringBundle;
-
-  AddressThreadData();
-  ~AddressThreadData();
-};
+#include "nsDirPrefs.h"
 
 nsresult NS_NewGenericAddressBooks(nsIImportGeneric **aImportGeneric) {
   NS_ASSERTION(aImportGeneric != nullptr, "null ptr");
@@ -415,7 +320,7 @@ void nsImportGenericAddressBooks::SetLogs(nsString &success, nsString &error,
   }
 }
 
-already_AddRefed<nsIAddrDatabase> GetAddressBookFromUri(const char *pUri) {
+already_AddRefed<nsIAbDirectory> GetAddressBookFromUri(const char *pUri) {
   if (!pUri) return nullptr;
 
   nsCOMPtr<nsIAbManager> abManager = do_GetService(NS_ABMANAGER_CONTRACTID);
@@ -425,16 +330,10 @@ already_AddRefed<nsIAddrDatabase> GetAddressBookFromUri(const char *pUri) {
   abManager->GetDirectory(nsDependentCString(pUri), getter_AddRefs(directory));
   if (!directory) return nullptr;
 
-  nsCOMPtr<nsIAbMDBDirectory> mdbDirectory = do_QueryInterface(directory);
-  if (!mdbDirectory) return nullptr;
-
-  nsCOMPtr<nsIAddrDatabase> pDatabase;
-  mdbDirectory->GetDatabase(getter_AddRefs(pDatabase));
-  return pDatabase.forget();
+  return directory.forget();
 }
 
-already_AddRefed<nsIAddrDatabase> GetAddressBook(const char16_t *name,
-                                                 bool makeNew) {
+already_AddRefed<nsIAbDirectory> GetAddressBook(nsString name, bool makeNew) {
   if (!makeNew) {
     // FIXME: How do I get the list of address books and look for a
     // specific name.  Major bogosity!
@@ -444,71 +343,19 @@ already_AddRefed<nsIAddrDatabase> GetAddressBook(const char16_t *name,
   IMPORT_LOG0("In GetAddressBook\n");
 
   nsresult rv;
-  nsCOMPtr<nsIAddrDatabase> pDatabase;
-  nsCOMPtr<nsIFile> dbPath;
+  nsCOMPtr<nsIAbDirectory> directory;
   nsCOMPtr<nsIAbManager> abManager =
       do_GetService(NS_ABMANAGER_CONTRACTID, &rv);
   if (NS_SUCCEEDED(rv)) {
-    /* Get the profile directory */
-    rv = abManager->GetUserProfileDirectory(getter_AddRefs(dbPath));
+    nsAutoCString dirPrefId;
+    rv = abManager->NewAddressBook(name, EmptyCString(), JSDirectory,
+                                   EmptyCString(), dirPrefId);
     if (NS_SUCCEEDED(rv)) {
-      // Create a new address book file - we don't care what the file
-      // name is, as long as it's unique
-      rv = dbPath->Append(NS_LITERAL_STRING("impab.mab"));
-      if (NS_SUCCEEDED(rv)) {
-        rv = dbPath->CreateUnique(nsIFile::NORMAL_FILE_TYPE, 0600);
-
-        if (NS_SUCCEEDED(rv)) {
-          IMPORT_LOG0("Getting the address database factory\n");
-
-          nsCOMPtr<nsIAddrDatabase> addrDBFactory =
-              do_GetService(NS_ADDRDATABASE_CONTRACTID, &rv);
-          if (NS_FAILED(rv)) return nullptr;
-
-          IMPORT_LOG0("Opening the new address book\n");
-          rv = addrDBFactory->Open(dbPath, true, true,
-                                   getter_AddRefs(pDatabase));
-        }
-      }
+      rv = abManager->GetDirectoryFromId(dirPrefId, getter_AddRefs(directory));
     }
   }
-  if (NS_FAILED(rv)) {
-    IMPORT_LOG0(
-        "Failed to get the user profile directory from the address book "
-        "session\n");
-  }
 
-  if (pDatabase && dbPath) {
-    // We made a database, add it to the UI?!?!?!?!?!?!
-    // This is major bogosity again!  Why doesn't the address book
-    // just handle this properly for me?  Uggggg...
-
-    nsCOMPtr<nsIAbDirectory> parentDir;
-    abManager->GetDirectory(NS_LITERAL_CSTRING(kAllDirectoryRoot),
-                            getter_AddRefs(parentDir));
-    if (parentDir) {
-      nsAutoCString URI("moz-abmdbdirectory://");
-      nsAutoCString leafName;
-      rv = dbPath->GetNativeLeafName(leafName);
-      if (NS_FAILED(rv))
-        IMPORT_LOG0("*** Error: Unable to get name of database file\n");
-      else {
-        URI.Append(leafName);
-        rv = parentDir->CreateDirectoryByURI(nsDependentString(name), URI);
-        if (NS_FAILED(rv))
-          IMPORT_LOG0("*** Error: Unable to create address book directory\n");
-      }
-    }
-
-    if (NS_SUCCEEDED(rv))
-      IMPORT_LOG0("Added new address book to the UI\n");
-    else
-      IMPORT_LOG0(
-          "*** Error: An error occurred while adding the address book to the "
-          "UI\n");
-  }
-
-  return pDatabase.forget();
+  return directory.forget();
 }
 
 NS_IMETHODIMP nsImportGenericAddressBooks::BeginImport(
@@ -565,14 +412,17 @@ NS_IMETHODIMP nsImportGenericAddressBooks::BeginImport(
   // Create/obtain any address books that we need here, so that we don't need
   // to do so inside the import thread which would just proxy the create
   // operations back to the main thread anyway.
-  nsCOMPtr<nsIAddrDatabase> db = GetAddressBookFromUri(m_pDestinationUri.get());
+  nsCOMPtr<nsIAbDirectory> db;
+  if (!m_pDestinationUri.IsEmpty()) {
+    db = GetAddressBookFromUri(m_pDestinationUri.get());
+  }
   for (uint32_t i = 0; i < count; ++i) {
     nsCOMPtr<nsIImportABDescriptor> book = do_QueryElementAt(m_Books, i);
     if (book) {
       if (!db) {
         nsString name;
         book->GetPreferredName(name);
-        db = GetAddressBook(name.get(), true);
+        db = GetAddressBook(name, true);
       }
       m_DBs.AppendObject(db);
     }
@@ -696,7 +546,7 @@ static void ImportAddressThread(void *stuff) {
         nsString name;
         book->GetPreferredName(name);
 
-        nsCOMPtr<nsIAddrDatabase> db = pData->dBs->ObjectAt(i);
+        nsCOMPtr<nsIAbDirectory> db = pData->dBs->ObjectAt(i);
 
         bool fatalError = false;
         pData->currentSize = size;
@@ -738,8 +588,6 @@ static void ImportAddressThread(void *stuff) {
 
         pData->currentSize = 0;
         pData->currentTotal += size;
-
-        if (db) db->Close(true);
 
         if (fatalError) {
           pData->fatalError = true;

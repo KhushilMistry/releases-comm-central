@@ -6,7 +6,7 @@
 
 /* import-globals-from ../calendar-ui-utils.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { PluralForm } = ChromeUtils.import("resource://gre/modules/PluralForm.jsm");
 
 /**
@@ -30,9 +30,9 @@ function onLoad() {
 
   if (gCalendar.getProperty("capabilities.username.supported") === true) {
     document.getElementById("calendar-username").value = gCalendar.getProperty("username");
-    document.getElementById("calendar-username-row").hidden = false;
+    document.getElementById("calendar-username-row").toggleAttribute("hidden", false);
   } else {
-    document.getElementById("calendar-username-row").hidden = true;
+    document.getElementById("calendar-username-row").toggleAttribute("hidden", true);
   }
 
   // Set up refresh interval
@@ -54,7 +54,10 @@ function onLoad() {
   let suppressAlarms = gCalendar.getProperty("suppressAlarms");
   document.getElementById("fire-alarms").checked = !suppressAlarms;
 
-  suppressAlarmsRow.hidden = gCalendar.getProperty("capabilities.alarms.popup.supported") === false;
+  suppressAlarmsRow.toggleAttribute(
+    "hidden",
+    gCalendar.getProperty("capabilities.alarms.popup.supported") === false
+  );
 
   // Set up the disabled checkbox
   let calendarDisabled = false;
@@ -64,7 +67,10 @@ function onLoad() {
   } else {
     calendarDisabled = gCalendar.getProperty("disabled");
     document.getElementById("calendar-enabled-checkbox").checked = !calendarDisabled;
-    document.documentElement.getButton("extra1").setAttribute("hidden", "true");
+    document
+      .getElementById("calendar-properties-dialog-2")
+      .getButton("extra1")
+      .setAttribute("hidden", "true");
   }
   setupEnabledCheckbox();
 
@@ -156,7 +162,9 @@ function initRefreshInterval() {
     return menuitem;
   }
 
-  setBooleanAttribute("calendar-refreshInterval-row", "hidden", !gCalendar.canRefresh);
+  document
+    .getElementById("calendar-refreshInterval-row")
+    .toggleAttribute("hidden", !gCalendar.canRefresh);
 
   if (gCalendar.canRefresh) {
     let refreshInterval = gCalendar.getProperty("refreshInterval");
@@ -185,7 +193,7 @@ function initRefreshInterval() {
     if (!foundValue) {
       // Special menuitem in case the user changed the value in the config editor.
       let menuitem = createMenuItem(refreshInterval);
-      separator.parentNode.insertBefore(menuitem, separator.nextSibling);
+      separator.parentNode.insertBefore(menuitem, separator.nextElementSibling);
       menulist.selectedItem = menuitem;
     }
   }

@@ -11,7 +11,6 @@
 <?xul-overlay href="chrome://communicator/content/tasksOverlay.xul"?>
 <?xul-overlay href="chrome://communicator/content/contentAreaContextOverlay.xul"?>
 <?xul-overlay href="chrome://messenger/content/addressbook/abResultsPaneOverlay.xul"?>
-<?xul-overlay href="chrome://navigator/content/platformMailOverlay.xul"?>
 
 <!DOCTYPE window [
 <!ENTITY % abMainWindowDTD SYSTEM "chrome://messenger/locale/addressbook/abMainWindow.dtd" >
@@ -112,10 +111,13 @@
   <key id="key_newNavigator"/>
   <key id="key_newPrivateWindow"/>
   <key id="key_newBlankPage"/>
-  <key id="key_newMessage"
-       key="&newMessageCmd.key;"
-       command="cmd_newMessage"
-       modifiers="accel"/>
+#ifdef XP_MACOSX
+  <key id="key_newMessage" key="&newMessageCmd.key;"
+       modifiers="accel,shift" command="cmd_newMessage"/>
+#else
+  <key id="key_newMessage" key="&newMessageCmd.key;"
+       modifiers="accel" command="cmd_newMessage"/>
+#endif
   <key id="key_printCard" key="&printContactViewCmd.key;"
        command="cmd_printcard" modifiers="accel"/>
   <key id="key_close"/>
@@ -131,7 +133,16 @@
   <key id="key_properties" key="&propertiesCmd.key;" command="cmd_properties" modifiers="accel"/>
 
   <!-- View Menu -->
-  <key id="key_toggleDirectoryPane" oncommand="togglePaneSplitter('dirTree-splitter');"/>
+#ifndef XP_MACOSX
+  <key id="key_toggleDirectoryPane"
+       keycode="VK_F9"
+       oncommand="togglePaneSplitter('dirTree-splitter');"/>
+#else
+  <key id="key_toggleDirectoryPane"
+       key="&toggleDirectoryPaneCmd.key;"
+       modifiers="accel,alt"
+       oncommand="togglePaneSplitter('dirTree-splitter');"/>
+#endif
 
   <!-- Tab/F6 Keys -->
   <key keycode="VK_TAB" oncommand="SwitchPaneFocus(event);" modifiers="control,shift"/>
@@ -248,6 +259,7 @@
             <menuitem id="menu_close"/>
             <menuseparator/>
             <menuitem id="menu_printSetup"/>
+#ifndef XP_MACOSX
             <menuitem id="printPreviewMenuItem"
                       label="&printPreviewContactViewCmd.label;"
                       accesskey="&printPreviewContactViewCmd.accesskey;"
@@ -256,6 +268,7 @@
                       label="&printPreviewAddressBook.label;"
                       accesskey="&printPreviewAddressBook.accesskey;"
                       command="cmd_printPreviewAddressBook"/>
+#endif
             <menuitem id="printMenuItem" label="&printContactViewCmd.label;"
                       accesskey="&printContactViewCmd.accesskey;"
                       key="key_printCard"

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* import-globals-from calendar-common-sets.js */
+/* import-globals-from calendar-command-controller.js */
 
 /* exported CalendarTaskTreeView */
 
@@ -242,12 +242,12 @@ class CalendarTaskTreeView {
     }
 
     // Alarm status atom.
-    if (item.getAlarms({}).length) {
+    if (item.getAlarms().length) {
       properties.push("alarm");
     }
 
     // Task categories.
-    properties = properties.concat(item.getCategories({}).map(cal.view.formatStringForCSSRule));
+    properties = properties.concat(item.getCategories().map(cal.view.formatStringForCSSRule));
 
     return properties.join(" ");
   }
@@ -311,7 +311,7 @@ class CalendarTaskTreeView {
         return task.percentComplete > 0 ? task.percentComplete + "%" : "";
       case "categories":
         // TODO This is l10n-unfriendly.
-        return task.getCategories({}).join(", ");
+        return task.getCategories().join(", ");
       case "location":
         return task.getProperty("LOCATION");
       case "status":

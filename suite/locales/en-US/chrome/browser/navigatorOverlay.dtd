@@ -15,12 +15,14 @@
 
 <!ENTITY closeOtherTabs.label "Close Other Tabs">
 <!ENTITY closeOtherTabs.accesskey "T">
+<!-- LOCALIZATION NOTE (closeTabsToTheEnd.label): This should indicate the
+direction in which tabs are closed, i.e. locales that use RTL mode should say
+left instead of right. -->
+<!ENTITY  closeTabsToTheEnd.label "Close Tabs to the Right">
+<!ENTITY  closeTabsToTheEnd.accesskey "i">
 
 <!ENTITY uploadFile.label "Upload File…">
 <!ENTITY uploadFile.accesskey "F">
-
-<!ENTITY printSetupCmd.label "Page Setup…">
-<!ENTITY printSetupCmd.accesskey "u">
 
 <!-- Edit Menu -->
 <!ENTITY findOnCmd.label "Find in This Page…">
@@ -56,10 +58,16 @@
 <!-- Go Menu -->
 <!ENTITY goMenu.label "Go">
 <!ENTITY goMenu.accesskey "G">
+<!ENTITY goBackCmd.commandKey "[">
+<!ENTITY goForwardCmd.commandKey "]">
 <!ENTITY goHomeCmd.label "Home">
 <!ENTITY goHomeCmd.accesskey "H">
 <!ENTITY historyCmd.label "History">
 <!ENTITY historyCmd.accesskey "s">
+<!-- LOCALIZATION NOTE (historyCmd.key): This is used only on the mac. -->
+<!ENTITY historyCmd.key "H">
+<!-- LOCALIZATION NOTE (history.commandKey): This is used on platforms other
+     than the mac instead of historyCmd.key. -->
 <!ENTITY history.commandKey "h">
 <!ENTITY recentTabs.label "Recently Closed Tabs">
 <!ENTITY recentTabs.accesskey "C">
@@ -144,3 +152,6 @@
 
 <!ENTITY clearPrivateDataCmd.label "Clear Private Data…">
 <!ENTITY clearPrivateDataCmd.accesskey "e">
+
+<!ENTITY stopCmd.macCommandKey ".">
+<!ENTITY fullScreenCmd.commandKey "f">

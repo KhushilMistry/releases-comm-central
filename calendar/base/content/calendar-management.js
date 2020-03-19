@@ -9,11 +9,11 @@
  *         calendarOfflineManager
  */
 
-/* import-globals-from dialogs/calendar-migration-dialog.js */
-/* import-globals-from calendar-common-sets.js */
+/* import-globals-from calendar-migration.js */
+/* import-globals-from calendar-command-controller.js */
 /* import-globals-from calendar-ui-utils.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 /**
@@ -37,7 +37,7 @@ function promptDeleteCalendar(aCalendar) {
   const cICM = Ci.calICalendarManager;
 
   let calMgr = cal.getCalendarManager();
-  let calendars = calMgr.getCalendars({});
+  let calendars = calMgr.getCalendars();
   if (calendars.length <= 1) {
     // If this is the last calendar, don't delete it.
     return;
@@ -106,7 +106,7 @@ function loadCalendarManager() {
   compositeCalendar.addObserver(compositeObserver);
 
   // Create the home calendar if no calendar exists.
-  let calendars = cal.getCalendarManager().getCalendars({});
+  let calendars = cal.getCalendarManager().getCalendars();
   if (calendars.length) {
     // migration code to make sure calendars, which do not support caching have cache enabled
     // required to further clean up on top of bug 1182264
@@ -124,7 +124,7 @@ function loadCalendarManager() {
 
   let calendarManager = cal.getCalendarManager();
 
-  for (let calendar of sortCalendarArray(cal.getCalendarManager().getCalendars({}))) {
+  for (let calendar of sortCalendarArray(cal.getCalendarManager().getCalendars())) {
     addCalendarItem(calendar);
   }
 
@@ -242,14 +242,14 @@ function loadCalendarManager() {
     }
 
     if (event.target == calendarList) {
-      calendarList.lastChild.setAttribute("drop-on", "bottom");
+      calendarList.lastElementChild.setAttribute("drop-on", "bottom");
       return;
     }
 
     let item = event.target.closest("richlistitem");
     if (item) {
       // If we're dragging/dropping in bottom half of attachmentitem,
-      // adjust target to target.nextSibling (to show dropmarker above that).
+      // adjust target to target.nextElementSibling (to show dropmarker above that).
       if ((event.screenY - item.screenY) / item.getBoundingClientRect().height >= 0.5) {
         item = item.nextElementSibling;
       }
@@ -391,6 +391,9 @@ function loadCalendarManager() {
       compositeCalendar.removeCalendar(calendar);
       let item = calendarList.getElementsByAttribute("calendar-id", calendar.id)[0];
       item.remove();
+      if (compositeCalendar.defaultCalendar.id == calendar.id) {
+        compositeCalendar.defaultCalendar = compositeCalendar.getCalendars()[0];
+      }
       saveSortOrder();
     },
     onCalendarDeleting(calendar) {},
@@ -484,16 +487,7 @@ function calendarListSetupContextMenu(event) {
 
   document.getElementById("list-calendars-context-menu").contextCalendar = calendar;
 
-  // Only enable calendar search if there's actually the chance of finding something:
-  let hasProviders = cal.getCalendarSearchService().getProviders({}).length < 1 && "true";
-  setElementValue("list-calendars-context-find", hasProviders, "collapsed");
-
   if (calendar) {
-    document.getElementById("list-calendars-context-edit").removeAttribute("disabled");
-    document.getElementById("list-calendars-context-publish").removeAttribute("disabled");
-
-    document.getElementById("list-calendars-context-togglevisible").removeAttribute("disabled");
-    setElementValue("list-calendars-context-togglevisible", false, "collapsed");
     let stringName = composite.getCalendarById(calendar.id) ? "hideCalendar" : "showCalendar";
     setElementValue(
       "list-calendars-context-togglevisible",
@@ -504,32 +498,24 @@ function calendarListSetupContextMenu(event) {
       .getElementById("list-calendars-context-togglevisible")
       .getAttribute(composite.getCalendarById(calendar.id) ? "accesskeyhide" : "accesskeyshow");
     setElementValue("list-calendars-context-togglevisible", accessKey, "accesskey");
-
-    document.getElementById("list-calendars-context-showonly").removeAttribute("disabled");
-    setElementValue("list-calendars-context-showonly", false, "collapsed");
     setElementValue(
       "list-calendars-context-showonly",
       cal.l10n.getCalString("showOnlyCalendar", [calendar.name]),
       "label"
     );
-
     setupDeleteMenuitem("list-calendars-context-delete", calendar);
-    // Only enable the delete calendars item if there is more than one
-    // calendar. We don't want to have the last calendar deleted.
-    let calendars = cal.getCalendarManager().getCalendars({});
-    setElementValue("list-calendars-context-delete", calendars.length < 2 && "true", "disabled");
+    for (let elem of event.target.querySelectorAll(".needs-calendar")) {
+      elem.removeAttribute("collapsed");
+    }
   } else {
-    document.getElementById("list-calendars-context-edit").setAttribute("disabled", "true");
-    document.getElementById("list-calendars-context-publish").setAttribute("disabled", "true");
-    document.getElementById("list-calendars-context-delete").setAttribute("disabled", "true");
-    document
-      .getElementById("list-calendars-context-togglevisible")
-      .setAttribute("disabled", "true");
-    setElementValue("list-calendars-context-togglevisible", true, "collapsed");
-    document.getElementById("list-calendars-context-showonly").setAttribute("disabled", "true");
-    setElementValue("list-calendars-context-showonly", true, "collapsed");
-    setupDeleteMenuitem("list-calendars-context-delete", null);
+    for (let elem of event.target.querySelectorAll(".needs-calendar")) {
+      elem.setAttribute("collapsed", "true");
+    }
   }
+
+  // Only enable calendar search if there's actually the chance of finding something:
+  let hasProviders = cal.getCalendarSearchService().getProviders().length < 1 && "true";
+  setElementValue("list-calendars-context-find", hasProviders, "collapsed");
 }
 
 /**
@@ -555,7 +541,6 @@ function setupDeleteMenuitem(aDeleteId, aCalendar) {
   let deleteItem = document.getElementById(aDeleteId);
   setElementValue(deleteItem, deleteItem.getAttribute("label" + type), "label");
   setElementValue(deleteItem, deleteItem.getAttribute("accesskey" + type), "accesskey");
-  setElementValue(deleteItem, modes.size == 0 && "true", "disabled");
 }
 
 /**
@@ -594,7 +579,7 @@ function toggleCalendarVisible(aCalendar) {
  */
 function showAllCalendars() {
   let composite = cal.view.getCompositeCalendar(window);
-  let cals = cal.getCalendarManager().getCalendars({});
+  let cals = cal.getCalendarManager().getCalendars();
 
   composite.startBatch();
   for (let calendar of cals) {
@@ -612,7 +597,7 @@ function showAllCalendars() {
  */
 function showOnlyCalendar(aCalendar) {
   let composite = cal.view.getCompositeCalendar(window);
-  let cals = composite.getCalendars({}) || [];
+  let cals = composite.getCalendars() || [];
 
   composite.startBatch();
   for (let calendar of cals) {
@@ -627,33 +612,42 @@ function showOnlyCalendar(aCalendar) {
 var compositeObserver = {
   QueryInterface: cal.generateQI([Ci.calIObserver, Ci.calICompositeObserver]),
 
-  onStartBatch: function() {},
-  onEndBatch: function() {},
-  onAddItem: function() {},
-  onModifyItem: function() {},
-  onDeleteItem: function() {},
-  onError: function() {},
-  onPropertyChanged: function() {},
-  onPropertyDeleting: function() {},
+  onStartBatch() {},
+  onEndBatch() {},
 
-  onLoad: function() {
+  onLoad() {
     calendarUpdateNewItemsCommand();
     document.commandDispatcher.updateCommands("calendar_commands");
   },
 
-  onCalendarAdded: function(aCalendar) {
+  onAddItem() {},
+  onModifyItem() {},
+  onDeleteItem() {},
+  onError() {},
+
+  onPropertyChanged(calendar, name, value, oldValue) {
+    if (name == "disabled") {
+      // Update commands when a calendar has been enabled or disabled.
+      calendarUpdateNewItemsCommand();
+      document.commandDispatcher.updateCommands("calendar_commands");
+    }
+  },
+
+  onPropertyDeleting() {},
+
+  onCalendarAdded(aCalendar) {
     // Update the calendar commands for number of remote calendars and for
     // more than one calendar
     document.commandDispatcher.updateCommands("calendar_commands");
   },
 
-  onCalendarRemoved: function(aCalendar) {
+  onCalendarRemoved(aCalendar) {
     // Update commands to disallow deleting the last calendar and only
     // allowing reload remote calendars when there are remote calendars.
     document.commandDispatcher.updateCommands("calendar_commands");
   },
 
-  onDefaultCalendarChanged: function(aNewCalendar) {
+  onDefaultCalendarChanged(aNewCalendar) {
     // A new default calendar may mean that the new calendar has different
     // ACLs. Make sure the commands are updated.
     calendarUpdateNewItemsCommand();
@@ -670,7 +664,7 @@ function openCalendarSubscriptionsDialog() {
 
   // open the dialog modally
   window.openDialog(
-    "chrome://calendar/content/calendar-subscriptions-dialog.xul",
+    "chrome://calendar/content/calendar-subscriptions-dialog.xhtml",
     "_blank",
     "chrome,titlebar,modal,resizable"
   );
@@ -682,7 +676,7 @@ function openCalendarSubscriptionsDialog() {
 var calendarOfflineManager = {
   QueryInterface: ChromeUtils.generateQI([Ci.nsIObserver]),
 
-  init: function() {
+  init() {
     if (this.initialized) {
       throw Cr.NS_ERROR_ALREADY_INITIALIZED;
     }
@@ -692,7 +686,7 @@ var calendarOfflineManager = {
     this.initialized = true;
   },
 
-  uninit: function() {
+  uninit() {
     if (!this.initialized) {
       throw Cr.NS_ERROR_NOT_INITIALIZED;
     }
@@ -700,11 +694,11 @@ var calendarOfflineManager = {
     this.initialized = false;
   },
 
-  isOnline: function() {
+  isOnline() {
     return !Services.io.offline;
   },
 
-  updateOfflineUI: function(aIsOffline) {
+  updateOfflineUI(aIsOffline) {
     // Refresh the current view
     currentView().goToDay(currentView().selectedDay);
 
@@ -712,7 +706,7 @@ var calendarOfflineManager = {
     document.commandDispatcher.updateCommands("calendar_commands");
   },
 
-  observe: function(aSubject, aTopic, aState) {
+  observe(aSubject, aTopic, aState) {
     if (aTopic == "network:offline-status-changed") {
       this.updateOfflineUI(aState == "offline");
     }

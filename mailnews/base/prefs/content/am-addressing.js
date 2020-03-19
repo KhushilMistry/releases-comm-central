@@ -9,7 +9,7 @@
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 function onLoad() {
-  parent.onPanelLoaded("am-addressing.xul");
+  parent.onPanelLoaded("am-addressing.xhtml");
 }
 
 function onInit(aPageId, aServerId) {
@@ -22,11 +22,8 @@ function onInitCompositionAndAddressing() {
 }
 
 function onEditDirectories() {
-  window.openDialog(
-    "chrome://messenger/content/addressbook/pref-editdirectories.xul",
-    "editDirectories",
-    "chrome,modal=yes,resizable=no",
-    null
+  parent.gSubDialog.open(
+    "chrome://messenger/content/addressbook/pref-editdirectories.xhtml"
   );
 }
 
@@ -41,11 +38,11 @@ function quoteEnabling() {
   var placebox = document.getElementById("placeBox");
 
   if (document.getElementById("identity.replyOnTop").value == "1") {
-    placebox.firstChild.removeAttribute("disabled");
-    placebox.lastChild.removeAttribute("disabled");
+    placebox.firstElementChild.removeAttribute("disabled");
+    placebox.lastElementChild.removeAttribute("disabled");
   } else {
-    placebox.firstChild.setAttribute("disabled", "true");
-    placebox.lastChild.setAttribute("disabled", "true");
+    placebox.firstElementChild.setAttribute("disabled", "true");
+    placebox.lastElementChild.setAttribute("disabled", "true");
   }
 }
 

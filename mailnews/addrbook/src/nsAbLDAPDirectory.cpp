@@ -16,7 +16,6 @@
 #include "nsArrayEnumerator.h"
 #include "nsEnumeratorUtils.h"
 #include "nsIAbLDAPAttributeMap.h"
-#include "nsIAbMDBDirectory.h"
 #include "nsIAbManager.h"
 #include "nsIAddrDatabase.h"
 #include "nsILDAPURL.h"
@@ -54,7 +53,7 @@ NS_IMPL_ISUPPORTS_INHERITED(nsAbLDAPDirectory, nsAbDirProperty,
 
 NS_IMETHODIMP nsAbLDAPDirectory::GetPropertiesChromeURI(nsACString &aResult) {
   aResult.AssignLiteral(
-      "chrome://messenger/content/addressbook/pref-directory-add.xul");
+      "chrome://messenger/content/addressbook/pref-directory-add.xhtml");
   return NS_OK;
 }
 
@@ -115,7 +114,7 @@ NS_IMETHODIMP nsAbLDAPDirectory::GetChildCards(nsISimpleEnumerator **result) {
     if (fileName.IsEmpty()) return NS_OK;
 
     // perform the same query, but on the local directory
-    nsAutoCString localDirectoryURI(NS_LITERAL_CSTRING(kMDBDirectoryRoot));
+    nsAutoCString localDirectoryURI(NS_LITERAL_CSTRING(kJSDirectoryRoot));
     localDirectoryURI.Append(fileName);
     if (mIsQueryURI) {
       localDirectoryURI.Append('?');
@@ -126,8 +125,11 @@ NS_IMETHODIMP nsAbLDAPDirectory::GetChildCards(nsISimpleEnumerator **result) {
         do_GetService(NS_ABMANAGER_CONTRACTID, &rv));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    nsCOMPtr<nsIAbDirectory> directory;
-    rv = abManager->GetDirectory(localDirectoryURI, getter_AddRefs(directory));
+    nsCOMPtr<nsIAbDirectory> directory =
+        do_CreateInstance(NS_ABJSDIRECTORY_CONTRACTID, &rv);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    rv = directory->Init(localDirectoryURI.get());
     NS_ENSURE_SUCCESS(rv, rv);
 
     rv = directory->GetChildCards(result);
@@ -235,22 +237,18 @@ NS_IMETHODIMP nsAbLDAPDirectory::SetLDAPURL(nsILDAPURL *aUrl) {
     NS_ENSURE_SUCCESS(rv, rv);
 
     // We inherit from nsIAbDirectory, so this static cast should be safe.
-    abManager->NotifyItemPropertyChanged(static_cast<nsIAbDirectory *>(this),
-                                         "IsSecure",
-                                         (newIsNotSecure ? u"true" : u"false"),
-                                         (newIsNotSecure ? u"false" : u"true"));
+    NS_NAMED_LITERAL_STRING(trueString, "true");
+    NS_NAMED_LITERAL_STRING(falseString, "false");
+    abManager->NotifyItemPropertyChanged(
+        static_cast<nsIAbDirectory *>(this), "IsSecure",
+        (newIsNotSecure ? trueString : falseString),
+        (newIsNotSecure ? falseString : trueString));
   }
 
   return NS_OK;
 }
 
-/*
- *
- * nsIAbDirectorySearch methods
- *
- */
-
-NS_IMETHODIMP nsAbLDAPDirectory::StartSearch() {
+nsresult nsAbLDAPDirectory::StartSearch() {
   if (!mIsQueryURI || mQueryString.IsEmpty()) return NS_OK;
 
   nsresult rv = Initiate();
@@ -306,7 +304,7 @@ NS_IMETHODIMP nsAbLDAPDirectory::StartSearch() {
   return rv;
 }
 
-NS_IMETHODIMP nsAbLDAPDirectory::StopSearch() {
+nsresult nsAbLDAPDirectory::StopSearch() {
   nsresult rv = Initiate();
   NS_ENSURE_SUCCESS(rv, rv);
 
@@ -625,23 +623,6 @@ NS_IMETHODIMP nsAbLDAPDirectory::GetReplicationFile(nsIFile **aResult) {
   profileDir.forget(aResult);
 
   return NS_OK;
-}
-
-NS_IMETHODIMP nsAbLDAPDirectory::GetReplicationDatabase(
-    nsIAddrDatabase **aResult) {
-  NS_ENSURE_ARG_POINTER(aResult);
-
-  nsresult rv;
-  nsCOMPtr<nsIFile> databaseFile;
-  rv = GetReplicationFile(getter_AddRefs(databaseFile));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<nsIAddrDatabase> addrDBFactory =
-      do_GetService(NS_ADDRDATABASE_CONTRACTID, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  return addrDBFactory->Open(databaseFile, false /* no create */, true,
-                             aResult);
 }
 
 NS_IMETHODIMP nsAbLDAPDirectory::AddCard(nsIAbCard *aUpdatedCard,

@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { Gloda } = ChromeUtils.import("resource:///modules/gloda/gloda.js");
+var { Gloda } = ChromeUtils.import("resource:///modules/gloda/Gloda.jsm");
 var { fixIterator } = ChromeUtils.import(
   "resource:///modules/iteratorUtils.jsm"
 );
@@ -86,15 +86,17 @@ function openIdentityEditor(identity) {
     ? gIdentityListBox.selectedIndex
     : gIdentityListBox.itemCount;
 
-  window.openDialog(
-    "am-identity-edit.xul",
-    "",
-    "chrome,modal,resizable,centerscreen",
-    args
+  parent.gSubDialog.open(
+    "chrome://messenger/content/am-identity-edit.xhtml",
+    null,
+    args,
+    onCloseIdentity
   );
 
-  if (args.result) {
-    refreshIdentityList(indexToSelect);
+  function onCloseIdentity() {
+    if (args.result) {
+      refreshIdentityList(indexToSelect);
+    }
   }
 }
 
@@ -211,4 +213,5 @@ function onDelete(event) {
 
 function onOk() {
   window.arguments[0].result = true;
+  window.dispatchEvent(new CustomEvent("prefchange"));
 }

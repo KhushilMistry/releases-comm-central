@@ -1,4 +1,4 @@
-  /* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+  /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
    */
   /* This Source Code Form is subject to the terms of the Mozilla Public
    * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1462,10 +1462,9 @@ case PR_CONTROL_ID:
 case PR_INITIAL_DETAILS_PANE:
   s = "PR_INITIAL_DETAILS_PANE";
   break;
-  /*
-   * Secure property id range
-   */
-
+/*
+ * Secure property id range
+ */
 case PROP_ID_SECURE_MIN:
   s = "PROP_ID_SECURE_MIN";
   break;

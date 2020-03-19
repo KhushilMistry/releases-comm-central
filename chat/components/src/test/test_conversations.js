@@ -5,10 +5,9 @@ var { Services } = ChromeUtils.import("resource:///modules/imServices.jsm");
 var { GenericConvIMPrototype, Message } = ChromeUtils.import(
   "resource:///modules/jsProtoHelper.jsm"
 );
-
 var imConversations = {};
 Services.scriptloader.loadSubScript(
-  "resource:///components/imConversations.js",
+  "resource:///modules/imConversations.jsm",
   imConversations
 );
 
@@ -240,8 +239,8 @@ var test_prpl_message_prep = function() {
   conv.prepareForSending = function(aMsg) {
     ok(aMsg.QueryInterface(Ci.imIOutgoingMessage), "Wrong message type.");
     equal(aMsg.message, msg, "Expected the original message.");
-    aMsg.message = prefix + aMsg.message;
     prepared = true;
+    return [prefix + aMsg.message];
   };
 
   conv.prepareForDisplaying = function(aMsg) {

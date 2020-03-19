@@ -8,7 +8,7 @@
  *          setFreebusyTimebarTime, onAttendeesInputKeyPress, onAttendeesInputBlur
  */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 var gStartDate = null;
@@ -99,7 +99,7 @@ function onLoad() {
   // attach an observer to get notified of changes
   // that are relevant to this dialog.
   let prefObserver = {
-    observe: function(aSubject, aTopic, aPrefName) {
+    observe(aSubject, aTopic, aPrefName) {
       switch (aPrefName) {
         case "calendar.view.daystarthour":
         case "calendar.view.dayendhour":
@@ -437,7 +437,7 @@ function editStartTimezone() {
 
   // Open the dialog modally
   openDialog(
-    "chrome://calendar/content/calendar-event-dialog-timezone.xul",
+    "chrome://calendar/content/calendar-event-dialog-timezone.xhtml",
     "_blank",
     "chrome,titlebar,modal,resizable",
     args
@@ -468,7 +468,7 @@ function editEndTimezone() {
 
   // Open the dialog modally
   openDialog(
-    "chrome://calendar/content/calendar-event-dialog-timezone.xul",
+    "chrome://calendar/content/calendar-event-dialog-timezone.xhtml",
     "_blank",
     "chrome,titlebar,modal,resizable",
     args
@@ -905,11 +905,9 @@ function onTimebar(event) {
   // with plain xul and css, at least as far as i know.
   let timebar = document.getElementById("timebar");
   let scrollbar = document.getElementById("horizontal-scrollbar");
-  document.documentElement.style.setProperty(
-    "--spacer-top-height",
-    timebar.getBoundingClientRect().height + "px"
-  );
-  document.documentElement.style.setProperty(
+  let dialog = document.getElementById("calendar-event-dialog-attendees-v2");
+  dialog.style.setProperty("--spacer-top-height", timebar.getBoundingClientRect().height + "px");
+  dialog.style.setProperty(
     "--spacer-bottom-height",
     scrollbar.getBoundingClientRect().height + "px"
   );
@@ -962,7 +960,7 @@ function calFreeBusyListener(aFbElement, aBinding) {
 }
 
 calFreeBusyListener.prototype = {
-  onResult: function(aRequest, aEntries) {
+  onResult(aRequest, aEntries) {
     if (aRequest && !aRequest.isPending) {
       // Find request in list of pending requests and remove from queue:
       this.mBinding.mPendingRequests = this.mBinding.mPendingRequests.filter(
@@ -1020,7 +1018,7 @@ function onFreebusyTimebarInit() {
   template.endDate = timebar.mEndDate;
   template.date = date;
   let parent = template.parentNode;
-  if (parent.childNodes.length <= 1) {
+  if (parent.children.length <= 1) {
     let count = timebar.mNumDays - 1;
     if (count > 0) {
       for (let i = 0; i < count; i++) {

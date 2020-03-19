@@ -5,29 +5,20 @@
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
-var { fixIterator } = ChromeUtils.import(
-  "resource:///modules/iteratorUtils.jsm"
-);
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 var gOkButton;
 var gNameInput;
 var gDirectory = null;
 
-var stillUsingMabFiles =
-  Services.prefs.getIntPref("ldap_2.servers.pab.dirType") == 2;
-var kPersonalAddressbookURI = stillUsingMabFiles
-  ? "moz-abmdbdirectory://abook.mab"
-  : "jsaddrbook://abook.sqlite";
-var kCollectedAddressbookURI = stillUsingMabFiles
-  ? "moz-abmdbdirectory://history.mab"
-  : "jsaddrbook://history.sqlite";
+var kPersonalAddressbookURI = "jsaddrbook://abook.sqlite";
+var kCollectedAddressbookURI = "jsaddrbook://history.sqlite";
 var kAllDirectoryRoot = "moz-abdirectory://";
-var kPABDirectory = 2; // defined in nsDirPrefs.h
+var kJSDirectory = 101; // defined in nsDirPrefs.h
 
 function abNameOnLoad() {
   // Get the document elements.
-  gOkButton = document.documentElement.getButton("accept");
+  gOkButton = document.querySelector("dialog").getButton("accept");
   gNameInput = document.getElementById("name");
 
   // look in arguments[0] for parameters to see if we have a directory or not
@@ -62,7 +53,7 @@ function abNameOnLoad() {
     // Address book name is not editable, therefore disable the field and
     // only have an ok button that doesn't do anything.
     gNameInput.readOnly = true;
-    document.documentElement.buttons = "accept";
+    document.querySelector("dialog").buttons = "accept";
   } else {
     document.addEventListener("dialogaccept", abNameOKButton);
     gNameInput.focus();
@@ -74,7 +65,7 @@ function abNameOKButton(event) {
   var newName = gNameInput.value.trim();
 
   // Do not allow an already existing name.
-  for (let ab of fixIterator(MailServices.ab.directories, Ci.nsIAbDirectory)) {
+  for (let ab of MailServices.ab.directories) {
     if (
       ab.dirName.toLowerCase() == newName.toLowerCase() &&
       (!gDirectory || ab.URI != gDirectory.URI)
@@ -96,11 +87,7 @@ function abNameOKButton(event) {
   if (gDirectory) {
     gDirectory.dirName = newName;
   } else {
-    MailServices.ab.newAddressBook(
-      newName,
-      "",
-      Services.prefs.getIntPref("mail.addr_book.newDirType", kPABDirectory)
-    );
+    MailServices.ab.newAddressBook(newName, "", kJSDirectory);
   }
 }
 

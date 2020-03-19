@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -231,8 +231,7 @@ void nsImapOfflineSync::ProcessFlagOperation(nsIMsgOfflineImapOperation *op) {
 
   if (!matchingFlagKeys.IsEmpty()) {
     nsAutoCString uids;
-    nsImapMailFolder::AllocateUidStringFromKeys(
-        matchingFlagKeys.Elements(), matchingFlagKeys.Length(), uids);
+    nsImapMailFolder::AllocateUidStringFromKeys(matchingFlagKeys, uids);
     uint32_t curFolderFlags;
     m_currentFolder->GetFlags(&curFolderFlags);
 
@@ -311,8 +310,7 @@ void nsImapOfflineSync::ProcessKeywordOperation(
              nsIMsgOfflineImapOperation::kRemoveKeywords)
                 ? keywords
                 : EmptyCString(),
-            matchingKeywordKeys.Elements(), matchingKeywordKeys.Length(),
-            getter_AddRefs(uriToStoreCustomKeywords));
+            matchingKeywordKeys, getter_AddRefs(uriToStoreCustomKeywords));
         if (NS_SUCCEEDED(rv) && uriToStoreCustomKeywords) {
           nsCOMPtr<nsIMsgMailNewsUrl> mailnewsUrl =
               do_QueryInterface(uriToStoreCustomKeywords);
@@ -503,9 +501,8 @@ void nsImapOfflineSync::ProcessMoveOperation(nsIMsgOfflineImapOperation *op) {
   nsCOMPtr<nsIMsgImapMailFolder> imapFolder =
       do_QueryInterface(m_currentFolder);
   if (imapFolder && DestFolderOnSameServer(destFolder)) {
-    imapFolder->ReplayOfflineMoveCopy(matchingFlagKeys.Elements(),
-                                      matchingFlagKeys.Length(), true,
-                                      destFolder, this, m_window);
+    imapFolder->ReplayOfflineMoveCopy(matchingFlagKeys, true, destFolder, this,
+                                      m_window);
   } else {
     nsresult rv;
     nsCOMPtr<nsIMutableArray> messages(
@@ -611,9 +608,8 @@ void nsImapOfflineSync::ProcessCopyOperation(
   nsCOMPtr<nsIMsgImapMailFolder> imapFolder =
       do_QueryInterface(m_currentFolder);
   if (imapFolder && DestFolderOnSameServer(destFolder)) {
-    rv = imapFolder->ReplayOfflineMoveCopy(matchingFlagKeys.Elements(),
-                                           matchingFlagKeys.Length(), false,
-                                           destFolder, this, m_window);
+    rv = imapFolder->ReplayOfflineMoveCopy(matchingFlagKeys, false, destFolder,
+                                           this, m_window);
   } else {
     nsCOMPtr<nsIMutableArray> messages(
         do_CreateInstance(NS_ARRAY_CONTRACTID, &rv));

@@ -51,19 +51,24 @@ function convertMailTab(tab, context) {
   };
 
   let nativeTab = tab.nativeTab;
-  let { folderDisplay } = nativeTab;
-  if (folderDisplay.view.displayedFolder) {
+  let { folderDisplay, mode } = nativeTab;
+  if (mode.name == "folder" && folderDisplay.view.displayedFolder) {
     let { folderPaneVisible, messagePaneVisible } = nativeTab.mode.persistTab(
       nativeTab
     );
+    mailTabObject.folderPaneVisible = folderPaneVisible;
+    mailTabObject.messagePaneVisible = messagePaneVisible;
+  } else if (mode.name == "glodaList") {
+    mailTabObject.folderPaneVisible = false;
+    mailTabObject.messagePaneVisible = true;
+  }
+  if (mode.name == "glodaList" || folderDisplay.view.displayedFolder) {
     mailTabObject.sortType = SORT_TYPE_MAP.get(
       folderDisplay.view.primarySortType
     );
     mailTabObject.sortOrder = SORT_ORDER_MAP.get(
       folderDisplay.view.primarySortOrder
     );
-    mailTabObject.folderPaneVisible = folderPaneVisible;
-    mailTabObject.messagePaneVisible = messagePaneVisible;
   }
   if (context.extension.hasPermission("accountsRead")) {
     mailTabObject.displayedFolder = convertFolder(
@@ -119,22 +124,6 @@ var uiListener = new (class extends EventEmitter {
   }
 })();
 
-class PermissionedEventManager extends EventManager {
-  constructor({ permission, context, name, register }) {
-    super({ context, name, register });
-    this.permission = permission;
-  }
-  addListener(callback) {
-    let { extension } = this.context;
-    if (!extension.hasPermission(this.permission)) {
-      throw new ExtensionError(
-        `The "${this.permission}" permission is required to use ${this.name}.`
-      );
-    }
-    return super.addListener(callback);
-  }
-}
-
 this.mailTabs = class extends ExtensionAPI {
   getAPI(context) {
     let { extension } = context;
@@ -186,6 +175,7 @@ this.mailTabs = class extends ExtensionAPI {
 
         async update(tabId, args) {
           let tab = getTabOrActive(tabId);
+          let { nativeTab } = tab;
           let window = tab.window;
 
           let {
@@ -203,8 +193,7 @@ this.mailTabs = class extends ExtensionAPI {
               displayedFolder.path
             );
             if (tab.active) {
-              let treeView = Cu.getGlobalForObject(tab.nativeTab)
-                .gFolderTreeView;
+              let treeView = Cu.getGlobalForObject(nativeTab).gFolderTreeView;
               let folder = MailServices.folderLookup.getFolderForURL(uri);
               if (folder) {
                 treeView.selectFolder(folder);
@@ -215,7 +204,7 @@ this.mailTabs = class extends ExtensionAPI {
                 );
               }
             } else {
-              tab.nativeTab.folderDisplay.showFolderUri(uri);
+              nativeTab.folderDisplay.showFolderUri(uri);
             }
           }
 
@@ -227,7 +216,7 @@ this.mailTabs = class extends ExtensionAPI {
               sortOrder &&
               sortOrder in Ci.nsMsgViewSortOrder
             ) {
-              tab.nativeTab.folderDisplay.view.sort(
+              nativeTab.folderDisplay.view.sort(
                 Ci.nsMsgViewSortType[sortType],
                 Ci.nsMsgViewSortOrder[sortOrder]
               );
@@ -242,7 +231,10 @@ this.mailTabs = class extends ExtensionAPI {
             );
           }
 
-          if (typeof folderPaneVisible == "boolean") {
+          if (
+            typeof folderPaneVisible == "boolean" &&
+            nativeTab.mode.name == "folder"
+          ) {
             if (tab.active) {
               let document = window.document;
               let folderPaneSplitter = document.getElementById(
@@ -253,32 +245,29 @@ this.mailTabs = class extends ExtensionAPI {
                 folderPaneVisible ? "open" : "collapsed"
               );
             } else {
-              tab.nativeTab.folderDisplay.folderPaneVisible = folderPaneVisible;
+              nativeTab.folderDisplay.folderPaneVisible = folderPaneVisible;
             }
           }
 
-          if (typeof messagePaneVisible == "boolean") {
+          if (
+            typeof messagePaneVisible == "boolean" &&
+            nativeTab.mode.name == "folder"
+          ) {
             if (tab.active) {
               if (messagePaneVisible == window.IsMessagePaneCollapsed()) {
                 window.MsgToggleMessagePane();
               }
             } else {
-              tab.nativeTab.messageDisplay._visible = messagePaneVisible;
+              nativeTab.messageDisplay._visible = messagePaneVisible;
               if (!messagePaneVisible) {
                 // Prevent the messagePane from showing if a message is selected.
-                tab.nativeTab.folderDisplay._aboutToSelectMessage = true;
+                nativeTab.folderDisplay._aboutToSelectMessage = true;
               }
             }
           }
         },
 
         async getSelectedMessages(tabId) {
-          if (!extension.hasPermission("messagesRead")) {
-            throw new ExtensionError(
-              `The "messagesRead" permission is required to use mailTabs.getSelectedMessages.`
-            );
-          }
-
           let tab = getTabOrActive(tabId);
           let { folderDisplay } = tab.nativeTab;
           let messageList = folderDisplay.view.dbView.getSelectedMsgHdrs();
@@ -299,21 +288,18 @@ this.mailTabs = class extends ExtensionAPI {
           filterer.clear();
 
           // Map of QuickFilter state names to possible WebExtensions state names.
-          // WebExtensions names are comma-separated in increasing order of precedence.
           let stateMap = {
             unread: "unread",
-            starred: "starred,flagged",
+            starred: "flagged",
             addrBook: "contact",
             attachment: "attachment",
           };
 
           filterer.visible = state.show !== false;
-          for (let [key, names] of Object.entries(stateMap)) {
+          for (let [key, name] of Object.entries(stateMap)) {
             let value = null;
-            for (let name of names.split(",")) {
-              if (state[name] !== null) {
-                value = state[name];
-              }
+            if (state[name] !== null) {
+              value = state[name];
             }
             if (value === null) {
               delete filterer.filterValues[key];
@@ -327,7 +313,7 @@ this.mailTabs = class extends ExtensionAPI {
               mode: "OR",
               tags: {},
             };
-            for (let tag of MailServices.tags.getAllTags({})) {
+            for (let tag of MailServices.tags.getAllTags()) {
               filterer.filterValues.tags[tag.key] = null;
             }
             if (typeof state.tags == "object") {
@@ -342,7 +328,7 @@ this.mailTabs = class extends ExtensionAPI {
             filterer.filterValues.text = {
               states: {
                 recipients: state.text.recipients || false,
-                sender: state.text.author || state.text.sender || false,
+                sender: state.text.author || false,
                 subject: state.text.subject || false,
                 body: state.text.body || false,
               },
@@ -360,8 +346,7 @@ this.mailTabs = class extends ExtensionAPI {
           // Inactive tabs are updated when they become active, except the search doesn't. :(
         },
 
-        onDisplayedFolderChanged: new PermissionedEventManager({
-          permission: "accountsRead",
+        onDisplayedFolderChanged: new EventManager({
           context,
           name: "mailTabs.onDisplayedFolderChanged",
           register: fire => {
@@ -378,8 +363,7 @@ this.mailTabs = class extends ExtensionAPI {
           },
         }).api(),
 
-        onSelectedMessagesChanged: new PermissionedEventManager({
-          permission: "messagesRead",
+        onSelectedMessagesChanged: new EventManager({
           context,
           name: "mailTabs.onSelectedMessagesChanged",
           register: fire => {

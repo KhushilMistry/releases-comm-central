@@ -18,7 +18,6 @@ ChromeUtils.defineModuleGetter(
 /**
  * Prototype for nsIAbCard objects that are not mailing lists.
  *
- * @implements {nsIAbItem}
  * @implements {nsIAbCard}
  */
 function AddrBookCard() {
@@ -35,7 +34,7 @@ AddrBookCard.prototype = {
   QueryInterface: ChromeUtils.generateQI([Ci.nsIAbCard]),
   classID: Components.ID("{1143991d-31cd-4ea6-9c97-c587d990d724}"),
 
-  /* nsIAbItem */
+  /* nsIAbCard */
 
   get uuid() {
     return MailServices.ab.generateUUID(this._directoryId, this._localId);
@@ -44,10 +43,10 @@ AddrBookCard.prototype = {
     let result = "";
     let format;
     switch (generateFormat) {
-      case Ci.nsIAbItem.GENERATE_DISPLAY_NAME:
+      case Ci.nsIAbCard.GENERATE_DISPLAY_NAME:
         result = this.displayName;
         break;
-      case Ci.nsIAbItem.GENERATE_LAST_FIRST_ORDER:
+      case Ci.nsIAbCard.GENERATE_LAST_FIRST_ORDER:
         format = bundle
           ? bundle.GetStringFromName("lastFirstFormat")
           : "%S, %S";
@@ -55,7 +54,7 @@ AddrBookCard.prototype = {
           .replace("%S", this.lastName)
           .replace("%S", this.firstName);
         break;
-      case Ci.nsIAbItem.GENERATE_FIRST_LAST_ORDER:
+      case Ci.nsIAbCard.GENERATE_FIRST_LAST_ORDER:
         format = bundle ? bundle.GetStringFromName("firstLastFormat") : "%S %S";
         result = format
           .replace("%S", this.firstName)
@@ -72,9 +71,6 @@ AddrBookCard.prototype = {
 
     return result;
   },
-
-  /* nsIAbCard */
-
   get directoryId() {
     return this._directoryId;
   },
@@ -168,7 +164,7 @@ AddrBookCard.prototype = {
   },
   getPropertyAsAString(name) {
     if (!this._properties.has(name)) {
-      throw Cr.NS_ERROR_NOT_AVAILABLE;
+      return "";
     }
     return this.getProperty(name);
   },
@@ -227,7 +223,12 @@ AddrBookCard.prototype = {
     return false;
   },
   translateTo(type) {
-    throw Cr.NS_ERROR_NOT_IMPLEMENTED;
+    // Get nsAbCardProperty to do the work, the code is in C++ anyway.
+    let cardCopy = Cc["@mozilla.org/addressbook/cardproperty;1"].createInstance(
+      Ci.nsIAbCard
+    );
+    cardCopy.copy(this);
+    return cardCopy.translateTo(type);
   },
   generatePhoneticName(lastNameFirst) {
     if (lastNameFirst) {
@@ -236,7 +237,22 @@ AddrBookCard.prototype = {
     return `${this.firstName} ${this.lastName}`;
   },
   generateChatName() {
-    throw Cr.NS_ERROR_NOT_IMPLEMENTED;
+    for (let name of [
+      "_GoogleTalk",
+      "_AimScreenName",
+      "_Yahoo",
+      "_Skype",
+      "_QQ",
+      "_MSN",
+      "_ICQ",
+      "_JabberId",
+      "_IRC",
+    ]) {
+      if (this._properties.has(name)) {
+        return this._properties.get(name);
+      }
+    }
+    return "";
   },
   copy(srcCard) {
     throw Cr.NS_ERROR_NOT_IMPLEMENTED;

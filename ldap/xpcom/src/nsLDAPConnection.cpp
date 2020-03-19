@@ -27,6 +27,7 @@
 #include "nsLDAPUtils.h"
 #include "nsProxyRelease.h"
 #include "mozilla/Attributes.h"
+#include "nsNetUtil.h"
 
 using namespace mozilla;
 
@@ -76,6 +77,11 @@ nsLDAPConnection::Init(nsILDAPURL *aUrl, const nsACString &aBindName,
   NS_ENSURE_ARG_POINTER(aMessageListener);
 
   nsresult rv;
+
+  // Cache the STS thread we'll use to dispatch IO on.
+  mSTS = do_GetService(NS_SOCKETTRANSPORTSERVICE_CONTRACTID, &rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+
   nsCOMPtr<nsIObserverService> obsServ =
       do_GetService(NS_OBSERVERSERVICE_CONTRACTID, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -91,7 +97,7 @@ nsLDAPConnection::Init(nsILDAPURL *aUrl, const nsACString &aBindName,
   // request pending.
   NS_ASSERTION(!mDNSRequest,
                "nsLDAPConnection::Init() "
-               "Connection was already initialized\n");
+               "Connection was already initialized");
 
   // Check and save the version number
   if (aVersion != nsILDAPConnection::VERSION2 &&
@@ -171,7 +177,7 @@ nsLDAPConnection::Init(nsILDAPURL *aUrl, const nsACString &aBindName,
 // out of the destructor.
 void nsLDAPConnection::Close() {
   int rc;
-  MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug, ("unbinding\n"));
+  MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug, ("unbinding"));
 
   if (mConnectionHandle) {
     // note that the ldap_unbind() call in the 5.0 version of the LDAP C SDK
@@ -181,15 +187,12 @@ void nsLDAPConnection::Close() {
     rc = ldap_unbind(mConnectionHandle);
     if (rc != LDAP_SUCCESS) {
       MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Warning,
-              ("nsLDAPConnection::Close(): %s\n", ldap_err2string(rc)));
+              ("nsLDAPConnection::Close(): %s", ldap_err2string(rc)));
     }
     mConnectionHandle = nullptr;
   }
 
-  MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug, ("unbound\n"));
-
-  NS_ASSERTION(!mThread || NS_SUCCEEDED(mThread->Shutdown()),
-               "Failed to shutdown thread cleanly");
+  MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug, ("unbound"));
 
   // Cancel the DNS lookup if needed, and also drop the reference to the
   // Init listener (if still there).
@@ -302,7 +305,7 @@ nsLDAPConnection::GetErrorString(char16_t **_retval) {
  */
 nsresult nsLDAPConnection::AddPendingOperation(uint32_t aOperationID,
                                                nsILDAPOperation *aOperation) {
-  NS_ENSURE_ARG_POINTER(aOperation);
+  MOZ_ASSERT(aOperation != nullptr);
 
   nsIRunnable *runnable =
       new nsLDAPConnectionRunnable(aOperationID, aOperation, this);
@@ -310,20 +313,30 @@ nsresult nsLDAPConnection::AddPendingOperation(uint32_t aOperationID,
     MutexAutoLock lock(mPendingOperationsMutex);
     mPendingOperations.Put((uint32_t)aOperationID, aOperation);
     MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug,
-            ("pending operation added; total pending operations now = %d\n",
+            ("pending operation added; total pending operations now = %d",
              mPendingOperations.Count()));
   }
 
   nsresult rv;
-  if (!mThread) {
-    rv = NS_NewThread(getter_AddRefs(mThread), runnable);
-    NS_ENSURE_SUCCESS(rv, rv);
-  } else {
-    rv = mThread->Dispatch(runnable, nsIEventTarget::DISPATCH_NORMAL);
-    NS_ENSURE_SUCCESS(rv, rv);
+  rv = mSTS->Dispatch(runnable, nsIEventTarget::DISPATCH_NORMAL);
+  if (rv != NS_OK) {
+    RemovePendingOperation(aOperationID);
+    // Tell the server we want the operation cancelled, and also
+    // ditch any responses we've already received but not collected.
+    (void)ldap_abandon_ext(mConnectionHandle, aOperationID, 0, 0);
+    // At this point we should be letting the listener know that there's
+    // an error, but listener doesn't have a suitable callback.
+    // See Bug 1592449.
+    // For now, just log it and leave it at that.
+    MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Error,
+            ("nsLDAPConnection::AddPendingOperation() failed, rv=%" PRIx32,
+             static_cast<uint32_t>(rv)));
   }
+  return rv;
+}
 
-  return NS_OK;
+nsresult nsLDAPConnection::StartOp(nsIRunnable *aOp) {
+  return mSTS->Dispatch(aOp, nsIEventTarget::DISPATCH_NORMAL);
 }
 
 /**
@@ -341,14 +354,14 @@ nsresult nsLDAPConnection::RemovePendingOperation(uint32_t aOperationID) {
   NS_ENSURE_TRUE(aOperationID > 0, NS_ERROR_UNEXPECTED);
 
   MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug,
-          ("nsLDAPConnection::RemovePendingOperation(): operation removed\n"));
+          ("nsLDAPConnection::RemovePendingOperation(): operation removed"));
 
   {
     MutexAutoLock lock(mPendingOperationsMutex);
     mPendingOperations.Remove(aOperationID);
     MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug,
             ("nsLDAPConnection::RemovePendingOperation(): operation "
-             "removed; total pending operations now = %d\n",
+             "removed; total pending operations now = %d",
              mPendingOperations.Count()));
   }
 
@@ -395,7 +408,7 @@ nsresult nsLDAPConnection::InvokeMessageCallback(LDAPMessage *aMsgHandle,
   // We only want this being logged for debug builds so as not to affect
   // performance too much.
   MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug,
-          ("InvokeMessageCallback entered\n"));
+          ("InvokeMessageCallback entered"));
 #endif
 
   // Get the operation.
@@ -423,8 +436,7 @@ nsresult nsLDAPConnection::InvokeMessageCallback(LDAPMessage *aMsgHandle,
     mPendingOperations.Remove(aOperation);
 
     MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Debug,
-            ("pending operation removed; total pending operations now ="
-             " %d\n",
+            ("pending operation removed; total pending operations now = %d",
              mPendingOperations.Count()));
   }
 
@@ -494,7 +506,7 @@ nsLDAPConnection::OnLookupComplete(nsICancelable *aRequest,
     //
     NS_ERROR(
         "nsLDAPConnection::OnStopLookup(): the resolved IP "
-        "string is empty.\n");
+        "string is empty.");
 
     rv = NS_ERROR_UNKNOWN_HOST;
   } else {
@@ -513,6 +525,7 @@ nsLDAPConnection::OnLookupComplete(nsICancelable *aRequest,
     if (!mConnectionHandle) {
       rv = NS_ERROR_FAILURE;  // LDAP C SDK API gives no useful error
     } else {
+      ldap_set_option(mConnectionHandle, LDAP_OPT_ASYNC_CONNECT, LDAP_OPT_ON);
 #if defined(DEBUG_dmose) || defined(DEBUG_bienvenu)
       const int lDebug = 0;
       ldap_set_option(mConnectionHandle, LDAP_OPT_DEBUG_LEVEL, &lDebug);
@@ -625,7 +638,7 @@ NS_IMETHODIMP nsLDAPConnectionRunnable::Run() {
     case LDAP_RES_SEARCH_REFERENCE:
       // XXX what should we do with LDAP_RES_SEARCH_EXTENDED
       operationFinished = false;
-      MOZ_FALLTHROUGH;
+      [[fallthrough]];
     default: {
       msg = new nsLDAPMessage;
       if (!msg) return NS_ERROR_NULL_POINTER;

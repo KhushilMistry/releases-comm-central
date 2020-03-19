@@ -22,7 +22,7 @@
  * Used by all grid views.
  */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 /**
  * PUBLIC: Displays a tooltip with details when hovering over an item in the views
@@ -71,9 +71,8 @@ function getPreviewForItem(aItem, aIsTooltip = true) {
     return getPreviewForEvent(aItem, aIsTooltip);
   } else if (cal.item.isToDo(aItem)) {
     return getPreviewForTask(aItem, aIsTooltip);
-  } else {
-    return null;
   }
+  return null;
 }
 
 /**
@@ -217,9 +216,8 @@ function getPreviewForTask(toDoItem, aIsTooltip = true) {
     }
 
     return vbox;
-  } else {
-    return null;
   }
+  return null;
 }
 
 /**
@@ -271,7 +269,7 @@ function getPreviewForEvent(aEvent, aIsTooltip = true) {
       boxAppendLabeledText(vbox, "tooltipStatus", statusString);
     }
 
-    if (event.organizer && event.getAttendees({}).length > 0) {
+    if (event.organizer && event.getAttendees().length > 0) {
       let organizer = event.organizer;
       boxAppendLabeledText(vbox, "tooltipOrganizer", organizer);
     }
@@ -283,9 +281,8 @@ function getPreviewForEvent(aEvent, aIsTooltip = true) {
       boxAppendBody(vbox, description, aIsTooltip);
     }
     return vbox;
-  } else {
-    return null;
   }
+  return null;
 }
 
 /**
@@ -386,7 +383,7 @@ function createTooltipHeaderLabel(text) {
   let labelCell = document.createElementNS("http://www.w3.org/1999/xhtml", "th");
   labelCell.setAttribute("class", "tooltipHeaderLabel");
   labelCell.textContent = text;
-  labelCell.setAttribute("align", "right");
+  labelCell.setAttribute("align", "end");
   return labelCell;
 }
 

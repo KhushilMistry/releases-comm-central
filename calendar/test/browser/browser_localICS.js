@@ -38,15 +38,15 @@ add_task(async function testLocalICS() {
   plan_for_modal_dialog("Calendar:NewCalendarWizard", wizard => {
     handleNewCalendarWizard(wizard, calendarName, { network: { format: "ics" } });
   });
-  controller.mainMenu.click("#ltnNewCalendar");
+  controller.mainMenu.click("#calendar-new-calendar-menuitem");
   wait_for_modal_dialog("Calendar:NewCalendarWizard", TIMEOUT_MODAL_DIALOG);
 
   // Create new event.
   let box = lookupEventBox("day", CANVAS_BOX, null, 1, HOUR);
-  invokeEventDialog(controller, box, (event, iframe) => {
+  await invokeEventDialog(controller, box, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
-    setData(event, iframe, { title: calendarName, calendar: calendarName });
+    await setData(event, iframe, { title: calendarName, calendar: calendarName });
 
     // save
     event.click(eventid("button-saveandclose"));

@@ -98,7 +98,7 @@ static void openMailWindow(const nsCString &aUri) {
           // bug 507593 is implemented.
 #ifdef MOZ_SUITE
         nsCOMPtr<mozIDOMWindowProxy> newWindow;
-        wwatch->OpenWindow(0, "chrome://messenger/content/messageWindow.xul", "_blank",
+        wwatch->OpenWindow(0, "chrome://messenger/content/messageWindow.xhtml", "_blank",
                            "all,chrome,dialog=no,status,toolbar", msgUri,
                            getter_AddRefs(newWindow));
 #else
@@ -109,7 +109,7 @@ static void openMailWindow(const nsCString &aUri) {
         messenger->MsgHdrFromURI(aUri, getter_AddRefs(msgHdr));
         if (msgHdr) {
           nsCOMPtr<mozIDOMWindowProxy> newWindow;
-          wwatch->OpenWindow(0, "chrome://messenger/content/messageWindow.xul", "_blank",
+          wwatch->OpenWindow(0, "chrome://messenger/content/messageWindow.xhtml", "_blank",
                              "all,chrome,dialog=no,status,toolbar", msgHdr,
                              getter_AddRefs(newWindow));
         }
@@ -126,7 +126,7 @@ static void openMailWindow(const nsCString &aUri) {
     topMostMsgWindow->GetDomWindow(getter_AddRefs(domWindow));
     if (domWindow) {
       nsCOMPtr<nsPIDOMWindowOuter> privateWindow = nsPIDOMWindowOuter::From(domWindow);
-      privateWindow->Focus();
+      privateWindow->Focus(mozilla::dom::CallerType::System);
     }
   } else {
     // the user doesn't have a mail window open already so open one for them...
@@ -167,14 +167,14 @@ nsresult nsMessengerOSXIntegration::Init() {
 }
 
 NS_IMETHODIMP
-nsMessengerOSXIntegration::OnItemPropertyChanged(nsIMsgFolder *, const nsACString &, char const *,
-                                                 char const *) {
+nsMessengerOSXIntegration::OnItemPropertyChanged(nsIMsgFolder *, const nsACString &,
+                                                 const nsACString &, const nsACString &) {
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsMessengerOSXIntegration::OnItemUnicharPropertyChanged(nsIMsgFolder *, const nsACString &,
-                                                        const char16_t *, const char16_t *) {
+                                                        const nsAString &, const nsAString &) {
   return NS_OK;
 }
 
@@ -306,15 +306,13 @@ void nsMessengerOSXIntegration::FillToolTipInfo(nsIMsgFolder *aFolder, int32_t a
           nsCOMPtr<nsIMsgDatabase> db;
           rv = aFolder->GetMsgDatabase(getter_AddRefs(db));
           if (NS_SUCCEEDED(rv) && db) {
-            uint32_t numNewKeys;
-            uint32_t *newMessageKeys;
-            rv = db->GetNewList(&numNewKeys, &newMessageKeys);
-            if (NS_SUCCEEDED(rv)) {
+            nsTArray<nsMsgKey> newMessageKeys;
+            rv = db->GetNewList(newMessageKeys);
+            if (NS_SUCCEEDED(rv) && !newMessageKeys.IsEmpty()) {
               nsCOMPtr<nsIMsgDBHdr> hdr;
-              rv = db->GetMsgHdrForKey(newMessageKeys[numNewKeys - 1], getter_AddRefs(hdr));
+              rv = db->GetMsgHdrForKey(newMessageKeys.LastElement(), getter_AddRefs(hdr));
               if (NS_SUCCEEDED(rv) && hdr) aFolder->GetUriForMsg(hdr, uri);
             }
-            free(newMessageKeys);
           }
         } else
           bundle->FormatStringFromName("macBiffNotification_messages", formatStrings, finalText);
@@ -503,7 +501,6 @@ nsresult nsMessengerOSXIntegration::GetNewMailAuthors(nsIMsgFolder *aFolder, nsS
   // the resulting length of aAuthors will be 0.
   nsCOMPtr<nsIMsgDatabase> db;
   nsresult rv = aFolder->GetMsgDatabase(getter_AddRefs(db));
-  uint32_t numNewKeys = 0;
   if (NS_SUCCEEDED(rv) && db) {
     nsCOMPtr<nsIObserverService> os = do_GetService("@mozilla.org/observer-service;1", &rv);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -513,14 +510,14 @@ nsresult nsMessengerOSXIntegration::GetNewMailAuthors(nsIMsgFolder *aFolder, nsS
     GetStringBundle(getter_AddRefs(bundle));
     if (!bundle) return NS_ERROR_FAILURE;
 
-    uint32_t *newMessageKeys;
-    rv = db->GetNewList(&numNewKeys, &newMessageKeys);
+    nsTArray<nsMsgKey> newMessageKeys;
+    rv = db->GetNewList(newMessageKeys);
     if (NS_SUCCEEDED(rv)) {
       nsString listSeparator;
       bundle->GetStringFromName("macBiffNotification_separator", listSeparator);
 
       int32_t displayed = 0;
-      for (int32_t i = numNewKeys - 1; i >= 0; i--, aNewCount--) {
+      for (int32_t i = newMessageKeys.Length() - 1; i >= 0; i--, aNewCount--) {
         if (0 == aNewCount || displayed == kMaxDisplayCount) break;
 
         nsCOMPtr<nsIMsgDBHdr> hdr;
@@ -551,7 +548,6 @@ nsresult nsMessengerOSXIntegration::GetNewMailAuthors(nsIMsgFolder *aFolder, nsS
         }
       }
     }
-    free(newMessageKeys);
   }
   *aNotDisplayed = aNewCount;
   return rv;

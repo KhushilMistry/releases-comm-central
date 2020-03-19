@@ -44,10 +44,6 @@ ifdef NIGHTLY_BUILD
 DEFINES += -DNIGHTLY_BUILD=1
 endif
 
-ifdef MOZ_CALENDAR
-DEFINES += -DMOZ_CALENDAR=1
-endif
-
 ifdef MOZ_DEBUG
 DEFINES += -DMOZ_DEBUG=1
 endif
@@ -62,10 +58,6 @@ endif
 
 ifdef MOZ_SYSTEM_NSS
 DEFINES += -DMOZ_SYSTEM_NSS=1
-endif
-
-ifdef NSS_DISABLE_DBM
-DEFINES += -DNSS_DISABLE_DBM=1
 endif
 
 ifdef MOZ_ARTIFACT_BUILDS
@@ -178,6 +170,10 @@ ifdef CLANG_CL
 DEFINES += -DCLANG_CL
 endif
 
+ifdef TB_LIBOTR_PREBUILT
+DEFINES += -DTB_LIBOTR_PREBUILT
+endif
+
 libs::
 	$(MAKE) -C $(commtopobjdir)/mail/locales langpack
 
@@ -194,7 +190,7 @@ endif
 
 package-compare:: $(MOZ_PKG_MANIFEST)
 	cd $(DIST); find $(PKGCOMP_FIND_OPTS) '$(FINDPATH)' -type f | sort > bin-list.txt
-	$(call py_action,preprocessor,$(DEFINES) $(ACDEFINES) $(MOZ_PKG_MANIFEST)) | grep '^$(BINPATH)' | sed -e 's/^\///' | sort > $(DIST)/pack-list.txt
+	$(call py3_action,preprocessor,$(DEFINES) $(ACDEFINES) $(MOZ_PKG_MANIFEST)) | grep '^$(BINPATH)' | sed -e 's/^\///' | sort > $(DIST)/pack-list.txt
 	-diff -u $(DIST)/pack-list.txt $(DIST)/bin-list.txt
 	rm -f $(DIST)/pack-list.txt $(DIST)/bin-list.txt
 

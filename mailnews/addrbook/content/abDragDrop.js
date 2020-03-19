@@ -3,7 +3,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* import-globals-from ../../../mail/base/content/nsDragAndDrop.js */
 /* import-globals-from ../../../mail/components/addrbook/content/abCommon.js */
 /* import-globals-from ../../../mail/components/compose/content/addressingWidgetOverlay.js */
 /* import-globals-from abResultsPane.js */
@@ -23,21 +22,19 @@ function getLoadContext() {
 var abFlavorDataProvider = {
   QueryInterface: ChromeUtils.generateQI([Ci.nsIFlavorDataProvider]),
 
-  getFlavorData(aTransferable, aFlavor, aData, aDataLen) {
+  getFlavorData(aTransferable, aFlavor, aData) {
     if (aFlavor == "application/x-moz-file-promise") {
       var primitive = {};
-      aTransferable.getTransferData("text/vcard", primitive, {});
+      aTransferable.getTransferData("text/vcard", primitive);
       var vCard = primitive.value.QueryInterface(Ci.nsISupportsString).data;
       aTransferable.getTransferData(
         "application/x-moz-file-promise-dest-filename",
-        primitive,
-        {}
+        primitive
       );
       var leafName = primitive.value.QueryInterface(Ci.nsISupportsString).data;
       aTransferable.getTransferData(
         "application/x-moz-file-promise-dir",
-        primitive,
-        {}
+        primitive
       );
       var localFile = primitive.value.QueryInterface(Ci.nsIFile).clone();
       localFile.append(leafName);
@@ -58,53 +55,37 @@ var abFlavorDataProvider = {
   },
 };
 
-var abResultsPaneObserver = {
-  onDragStart(aEvent, aXferData, aDragAction) {
-    var selectedRows = GetSelectedRows();
+let abResultsPaneObserver = {
+  onDragStart(event) {
+    let selectedRows = GetSelectedRows();
 
     if (!selectedRows) {
       return;
     }
 
-    var selectedAddresses = GetSelectedAddresses();
+    let selectedAddresses = GetSelectedAddresses();
 
-    aXferData.data = new TransferData();
-    aXferData.data.addDataForFlavour("moz/abcard", selectedRows);
-    aXferData.data.addDataForFlavour("text/x-moz-address", selectedAddresses);
-    aXferData.data.addDataForFlavour("text/unicode", selectedAddresses);
+    event.dataTransfer.setData("moz/abcard", selectedRows);
+    event.dataTransfer.setData("moz/abcard", selectedRows);
+    event.dataTransfer.setData("text/x-moz-address", selectedAddresses);
+    event.dataTransfer.setData("text/unicode", selectedAddresses);
 
-    let srcDirectory = getSelectedDirectory();
-    // The default allowable actions are copy, move and link, so we need
-    // to restrict them here.
-    if (!srcDirectory.readOnly) {
-      // Only allow copy & move from read-write directories.
-      aDragAction.action =
-        Ci.nsIDragService.DRAGDROP_ACTION_COPY |
-        Ci.nsIDragService.DRAGDROP_ACTION_MOVE;
-    } else {
-      // Only allow copy from read-only directories.
-      aDragAction.action = Ci.nsIDragService.DRAGDROP_ACTION_COPY;
-    }
-
-    var card = GetSelectedCard();
+    let card = GetSelectedCard();
     if (card && card.displayName) {
       try {
         // A card implementation may throw NS_ERROR_NOT_IMPLEMENTED.
         // Don't break drag-and-drop if that happens.
         let vCard = card.translateTo("vcard");
-        aXferData.data.addDataForFlavour(
-          "text/vcard",
-          decodeURIComponent(vCard)
-        );
-        aXferData.data.addDataForFlavour(
+        event.dataTransfer.setData("text/vcard", decodeURIComponent(vCard));
+        event.dataTransfer.setData(
           "application/x-moz-file-promise-dest-filename",
           card.displayName + ".vcf"
         );
-        aXferData.data.addDataForFlavour(
+        event.dataTransfer.setData(
           "application/x-moz-file-promise-url",
           "data:text/vcard," + vCard
         );
-        aXferData.data.addDataForFlavour(
+        event.dataTransfer.setData(
           "application/x-moz-file-promise",
           abFlavorDataProvider
         );
@@ -112,16 +93,12 @@ var abResultsPaneObserver = {
         Cu.reportError(ex);
       }
     }
-  },
 
-  onDrop(aEvent, aXferData, aDragSession) {},
-
-  onDragExit(aEvent, aDragSession) {},
-
-  onDragOver(aEvent, aFlavour, aDragSession) {},
-
-  getSupportedFlavours() {
-    return null;
+    event.dataTransfer.effectAllowed = "copyMove";
+    // a drag targeted at a tree should instead use the treechildren so that
+    // the current selection is used as the drag feedback
+    event.dataTransfer.addElement(event.originalTarget);
+    event.stopPropagation();
   },
 };
 
@@ -228,9 +205,13 @@ var abDirTreeObserver = {
       .map(j => parseInt(j, 10));
 
     for (var j = 0; j < rows.length; j++) {
-      if (gAbView.getCardFromRow(rows[j]).isMailList) {
+      let card = gAbView.getCardFromRow(rows[j]);
+      if (!card.UID) {
+        Cu.reportError(new Error("Card must have a UID to be dropped here."));
+        return false;
+      }
+      if (card.isMailList) {
         draggingMailList = true;
-        break;
       }
     }
 
@@ -406,51 +387,12 @@ function DragAddressOverTargetControl(event) {
     dragSession.getData(trans, i);
     var dataObj = {};
     var bestFlavor = {};
-    var len = {};
     try {
-      trans.getAnyTransferData(bestFlavor, dataObj, len);
+      trans.getAnyTransferData(bestFlavor, dataObj);
     } catch (ex) {
       canDrop = false;
       break;
     }
   }
   dragSession.canDrop = canDrop;
-}
-
-function DropAddressOverTargetControl(event) {
-  var dragSession = gDragService.getCurrentSession();
-
-  var trans = Cc["@mozilla.org/widget/transferable;1"].createInstance(
-    Ci.nsITransferable
-  );
-  trans.addDataFlavor("text/x-moz-address");
-
-  for (var i = 0; i < dragSession.numDropItems; ++i) {
-    dragSession.getData(trans, i);
-    var dataObj = {};
-    var bestFlavor = {};
-    var len = {};
-
-    // Ensure we catch any empty data that may have slipped through
-    try {
-      trans.getAnyTransferData(bestFlavor, dataObj, len);
-    } catch (ex) {
-      continue;
-    }
-
-    if (dataObj) {
-      dataObj = dataObj.value.QueryInterface(Ci.nsISupportsString);
-    }
-    if (!dataObj) {
-      continue;
-    }
-
-    // pull the address out of the data object
-    var address = dataObj.data.substring(0, len.value);
-    if (!address) {
-      continue;
-    }
-
-    DropRecipient(address);
-  }
 }

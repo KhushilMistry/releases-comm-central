@@ -238,8 +238,6 @@ pref("browser.tabs.warnOnOpen", true);
 pref("browser.tabs.maxOpenBeforeWarn", 15);
 pref("browser.tabs.insertRelatedAfterCurrent", true);
 pref("browser.tabs.insertAllTabsAfterCurrent", false);
-// 0 = append, 1 = replace
-pref("browser.tabs.loadGroup", 1);
 
 // For future use
 pref("browser.tabs.loadBookmarksInBackground", false);
@@ -359,13 +357,19 @@ pref("network.auth.non-web-content-triggered-resources-http-auth-allow", true);
 
 pref("mail.biff.show_new_alert",     true);
 
+// If messages or folders are opened using the context menu or a middle click,
+// should we open them in the foreground or in the background?
+pref("mail.tabs.loadInBackground", true);
+
 pref("mailnews.ui.deleteMarksRead", true);
+pref("mailnews.ui.deleteAlwaysSelectedMessages", false);
 
 // The maximum amount of decoded image data we'll willingly keep around (we
 // might keep around more than this, but we'll try to get down to this value).
 // (This is intentionally on the high side; see bugs 746055 and 768015.)
 pref("image.mem.max_decoded_image_kb", 256000);
 
+pref("spellchecker.dictionary", "");
 pref("spellchecker.dictionaries.download.url", "https://addons.thunderbird.net/%LOCALE%/%APP%/dictionaries");
 
 // this will automatically enable inline spellchecking (if it is available) for
@@ -584,8 +588,10 @@ pref("extensions.autoDisableScopes", 15);
 // Enable add-ons installed and owned by the application, like the default theme.
 pref("extensions.startupScanScopes", 4);
 
-// Allow "legacy" XUL/XPCOM extensions.
-pref("extensions.legacy.enabled", true);
+// If true, unprivileged extensions may use experimental APIs on
+// nightly and developer edition.
+pref("extensions.experiments.enabled", true);
+
 // Extensions that should not be flagged as legacy in about:addons
 // {972ce4c6-7e08-4474-a285-3208198ce6fd} default theme
 // {59c81df5-4b7a-477b-912d-4e0fdf64e5f2} chatZilla
@@ -763,7 +769,6 @@ pref("pfs.datasource.url", "https://pfs.mozilla.org/plugins/PluginFinderService.
 pref("plugins.update.url", "https://www.mozilla.org/%LOCALE%/plugincheck/");
 pref("plugins.update.notifyUser", false);
 pref("plugins.hide_infobar_for_outdated_plugin", false);
-pref("plugins.hide_infobar_for_carbon_failure_plugin", false);
 pref("plugins.hide_infobar_for_missing_plugin", false);
 pref("plugins.click_to_play", true);
 pref("plugin.disable", false);

@@ -8,7 +8,7 @@
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+  var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
   /**
    * An abstract class to handle drag on drop for calendar.
@@ -87,10 +87,10 @@
         let dropshadow = document.createXULElement("box");
         dropshadow.setAttribute("class", "dropshadow");
         if (boxItems) {
-          boxItems.insertBefore(dropshadow, boxItems.firstChild);
+          boxItems.insertBefore(dropshadow, boxItems.firstElementChild);
           this.calendarView.mDropShadows.push(boxItems);
         } else {
-          box.insertBefore(dropshadow, box.firstChild);
+          box.insertBefore(dropshadow, box.firstElementChild);
           this.calendarView.mDropShadows.push(box);
         }
         shadowStartDate.day += 1;

@@ -24,7 +24,7 @@ var { helpersForEditUI, setData } = ChromeUtils.import(
   "resource://testing-common/mozmill/ItemEditingHelpers.jsm"
 );
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 var controller = mozmill.getMail3PaneController();
 var { lookup, lookupEventBox } = helpersForController(controller);
@@ -33,7 +33,7 @@ const TITLE1 = "Day View Event";
 const TITLE2 = "Day View Event Changed";
 const DESC = "Day View Event Description";
 
-add_task(function testDayView() {
+add_task(async function testDayView() {
   let dateFormatter = cal.getDateFormatter();
 
   createCalendar(controller, CALENDARNAME);
@@ -46,7 +46,7 @@ add_task(function testDayView() {
 
   // Create event at 8 AM.
   let eventBox = lookupEventBox("day", CANVAS_BOX, null, 1, 8);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
     let { getDateTimePicker } = helpersForEditUI(iframe);
 
@@ -61,7 +61,7 @@ add_task(function testDayView() {
     event.assertValue(startDateInput, dateFormatter.formatDateShort(someDate));
 
     // Fill in title, description and calendar.
-    setData(event, iframe, {
+    await setData(event, iframe, {
       title: TITLE1,
       description: DESC,
       calendar: CALENDARNAME,
@@ -73,11 +73,11 @@ add_task(function testDayView() {
 
   // If it was created successfully, it can be opened.
   eventBox = lookupEventBox("day", EVENT_BOX, null, 1, null, EVENTPATH);
-  invokeEventDialog(controller, eventBox, (event, iframe) => {
+  await invokeEventDialog(controller, eventBox, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
     // Change title and save changes.
-    setData(event, iframe, { title: TITLE2 });
+    await setData(event, iframe, { title: TITLE2 });
     event.click(eventid("button-saveandclose"));
   });
 
@@ -88,8 +88,9 @@ add_task(function testDayView() {
     null,
     1,
     null,
-    `${EVENTPATH}/${getEventDetails("day")}/anon({"flex":"1"})/
-        anon({"class":"calendar-event-details-core event-name-label"})`
+    `${EVENTPATH}/${getEventDetails(
+      "day"
+    )}/{"flex":"1"}/{"class":"calendar-event-details-core event-name-label"}`
   );
   controller.waitForElement(eventName);
   controller.waitFor(() => eventName.getNode().textContent == TITLE2);

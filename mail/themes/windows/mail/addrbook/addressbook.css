@@ -9,6 +9,10 @@
 @import url("chrome://messenger/skin/");
 @import url("chrome://messenger/skin/shared/addressbook.css");
 
+#abContent {
+  background-color: -moz-Dialog;
+}
+
 /* ::::: results pane ::::: */
 
 #GeneratedName {
@@ -113,7 +117,7 @@ toolbox > toolbar:last-of-type {
     background-color: #fafafa;
   }
 
-  sidebarheader {
+  .sidebar-header {
     -moz-appearance: none;
     background-color: #f8f8f8;
     border-top: 0;

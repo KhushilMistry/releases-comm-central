@@ -4,7 +4,7 @@
 
 /* exported loadCalendarPublishDialog, closeDialog */
 
-/* globals publishButtonLabel, closeButtonLabel */ // From publishDialog.xul
+/* globals publishButtonLabel, closeButtonLabel */ // From publishDialog.xhtml
 
 var gOnOkFunction; // function to be called when user clicks OK
 var gPublishObject;
@@ -70,11 +70,11 @@ function checkURLField() {
 }
 
 var progressDialog = {
-  onStartUpload: function() {
+  onStartUpload() {
     document.getElementById("publish-progressmeter").removeAttribute("value");
   },
 
-  onStopUpload: function() {
+  onStopUpload() {
     document.getElementById("publish-progressmeter").setAttribute("value", "0");
   },
 };

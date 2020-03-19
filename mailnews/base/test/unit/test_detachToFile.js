@@ -16,7 +16,7 @@ var mimeMsg = {};
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
-ChromeUtils.import("resource:///modules/gloda/mimemsg.js", mimeMsg);
+ChromeUtils.import("resource:///modules/gloda/MimeMessage.jsm", mimeMsg);
 
 var tests = [startCopy, startMime, startDetach, testDetach];
 
@@ -61,7 +61,6 @@ function* startDetach() {
 
   messenger.detachAttachmentsWOPrompts(
     do_get_profile(),
-    1,
     [attachment.contentType],
     [attachment.url],
     [attachment.name],

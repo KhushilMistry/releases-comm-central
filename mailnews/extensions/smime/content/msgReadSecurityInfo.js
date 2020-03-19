@@ -23,7 +23,7 @@ function setText(id, value) {
     return;
   }
   if (element.hasChildNodes()) {
-    element.firstChild.remove();
+    element.firstElementChild.remove();
   }
   var textNode = document.createTextNode(value);
   element.appendChild(textNode);
@@ -216,7 +216,7 @@ function onLoad() {
 function viewCertHelper(parent, cert) {
   Services.ww.openWindow(
     parent,
-    "chrome://pippki/content/certViewer.xul",
+    "chrome://pippki/content/certViewer.xhtml",
     "_blank",
     "centerscreen,chrome,titlebar",
     cert

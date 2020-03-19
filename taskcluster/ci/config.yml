@@ -9,7 +9,6 @@ product-dir: comm/mail
 treeherder:
     group-names:
         'X': 'Xpcshell tests'
-        'Z': 'MozMill tests'
         'I': 'Docker Image Builds'
         'TL': 'Toolchain builds for Linux 64-bits'
         'TM': 'Toolchain builds for OSX'
@@ -24,6 +23,8 @@ treeherder:
         'L10n': 'Localised Repacks'
         'L10n-Rpk': 'Localized Repackaged Repacks'
         'M': 'Mochitests'
+        'p': 'Partial generation'
+        'ps': 'Partials signing'
         'ms': 'Complete MAR signing'
         'MSI': 'Repack installers into MSIs'
         'MSIs': 'Signing of Repacked installers of MSIs'
@@ -52,34 +53,22 @@ release-promotion:
         promote_thunderbird:
             product: thunderbird
             target-tasks-method: promote_desktop
+            partial-updates: true
         push_thunderbird:
             product: thunderbird
             target-tasks-method: push_desktop
+            partial-updates: true
         ship_thunderbird:
             product: thunderbird
             target-tasks-method: ship_desktop
             version-bump: true
+            partial-updates: true
+
+merge-automation:
+    flavors: {}
 
 scriptworker:
     scope-prefix: 'project:comm:thunderbird:releng'
-
-    worker-types:
-        'linux-depsigning':
-            - 'project:comm:thunderbird:releng:signing:cert:dep-signing'
-        'linux-signing':
-            - 'project:comm:thunderbird:releng:signing:cert:nightly-signing'
-            - 'project:comm:thunderbird:releng:signing:cert:release-signing'
-        'scriptworker-prov-v1/tb-beetmover-dev':
-            - 'project:comm:thunderbird:releng:beetmover:bucket:dep'
-        'scriptworker-prov-v1/tb-beetmover-v1':
-            - 'project:comm:thunderbird:releng:beetmover:bucket:nightly'
-            - 'project:comm:thunderbird:releng:beetmover:bucket:release'
-        'scriptworker-prov-v1/tb-balrog-dev':
-            - 'project:comm:thunderbird:releng:balrog:server:dep'
-        'scriptworker-prov-v1/tb-balrog-v1':
-            - 'project:comm:thunderbird:releng:balrog:server:nightly'
-            - 'project:comm:thunderbird:releng:balrog:server:beta'
-            - 'project:comm:thunderbird:releng:balrog:server:release'
 
 partner-urls:
     release-partner-repack: {}
@@ -87,53 +76,102 @@ partner-urls:
 
 task-priority:
     by-project:
-        'comm-(esr60|esr68)': 'very-high'
+        'comm-esr68': 'very-high'
         'comm-beta': 'high'
         'comm-central': 'medium'
         'default': 'low'
 
+taskgraph:
+    register: comm_taskgraph:register
+    decision-parameters: 'comm_taskgraph:get_decision_parameters'
+
 workers:
     aliases:
         b-linux.*:
-            provisioner: aws-provisioner-v1
+            provisioner: 'comm-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: 'gecko-{level}-{alias}'
+            worker-type: '{alias}'
         b-win2012:
-            provisioner: aws-provisioner-v1
+            provisioner: 'comm-{level}'
             implementation: generic-worker
             os: windows
-            worker-type: 'gecko-{level}-{alias}'
+            worker-type: '{alias}'
         images:
-            provisioner: aws-provisioner-v1
+            provisioner: 'comm-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: 'gecko-{level}-{alias}'
+            worker-type: '{alias}'
+        balrog:
+            provisioner: scriptworker-k8s
+            implementation: balrog
+            os: scriptworker
+            worker-type:
+                by-release-level:
+                    production: comm-3-balrog
+                    staging: comm-1-balrog
+        bouncer:
+            provisioner: scriptworker-k8s
+            # Note that this implementation doesn't correspond with a
+            # payload_builder, there are several `bouncer-*` implementations.
+            implementation: bouncer
+            os: scriptworker
+            worker-type:
+                by-release-level:
+                    production: comm-3-bouncer
+                    staging: comm-1-bouncer
+        beetmover:
+            provisioner: scriptworker-k8s
+            implementation: beetmover
+            os: scriptworker
+            worker-type:
+                by-release-level:
+                    production: comm-3-beetmover
+                    staging: comm-1-beetmover
         linux-depsigning:
-            provisioner: scriptworker-prov-v1
+            provisioner: scriptworker-k8s
             implementation: scriptworker-signing
             os: linux
-            worker-type: tb-depsigning
+            worker-type: comm-t-signing
         linux-signing:
-            provisioner: scriptworker-prov-v1
+            provisioner: scriptworker-k8s
             implementation: scriptworker-signing
             os: linux
-            worker-type: tb-signing-v1
+            worker-type:
+                by-release-level:
+                    production: comm-3-signing
+                    staging: comm-t-signing
         mac-depsigning:
             provisioner: scriptworker-prov-v1
-            implementation: scriptworker-iscript
+            implementation: scriptworker-signing
             os: macosx
             worker-type: tb-depsigning-mac-v1
+        mac-notarization-poller:
+            provisioner: scriptworker-prov-v1
+            implementation: notarization-poller
+            os: macosx
+            worker-type: tb-mac-notarization-poller
         mac-signing:
             provisioner: scriptworker-prov-v1
-            implementation: scriptworker-iscript
+            implementation: scriptworker-signing
             os: macosx
-            worker-type: tb-signing-mac-v1
+            worker-type:
+                by-release-level:
+                    production: tb-signing-mac-v1
+                    staging: tb-depsigning-mac-v1
+        tree:
+            provisioner: scriptworker-k8s
+            implementation: treescript
+            os: scriptworker
+            worker-type:
+                by-release-level:
+                    production: comm-3-tree
+                    staging: comm-1-tree
         t-linux(-large|-xlarge):
-            provisioner: aws-provisioner-v1
+            provisioner: comm-t
             implementation: docker-worker
             os: linux
-            worker-type: 'gecko-{alias}'
+            worker-type: '{alias}'
         t-osx-1010:
             provisioner: releng-hardware
             implementation: generic-worker
@@ -144,33 +182,31 @@ workers:
             implementation: generic-worker
             os: macosx
             worker-type: 'gecko-{alias}'
-        t-win10-64(|-gpu):
-            provisioner: aws-provisioner-v1
+        t-win.*:
+            provisioner: comm-t
             implementation: generic-worker
             os: windows
-            worker-type: 'gecko-{alias}'
-        t-win7-32(|-gpu):
-            provisioner: aws-provisioner-v1
-            implementation: generic-worker
-            os: windows
-            worker-type: 'gecko-{alias}'
+            worker-type: '{alias}'
         succeed:
             provisioner: built-in
             implementation: succeed
             os: none
             worker-type: succeed
+        misc:
+            provisioner: comm-t
+            implementation: docker-worker
+            os: linux
+            worker-type: misc
 
 mac-notarization:
     mac-behavior:
-        by-release-type:
-            nightly.*: mac_notarize
-            beta.*: mac_notarize
-            release.*: mac_notarize
+        by-project:
+            comm-(central|beta|esr.*): mac_notarize
             default: mac_sign_and_pkg
     mac-entitlements:
         by-platform:
             macosx64.*:
                 by-release-level:
-                    production: security/mac/hardenedruntime/production.entitlements.xml
-                    default: security/mac/hardenedruntime/developer.entitlements.xml
+                    production: comm/build/macosx/hardenedruntime/production.entitlements.xml
+                    default: comm/build/macosx/hardenedruntime/developer.entitlements.xml
             default: ''

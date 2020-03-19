@@ -7,9 +7,9 @@
 #include "nsAbBaseCID.h"
 #include "nsNetUtil.h"
 #include "nsCOMPtr.h"
-#include "nsAutoPtr.h"
 #include "mozilla/NullPrincipal.h"
 #include "mozilla/dom/BrowsingContext.h"
+#include "mozilla/UniquePtr.h"
 #include "nsISupportsPrimitives.h"
 #include "plstr.h"
 #include "nsPIDOMWindow.h"
@@ -19,9 +19,9 @@
 #include "nsMsgUtils.h"
 #include "nsIMsgVCardService.h"
 #include "nsIAbCard.h"
-#include "nsIAbManager.h"
 #include "nsVCard.h"
 #include "nsIChannel.h"
+#include "nsIMsgVCardService.h"
 //
 // nsAbContentHandler
 //
@@ -70,12 +70,13 @@ nsAbContentHandler::HandleContent(const char *aContentType,
         nsCOMPtr<nsPIDOMWindowOuter> parentWindow =
             nsPIDOMWindowOuter::From(domWindow);
 
-        nsCOMPtr<nsIAbManager> ab = do_GetService(NS_ABMANAGER_CONTRACTID, &rv);
+        nsCOMPtr<nsIMsgVCardService> vCardService =
+            do_GetService(NS_MSGVCARDSERVICE_CONTRACTID, &rv);
         NS_ENSURE_SUCCESS(rv, rv);
 
         nsCOMPtr<nsIAbCard> cardFromVCard;
-        rv = ab->EscapedVCardToAbCard(unescapedData.get(),
-                                      getter_AddRefs(cardFromVCard));
+        rv = vCardService->EscapedVCardToAbCard(unescapedData.get(),
+                                                getter_AddRefs(cardFromVCard));
         NS_ENSURE_SUCCESS(rv, rv);
 
         nsCOMPtr<nsISupportsInterfacePointer> ifptr =
@@ -94,7 +95,7 @@ nsAbContentHandler::HandleContent(const char *aContentType,
         RefPtr<mozilla::dom::BrowsingContext> dialogWindow;
         rv = window->OpenDialog(
             NS_LITERAL_STRING(
-                "chrome://messenger/content/addressbook/abNewCardDialog.xul"),
+                "chrome://messenger/content/addressbook/abNewCardDialog.xhtml"),
             EmptyString(),
             NS_LITERAL_STRING(
                 "chrome,resizable=no,titlebar,modal,centerscreen"),
@@ -148,18 +149,21 @@ nsAbContentHandler::OnStreamComplete(nsIStreamLoader *aLoader,
   nsCOMPtr<nsIMsgVCardService> vCardService =
       do_GetService(NS_MSGVCARDSERVICE_CONTRACTID);
   if (vCardService) {
-    nsAutoPtr<VObject> vObj(
+    mozilla::UniquePtr<VObject> vObj(
         vCardService->Parse_MIME((const char *)data, datalen));
     if (vObj) {
       int32_t len = 0;
       nsCString vCard;
-      vCard.Adopt(vCardService->WriteMemoryVObjects(0, &len, vObj, false));
+      vCard.Adopt(
+          vCardService->WriteMemoryVObjects(0, &len, vObj.get(), false));
 
-      nsCOMPtr<nsIAbManager> ab = do_GetService(NS_ABMANAGER_CONTRACTID, &rv);
+      nsCOMPtr<nsIMsgVCardService> vCardService =
+          do_GetService(NS_MSGVCARDSERVICE_CONTRACTID, &rv);
       NS_ENSURE_SUCCESS(rv, rv);
 
       nsCOMPtr<nsIAbCard> cardFromVCard;
-      rv = ab->EscapedVCardToAbCard(vCard.get(), getter_AddRefs(cardFromVCard));
+      rv = vCardService->EscapedVCardToAbCard(vCard.get(),
+                                              getter_AddRefs(cardFromVCard));
       NS_ENSURE_SUCCESS(rv, rv);
 
       nsCOMPtr<mozIDOMWindowProxy> domWindow = do_GetInterface(aContext);
@@ -170,7 +174,7 @@ nsAbContentHandler::OnStreamComplete(nsIStreamLoader *aLoader,
       RefPtr<mozilla::dom::BrowsingContext> dialogWindow;
       rv = parentWindow->OpenDialog(
           NS_LITERAL_STRING(
-              "chrome://messenger/content/addressbook/abNewCardDialog.xul"),
+              "chrome://messenger/content/addressbook/abNewCardDialog.xhtml"),
           EmptyString(),
           NS_LITERAL_STRING("chrome,resizable=no,titlebar,modal,centerscreen"),
           cardFromVCard, getter_AddRefs(dialogWindow));

@@ -20,31 +20,16 @@ var {
   switchToView,
 } = ChromeUtils.import("resource://testing-common/mozmill/CalendarUtils.jsm");
 var { setData } = ChromeUtils.import("resource://testing-common/mozmill/ItemEditingHelpers.jsm");
-var { mark_failure } = ChromeUtils.import(
-  "resource://testing-common/mozmill/FolderDisplayHelpers.jsm"
-);
 
-var { plan_for_modal_dialog, wait_for_modal_dialog } = ChromeUtils.import(
-  "resource://testing-common/mozmill/WindowHelpers.jsm"
-);
-
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 var controller = mozmill.getMail3PaneController();
 var { eid, lookupEventBox } = helpersForController(controller);
 
-const TIMEOUT_COMMON_DIALOG = 3000;
-var savePromptAppeared = false;
-var failPoints = {
-  first: "no change",
-  second: "change all and back",
-  third: ["1st pass", "2nd pass", "3rd pass", "4th pass", "5th pass"],
-};
-
 var { date1, date2, date3, data, newlines } = setupData();
 
 // Test that closing an event dialog with no changes does not prompt for save.
-add_task(function testEventDialogModificationPrompt() {
+add_task(async function testEventDialogModificationPrompt() {
   createCalendar(controller, CALENDARNAME);
   switchToView(controller, "day");
   goToDate(controller, 2009, 1, 1);
@@ -53,7 +38,7 @@ add_task(function testEventDialogModificationPrompt() {
   let eventbox = lookupEventBox("day", EVENT_BOX, null, 1, null, EVENTPATH);
 
   // Create new event.
-  invokeEventDialog(controller, createbox, (event, iframe) => {
+  await invokeEventDialog(controller, createbox, async (event, iframe) => {
     let { eid: eventid } = helpersForController(event);
 
     let categories = cal.l10n.getAnyString("calendar", "categories", "categories2").split(",");
@@ -61,68 +46,59 @@ add_task(function testEventDialogModificationPrompt() {
     data[1].categories.push(categories[1], categories[2]);
 
     // Enter first set of data.
-    setData(event, iframe, data[0]);
+    await setData(event, iframe, data[0]);
 
     // save
     event.click(eventid("button-saveandclose"));
   });
 
-  invokeEventDialog(controller, eventbox, (event, iframe) => {
-    // Open, but change nothing.
-    plan_for_modal_dialog("commonDialog", handleSavePrompt);
-
+  // Open, but change nothing.
+  await invokeEventDialog(controller, eventbox, (event, iframe) => {
     // Escape the event window, there should be no prompt to save event.
     event.keypress(null, "VK_ESCAPE", {});
-    try {
-      wait_for_modal_dialog("commonDialog", TIMEOUT_COMMON_DIALOG);
-    } catch (e) {
-      failPoints.first = "";
-    }
+    // Wait to see if the prompt appears.
+    controller.sleep(2000);
   });
 
-  // open
-  invokeEventDialog(controller, eventbox, (event, iframe) => {
+  // Open, change all values then revert the changes.
+  await invokeEventDialog(controller, eventbox, async (event, iframe) => {
     // Change all values.
-    setData(event, iframe, data[1]);
+    await setData(event, iframe, data[1]);
 
     // Edit all values back to original.
-    setData(event, iframe, data[0]);
-
-    plan_for_modal_dialog("commonDialog", handleSavePrompt);
+    await setData(event, iframe, data[0]);
 
     // Escape the event window, there should be no prompt to save event.
     event.keypress(null, "VK_ESCAPE", {});
-    try {
-      wait_for_modal_dialog("commonDialog", TIMEOUT_COMMON_DIALOG);
-    } catch (e) {
-      failPoints.second = "";
-    }
+    // Wait to see if the prompt appears.
+    controller.sleep(2000);
   });
 
   // Delete event.
   controller.click(eventbox);
   controller.keypress(eid("day-view"), "VK_DELETE", {});
   controller.waitForElementNotPresent(eventbox);
+});
+
+add_task(async function testDescriptionWhitespace() {
+  let createbox = lookupEventBox("day", CANVAS_BOX, null, 1, 8);
+  let eventbox = lookupEventBox("day", EVENT_BOX, null, 1, null, EVENTPATH);
 
   for (let i = 0; i < newlines.length; i++) {
     // test set i
-    invokeEventDialog(controller, createbox, (event, iframe) => {
+    await invokeEventDialog(controller, createbox, async (event, iframe) => {
       let { eid: eventid } = helpersForController(event);
 
-      setData(event, iframe, newlines[i]);
+      await setData(event, iframe, newlines[i]);
       event.click(eventid("button-saveandclose"));
     });
 
     // Open and close.
-    invokeEventDialog(controller, eventbox, (event, iframe) => {
-      setData(event, iframe, newlines[i]);
-      plan_for_modal_dialog("commonDialog", handleSavePrompt);
+    await invokeEventDialog(controller, eventbox, async (event, iframe) => {
+      await setData(event, iframe, newlines[i]);
       event.keypress(null, "VK_ESCAPE", {});
-      try {
-        wait_for_modal_dialog("commonDialog", TIMEOUT_COMMON_DIALOG);
-      } catch (e) {
-        failPoints.third[i] = "";
-      }
+      // Wait to see if the prompt appears.
+      controller.sleep(2000);
     });
 
     // Delete it.
@@ -137,31 +113,8 @@ add_task(function testEventDialogModificationPrompt() {
 
 registerCleanupFunction(function teardownModule(module) {
   deleteCalendars(controller, CALENDARNAME);
-  if (savePromptAppeared) {
-    mark_failure([
-      "Save Prompt unexpectedly appeared on: ",
-      failPoints.first,
-      failPoints.second,
-      failPoints.third,
-    ]);
-  }
   closeAllEventDialogs();
 });
-
-function handleSavePrompt(dialogController) {
-  let { lookup: cdlglookup } = helpersForController(dialogController);
-  // Unexpected prompt, thus the test has already failed.
-  // Can't trigger a failure though, because the following click wouldn't
-  // be executed. So remembering it.
-  savePromptAppeared = true;
-
-  // application close is blocked without it
-  controller.waitThenClick(
-    cdlglookup(`
-        /id("commonDialog")/shadow/{"class":"dialog-button-box"}/{"dlgtype":"extra1"}
-    `)
-  );
-}
 
 function setupData() {
   return {

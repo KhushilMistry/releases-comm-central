@@ -13,9 +13,6 @@ if (!customElements.get("menulist")) {
   const { MailServices } = ChromeUtils.import(
     "resource:///modules/MailServices.jsm"
   );
-  const { fixIterator } = ChromeUtils.import(
-    "resource:///modules/iteratorUtils.jsm"
-  );
   /**
    * MozMenulistAddrbooks is a menulist widget that is automatically
    * populated with the complete address book list.
@@ -40,52 +37,63 @@ if (!customElements.get("menulist")) {
       this.addressBookListener = {
         onItemAdded: (aParentDir, aItem) => {
           // Are we interested in this new directory?
-          if (aItem instanceof Ci.nsIAbDirectory && this._matches(aItem)) {
+          try {
+            aItem.QueryInterface(Ci.nsIAbDirectory);
+          } catch (ex) {
+            return;
+          }
+          if (this._matches(aItem)) {
             this._rebuild();
           }
         },
 
         onItemRemoved: (aParentDir, aItem) => {
-          if (aItem instanceof Ci.nsIAbDirectory) {
-            // Find the item in the list to remove.
-            // We can't use indexOf here because we need loose equality.
-            let len = this._directories.length;
-            for (var index = len - 1; index >= 0; index--) {
-              if (this._directories[index] == aItem) {
-                break;
-              }
+          try {
+            aItem.QueryInterface(Ci.nsIAbDirectory);
+          } catch (ex) {
+            return;
+          }
+          // Find the item in the list to remove.
+          // We can't use indexOf here because we need loose equality.
+          let len = this._directories.length;
+          for (var index = len - 1; index >= 0; index--) {
+            if (this._directories[index] == aItem) {
+              break;
             }
-            if (index != -1) {
-              this._directories.splice(index, 1);
-              // Are we removing the selected directory?
-              if (
-                this.selectedItem ==
-                this.menupopup.removeChild(this.menupopup.childNodes[index])
-              ) {
-                // If so, try to select the first directory, if available.
-                if (this.menupopup.hasChildNodes()) {
-                  this.menupopup.firstChild.doCommand();
-                } else {
-                  this.selectedItem = null;
-                }
+          }
+          if (index != -1) {
+            this._directories.splice(index, 1);
+            // Are we removing the selected directory?
+            if (
+              this.selectedItem ==
+              this.menupopup.removeChild(this.menupopup.children[index])
+            ) {
+              // If so, try to select the first directory, if available.
+              if (this.menupopup.hasChildNodes()) {
+                this.menupopup.firstElementChild.doCommand();
+              } else {
+                this.selectedItem = null;
               }
             }
           }
         },
 
         onItemPropertyChanged: (aItem, aProperty, aOldValue, aNewValue) => {
-          if (aItem instanceof Ci.nsIAbDirectory) {
-            // Find the item in the list to rename.
-            // We can't use indexOf here because we need loose equality.
-            let len = this._directories.length;
-            for (var oldIndex = len - 1; oldIndex >= 0; oldIndex--) {
-              if (this._directories[oldIndex] == aItem) {
-                break;
-              }
+          try {
+            aItem.QueryInterface(Ci.nsIAbDirectory);
+          } catch (ex) {
+            return;
+          }
+          // Find the item in the list to rename.
+          // We can't use indexOf here because we need loose equality.
+          let len = this._directories.length;
+          for (var oldIndex = len - 1; oldIndex >= 0; oldIndex--) {
+            if (this._directories[oldIndex] == aItem) {
+              break;
             }
-            if (oldIndex != -1) {
-              this._rebuild();
-            }
+          }
+          if (oldIndex != -1) {
+            this._rebuild();
           }
         },
       };
@@ -124,16 +132,14 @@ if (!customElements.get("menulist")) {
     _rebuild() {
       // Init the address book cache.
       this._directories.length = 0;
-      let directories = MailServices.ab.directories;
 
-      while (directories && directories.hasMoreElements()) {
-        let ab = directories.getNext();
-        if (ab instanceof Ci.nsIAbDirectory && this._matches(ab)) {
+      for (let ab of MailServices.ab.directories) {
+        if (this._matches(ab)) {
           this._directories.push(ab);
 
           if (this.getAttribute("mailinglists") == "true") {
             // Also append contained mailinglists.
-            for (let list of fixIterator(ab.childNodes, Ci.nsIAbDirectory)) {
+            for (let list of ab.childNodes) {
               if (this._matches(list)) {
                 this._directories.push(list);
               }

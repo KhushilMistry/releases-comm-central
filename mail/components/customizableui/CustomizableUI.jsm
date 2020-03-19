@@ -1021,7 +1021,7 @@ var CustomizableUIInternal = {
         let limit = currentNode.previousElementSibling;
         let node = container.lastElementChild;
         while (node && node != limit) {
-          let previousSibling = node.previousElementSibling;
+          let previousElementSibling = node.previousElementSibling;
           // Nodes opt-in to removability. If they're removable, and we haven't
           // seen them in the placements array, then we toss them into the palette
           // if one exists. If no palette exists, we just remove the node. If the
@@ -1058,7 +1058,7 @@ var CustomizableUIInternal = {
               gDirty = true;
             }
           }
-          node = previousSibling;
+          node = previousElementSibling;
         }
       }
 
@@ -2023,7 +2023,7 @@ var CustomizableUIInternal = {
         }
       }
       let tagName = target.localName;
-      inInput = tagName == "input" || tagName == "textbox";
+      inInput = tagName == "input";
       inItem = tagName == "toolbaritem" || tagName == "toolbarbutton";
       let isMenuItem = tagName == "menuitem";
       inMenu = inMenu || isMenuItem;
@@ -2134,7 +2134,7 @@ var CustomizableUIInternal = {
     let widgets = new Set();
 
     // It's possible that some widgets have been defined programmatically and
-    // have not been overlayed into the palette. We can find those inside
+    // have not been overlaid into the palette. We can find those inside
     // gPalette.
     for (let [id, widget] of gPalette) {
       if (!widget.currentArea) {
@@ -4422,7 +4422,7 @@ var CustomizableUI = {
           subviewItem.setAttribute(attr, attrVal);
         }
       }
-      // We do this after so the .subviewbutton class doesn't get overriden.
+      // We do this after so the .subviewbutton class doesn't get overridden.
       if (menuChild.localName == "menuitem") {
         subviewItem.classList.add("subviewbutton");
       }
@@ -4441,8 +4441,8 @@ var CustomizableUI = {
     // to avoid reflowing each time we remove something.
     parent.removeChild(aSubview);
 
-    while (aSubview.firstChild) {
-      aSubview.firstChild.remove();
+    while (aSubview.firstElementChild) {
+      aSubview.firstElementChild.remove();
     }
 
     parent.appendChild(aSubview);
@@ -4452,8 +4452,8 @@ var CustomizableUI = {
     return CustomizableUIInternal.getCustomizationTarget(aElement);
   },
 };
-Object.freeze(this.CustomizableUI);
-Object.freeze(this.CustomizableUI.windows);
+Object.freeze(CustomizableUI);
+Object.freeze(CustomizableUI.windows);
 
 /**
  * All external consumers of widgets are really interacting with these wrappers

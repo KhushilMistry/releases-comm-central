@@ -4,17 +4,16 @@
 
 /* import-globals-from ../../../../toolkit/mozapps/extensions/content/aboutaddons.js */
 
-var { ExtensionSupport } = ChromeUtils.import(
-  "resource:///modules/ExtensionSupport.jsm"
-);
-var { BrowserUtils } = ChromeUtils.import(
-  "resource://gre/modules/BrowserUtils.jsm"
-);
-
-var mailExtBundle = Services.strings.createBundle(
-  "chrome://messenger/locale/extensionsOverlay.properties"
-);
-var extensionsNeedingRestart = new Set();
+const THUNDERBIRD_THEME_PREVIEWS = new Map([
+  [
+    "thunderbird-compact-light@mozilla.org",
+    "chrome://mozapps/content/extensions/firefox-compact-light.svg",
+  ],
+  [
+    "thunderbird-compact-dark@mozilla.org",
+    "chrome://mozapps/content/extensions/firefox-compact-dark.svg",
+  ],
+]);
 
 /* This file runs in both the outer window, which controls the categories list, search bar, etc.,
  * and the inner window which is the list of add-ons or the detail view. */
@@ -26,40 +25,17 @@ var extensionsNeedingRestart = new Set();
     );
     document.insertBefore(contentStylesheet, document.documentElement);
 
-    // Add navigation buttons for back and forward on the addons page.
-    let hbox = document.createXULElement("hbox");
-    hbox.setAttribute("id", "nav-header");
-    hbox.setAttribute("align", "center");
-    hbox.setAttribute("pack", "center");
-
-    let backButton = document.createXULElement("toolbarbutton");
-    backButton.setAttribute("id", "back-btn");
-    backButton.setAttribute("class", "nav-button");
-    backButton.setAttribute("command", "cmd_back");
-    backButton.setAttribute(
-      "tooltiptext",
-      mailExtBundle.GetStringFromName("cmdBackTooltip")
-    );
-    backButton.setAttribute("disabled", "true");
-
-    let forwardButton = document.createXULElement("toolbarbutton");
-    forwardButton.setAttribute("id", "forward-btn");
-    forwardButton.setAttribute("class", "nav-button");
-    forwardButton.setAttribute("command", "cmd_forward");
-    forwardButton.setAttribute(
-      "tooltiptext",
-      mailExtBundle.GetStringFromName("cmdForwardTooltip")
-    );
-    forwardButton.setAttribute("disabled", "true");
-    hbox.appendChild(backButton);
-    hbox.appendChild(forwardButton);
-
-    document
-      .getElementById("category-box")
-      .insertBefore(hbox, document.getElementById("categories"));
-
     // Fix the "Search on addons.mozilla.org" placeholder text in the searchbox.
-    let textbox = document.getElementById("header-search");
+    let browser = document.getElementById("html-view-browser");
+    if (!/(interactive|complete)/.test(browser.contentDocument.readyState)) {
+      await new Promise(resolve =>
+        browser.contentWindow.addEventListener("DOMContentLoaded", resolve, {
+          once: true,
+        })
+      );
+    }
+
+    let textbox = browser.contentDocument.getElementById("search-addons");
     let placeholder = textbox.getAttribute("placeholder");
     placeholder = placeholder.replace(
       "addons.mozilla.org",
@@ -78,130 +54,11 @@ var extensionsNeedingRestart = new Set();
     "chrome://messenger/locale/addons.properties"
   );
 
-  let _getAddonMessageInfo = getAddonMessageInfo;
-  getAddonMessageInfo = async function(addon) {
-    let result = await _getAddonMessageInfo(addon);
-    if (!result.message) {
-      let { stringName } = getTrueState(addon, "gDetailView._addon");
-      if (stringName) {
-        result.message = mailExtBundle.formatStringFromName(stringName, [
-          addon.name,
-          brandBundle.GetStringFromName("brandShortName"),
-        ]);
-        result.type = "success";
-        extensionsNeedingRestart.add(addon.id);
-      } else {
-        extensionsNeedingRestart.delete(addon.id);
-      }
-      setRestartBar();
+  let _getScreenshotUrlForAddon = getScreenshotUrlForAddon;
+  getScreenshotUrlForAddon = function(addon) {
+    if (THUNDERBIRD_THEME_PREVIEWS.has(addon.id)) {
+      return THUNDERBIRD_THEME_PREVIEWS.get(addon.id);
     }
-    return result;
+    return _getScreenshotUrlForAddon(addon);
   };
-
-  let listener = {
-    onUninstalling(addon) {
-      if (ExtensionSupport.loadedLegacyExtensions.hasAnyState(addon.id)) {
-        extensionsNeedingRestart.add(addon.id);
-        setRestartBar();
-      }
-    },
-    onUninstalled(addon) {
-      if (ExtensionSupport.loadedLegacyExtensions.hasAnyState(addon.id)) {
-        extensionsNeedingRestart.add(addon.id);
-        setRestartBar();
-      }
-    },
-  };
-  AddonManager.addAddonListener(listener);
-  window.addEventListener("unload", () =>
-    AddonManager.removeAddonListener(listener)
-  );
-
-  // If a legacy extension has been removed, it needs a restart but is not in the list
-  // - show the restart bar anyway.
-  let removed = await ExtensionSupport.loadedLegacyExtensions.listRemoved();
-  for (let removedExtension of removed) {
-    extensionsNeedingRestart.add(removedExtension.id);
-  }
-  setRestartBar();
 })();
-
-function setRestartBar() {
-  let list = document.querySelector("addon-list");
-  if (!list || list.type != "extension") {
-    return;
-  }
-
-  let restartBar = document.getElementById("restartBar");
-  if (extensionsNeedingRestart.size == 0) {
-    if (restartBar) {
-      restartBar.remove();
-    }
-    return;
-  }
-  if (restartBar) {
-    return;
-  }
-
-  restartBar = document.createElement("message-bar");
-  restartBar.id = "restartBar";
-  restartBar.setAttribute("type", "warning");
-
-  const message = document.createElement("span");
-  message.textContent = mailExtBundle.formatStringFromName(
-    "globalRestartMessage",
-    [brandBundle.GetStringFromName("brandShortName")]
-  );
-
-  const restart = document.createElement("button");
-  restart.textContent = mailExtBundle.GetStringFromName("globalRestartButton");
-  restart.addEventListener("click", () => {
-    BrowserUtils.restartApplication();
-  });
-
-  restartBar.append(message, restart);
-  list.pendingUninstallStack.append(restartBar);
-}
-
-/**
- * The true status of legacy extensions, which AddonManager doesn't know
- * about because it thinks all extensions are restartless.
- *
- * @return An object of three properties:
- *         stringName: a string to display to the user, from extensionsOverlay.properties.
- *         undoFunction: function to call, should the user want to return to the previous state.
- *         version: the current version of the extension.
- */
-function getTrueState(addon) {
-  let state = ExtensionSupport.loadedLegacyExtensions.get(addon.id);
-  let returnObject = {};
-
-  if (!state) {
-    return returnObject;
-  }
-
-  if (
-    addon.pendingOperations & AddonManager.PENDING_UNINSTALL &&
-    ExtensionSupport.loadedLegacyExtensions.has(addon.id)
-  ) {
-    returnObject.stringName = "warnLegacyUninstall";
-    returnObject.undoFunction = addon.cancelUninstall;
-  } else if (state.pendingOperation == "install") {
-    returnObject.stringName = "warnLegacyInstall";
-    returnObject.undoFunction = addon.uninstall;
-  } else if (addon.userDisabled) {
-    returnObject.stringName = "warnLegacyDisable";
-    returnObject.undoFunction = addon.enable;
-  } else if (state.pendingOperation == "enable") {
-    returnObject.stringName = "warnLegacyEnable";
-    returnObject.undoFunction = addon.disable;
-  } else if (state.pendingOperation == "upgrade") {
-    returnObject.stringName = "warnLegacyUpgrade";
-    returnObject.version = state.version;
-  } else if (state.pendingOperation == "downgrade") {
-    returnObject.stringName = "warnLegacyDowngrade";
-    returnObject.version = state.version;
-  }
-
-  return returnObject;
-}

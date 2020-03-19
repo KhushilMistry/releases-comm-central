@@ -6,20 +6,20 @@
 /* import-globals-from editBookmarkOverlay.js */
 /* import-globals-from ../../../../../toolkit/content/contentAreaUtils.js */
 
-var {AppConstants} = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
-var {XPCOMUtils} = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
-var {Services} = ChromeUtils.import("resource://gre/modules/Services.jsm");
+var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+var { AppConstants } =
+  ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
 
 ChromeUtils.defineModuleGetter(this, "MigrationUtils",
-                               "resource:///modules/MigrationUtils.jsm");
+  "resource:///modules/MigrationUtils.jsm");
 ChromeUtils.defineModuleGetter(this, "BookmarkJSONUtils",
-                               "resource://gre/modules/BookmarkJSONUtils.jsm");
+  "resource://gre/modules/BookmarkJSONUtils.jsm");
 ChromeUtils.defineModuleGetter(this, "PlacesBackups",
-                               "resource://gre/modules/PlacesBackups.jsm");
+  "resource://gre/modules/PlacesBackups.jsm");
 ChromeUtils.defineModuleGetter(this, "DownloadUtils",
-                               "resource://gre/modules/DownloadUtils.jsm");
+  "resource://gre/modules/DownloadUtils.jsm");
 ChromeUtils.defineModuleGetter(this, "OS",
-                               "resource://gre/modules/osfile.jsm");
+  "resource://gre/modules/osfile.jsm");
 
 const RESTORE_FILEPICKER_FILTER_EXT = "*.json;*.jsonlz4";
 
@@ -967,21 +967,21 @@ var ViewMenu = {
    *          null if the caller should just append to the popup.
    */
   _clean: function VM__clean(popup, startID, endID) {
-    if (endID)
-      NS_ASSERT(startID, "meaningless to have valid endID and null startID");
+    if (endID && !startID)
+      throw new Error("meaningless to have valid endID and null startID");
     if (startID) {
       var startElement = document.getElementById(startID);
-      NS_ASSERT(startElement.parentNode ==
-                popup, "startElement is not in popup");
-      NS_ASSERT(startElement,
-                "startID does not correspond to an existing element");
+      if (!startElement)
+        throw new Error("startID does not correspond to an existing element");
+      if (startElement.parentNode != popup)
+        throw new Error("startElement is not in popup");
       var endElement = null;
       if (endID) {
         endElement = document.getElementById(endID);
-        NS_ASSERT(endElement.parentNode == popup,
-                  "endElement is not in popup");
-        NS_ASSERT(endElement,
-                  "endID does not correspond to an existing element");
+        if (!endElement)
+          throw new Error("endID does not correspond to an existing element");
+        if (endElement.parentNode != popup)
+          throw new Error("endElement is not in popup");
       }
       while (startElement.nextSibling != endElement)
         popup.removeChild(startElement.nextSibling);

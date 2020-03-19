@@ -25,9 +25,9 @@ load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
 
 /* import-globals-from ../../../test/resources/alertTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 load("../../../resources/alertTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 
 // Globals
 var { MailServices } = ChromeUtils.import(
@@ -126,15 +126,10 @@ function* test_waitForTargetUpdate() {
 
 // Cleanup
 function endTest() {
-  let enumerator = gTargetFolder.messages;
   let numMsgs = 0;
-  while (enumerator.hasMoreElements()) {
+  for (let header of gTargetFolder.messages) {
     numMsgs++;
-    Assert.notEqual(
-      enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr).flags &
-        msgFlagOffline,
-      0
-    );
+    Assert.notEqual(header.flags & msgFlagOffline, 0);
   }
   Assert.equal(2, numMsgs);
   Assert.equal(gAutoSyncListener._waitingForUpdateList.length, 0);

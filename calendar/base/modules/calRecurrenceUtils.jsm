@@ -7,7 +7,7 @@
  */
 
 var { PluralForm } = ChromeUtils.import("resource://gre/modules/PluralForm.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 this.EXPORTED_SYMBOLS = [
   "recurrenceRule2String",
@@ -76,7 +76,7 @@ function recurrenceRule2String(recurrenceInfo, startDate, endDate, allDay) {
       let ruleString;
       if (rule.type == "DAILY") {
         if (checkRecurrenceRule(rule, ["BYDAY"])) {
-          let days = rule.getComponent("BYDAY", {});
+          let days = rule.getComponent("BYDAY");
           let weekdays = [2, 3, 4, 5, 6];
           if (weekdays.length == days.length) {
             let i;
@@ -100,7 +100,7 @@ function recurrenceRule2String(recurrenceInfo, startDate, endDate, allDay) {
         // support a single 'BYDAY'-rule only.
         if (checkRecurrenceRule(rule, ["BYDAY"])) {
           // create a string like 'Monday, Tuesday and Wednesday'
-          let days = rule.getComponent("BYDAY", {});
+          let days = rule.getComponent("BYDAY");
           let weekdays = "";
           // select noun class (grammatical gender) according to the
           // first day of the list
@@ -126,7 +126,7 @@ function recurrenceRule2String(recurrenceInfo, startDate, endDate, allDay) {
         }
       } else if (rule.type == "MONTHLY") {
         if (checkRecurrenceRule(rule, ["BYDAY"])) {
-          let byday = rule.getComponent("BYDAY", {});
+          let byday = rule.getComponent("BYDAY");
           if (everyWeekDay(byday)) {
             // Rule every day of the month.
             ruleString = getRString("monthlyEveryDayOfNth");
@@ -190,7 +190,7 @@ function recurrenceRule2String(recurrenceInfo, startDate, endDate, allDay) {
             ruleString = PluralForm.get(rule.interval, monthlyString).replace("#2", rule.interval);
           }
         } else if (checkRecurrenceRule(rule, ["BYMONTHDAY"])) {
-          let component = rule.getComponent("BYMONTHDAY", {});
+          let component = rule.getComponent("BYMONTHDAY");
 
           // First, find out if the 'BYMONTHDAY' component contains
           // any elements with a negative value lesser than -1 ("the
@@ -237,10 +237,10 @@ function recurrenceRule2String(recurrenceInfo, startDate, endDate, allDay) {
         let bymonthday = null;
         let bymonth = null;
         if (checkRecurrenceRule(rule, ["BYMONTHDAY"])) {
-          bymonthday = rule.getComponent("BYMONTHDAY", {});
+          bymonthday = rule.getComponent("BYMONTHDAY");
         }
         if (checkRecurrenceRule(rule, ["BYMONTH"])) {
-          bymonth = rule.getComponent("BYMONTH", {});
+          bymonth = rule.getComponent("BYMONTH");
         }
         if (
           (bymonth && bymonth.length > 1) ||
@@ -268,7 +268,7 @@ function recurrenceRule2String(recurrenceInfo, startDate, endDate, allDay) {
           ruleString = PluralForm.get(rule.interval, yearlyString).replace("#3", rule.interval);
         } else if (checkRecurrenceRule(rule, ["BYMONTH"]) && checkRecurrenceRule(rule, ["BYDAY"])) {
           // RRULE:FREQ=YEARLY;BYMONTH=x;BYDAY=y1,y2,....
-          let byday = rule.getComponent("BYDAY", {});
+          let byday = rule.getComponent("BYDAY");
           let month = getRString("repeatDetailsMonth" + bymonth[0]);
           if (everyWeekDay(byday)) {
             // Every day of the month.
@@ -382,7 +382,7 @@ function recurrenceRule2String(recurrenceInfo, startDate, endDate, allDay) {
  *                            rules and an array of negative rules.
  */
 function splitRecurrenceRules(recurrenceInfo) {
-  let ritems = recurrenceInfo.getRecurrenceItems({});
+  let ritems = recurrenceInfo.getRecurrenceItems();
   let rules = [];
   let exceptions = [];
   for (let ritem of ritems) {
@@ -405,7 +405,7 @@ function splitRecurrenceRules(recurrenceInfo) {
  */
 function checkRecurrenceRule(aRule, aArray) {
   for (let comp of aArray) {
-    let ruleComp = aRule.getComponent(comp, {});
+    let ruleComp = aRule.getComponent(comp);
     if (ruleComp && ruleComp.length > 0) {
       return true;
     }
@@ -429,7 +429,7 @@ function countOccurrences(aItem) {
     occCounter = 0;
     let excCounter = 0;
     let byCount = false;
-    let ritems = recInfo.getRecurrenceItems({});
+    let ritems = recInfo.getRecurrenceItems();
     for (let ritem of ritems) {
       if (ritem instanceof Ci.calIRecurrenceRule) {
         if (ritem.isByCount) {
@@ -443,7 +443,7 @@ function countOccurrences(aItem) {
             until = ritem.untilDate.clone();
           }
 
-          let exceptionIds = recInfo.getExceptionIds({});
+          let exceptionIds = recInfo.getExceptionIds();
           for (let exceptionId of exceptionIds) {
             let recur = recInfo.getExceptionFor(exceptionId);
             recur.QueryInterface(Ci.calIEvent);
@@ -460,7 +460,7 @@ function countOccurrences(aItem) {
           from.addDuration(cal.createDuration("-P1D"));
           until.addDuration(cal.createDuration("P1D"));
 
-          let occurrences = recInfo.getOccurrences(from, until, 0, {});
+          let occurrences = recInfo.getOccurrences(from, until, 0);
           occCounter = occCounter + occurrences.length;
         }
       } else if (ritem instanceof Ci.calIRecurrenceDate) {

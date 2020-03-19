@@ -11,17 +11,19 @@ transforms:
     - taskgraph.transforms.beetmover_repackage_l10n:transforms
     - taskgraph.transforms.beetmover_repackage:transforms
     - taskgraph.transforms.task:transforms
-    - comm_taskgraph:remove_widevine
+    - comm_taskgraph.transforms.signing:transforms
 
 kind-dependencies:
     - build
     - build-signing
     - repackage
     - repackage-signing
-    - nightly-l10n
-    - nightly-l10n-signing
+    - shippable-l10n
+    - shippable-l10n-signing
     - repackage-l10n
     - repackage-signing-l10n
+    - partials
+    - partials-signing
     - repackage-signing-msi
     - mar-signing
     - mar-signing-l10n

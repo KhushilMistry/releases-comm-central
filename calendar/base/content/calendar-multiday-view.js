@@ -10,7 +10,7 @@
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  const { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+  const { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
   /**
    * Implements the Drag and Drop class for the Calendar Header Container.
@@ -131,7 +131,7 @@
     onClick(event) {
       if (event.button == 0) {
         if (!(event.ctrlKey || event.metaKey)) {
-          this.calendarView.setSelectedItems(0, []);
+          this.calendarView.setSelectedItems([]);
         }
       }
       if (event.button == 2) {
@@ -198,7 +198,7 @@
 
         let whichside = event.whichside;
         if (whichside) {
-          this.calendarView.setSelectedItems(1, [
+          this.calendarView.setSelectedItems([
             event.ctrlKey ? this.mOccurrence.parentItem : this.mOccurrence,
           ]);
 
@@ -296,13 +296,12 @@
                       </label>
                     </vbox>
                     <hbox class="alarm-icons-box"
-                          align="top">
+                          align="start">
                     </hbox>
                     <image class="item-classification-box">
                     </image>
                   </hbox>
-                  <stack mousethrough="always"
-                         class="calendar-category-box-stack">
+                  <stack class="calendar-category-box-stack">
                     <hbox class="calendar-category-box category-color-box calendar-event-selection"
                           flex="1"
                           pack="end">
@@ -312,14 +311,10 @@
                   </stack>
                   <box class="calendar-event-gripbar-container">
                     <calendar-event-gripbar class="calendar-event-box-grippy-top"
-                                            mousethrough="never"
                                             whichside="start">
                     </calendar-event-gripbar>
-                    <spacer mousethrough="always"
-                            flex="1">
-                    </spacer>
+                    <spacer flex="1"/>
                     <calendar-event-gripbar class="calendar-event-box-grippy-bottom"
-                                            mousethrough="never"
                                             whichside="end">
                     </calendar-event-gripbar>
                   </box>
@@ -330,10 +325,12 @@
         `)
       );
 
-      this.setAttribute("mousethrough", "never");
+      this.style.pointerEvents = "auto";
       this.setAttribute("tooltip", "itemTooltip");
 
-      this.orient = this.getAttribute("orient");
+      if (!this.hasAttribute("orient")) {
+        this.setAttribute("orient", "vertical");
+      }
       this.addEventNameTextboxListener();
       this.initializeAttributeInheritance();
     }
@@ -402,7 +399,7 @@
         this.editingTimer = null;
       }
 
-      this.calendarView.setSelectedItems(1, [this.mOccurrence]);
+      this.calendarView.setSelectedItems([this.mOccurrence]);
 
       this.mEditing = false;
 

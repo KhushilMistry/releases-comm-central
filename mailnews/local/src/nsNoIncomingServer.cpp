@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -39,7 +39,7 @@ nsNoIncomingServer::GetLocalDatabaseType(nsACString &type) {
 
 NS_IMETHODIMP
 nsNoIncomingServer::GetAccountManagerChrome(nsAString &aResult) {
-  aResult.AssignLiteral("am-serverwithnoidentities.xul");
+  aResult.AssignLiteral("am-serverwithnoidentities.xhtml");
   return NS_OK;
 }
 
@@ -151,13 +151,12 @@ NS_IMETHODIMP
 nsNoIncomingServer::GetNewMail(nsIMsgWindow *aMsgWindow,
                                nsIUrlListener *aUrlListener,
                                nsIMsgFolder *aInbox, nsIURI **aResult) {
-  nsCOMArray<nsIPop3IncomingServer> deferredServers;
+  nsTArray<RefPtr<nsIPop3IncomingServer>> deferredServers;
   nsresult rv = GetDeferredServers(this, deferredServers);
   NS_ENSURE_SUCCESS(rv, rv);
   if (!deferredServers.IsEmpty()) {
     rv = deferredServers[0]->DownloadMailFromServers(
-        deferredServers.Elements(), deferredServers.Length(), aMsgWindow,
-        aInbox, aUrlListener);
+        deferredServers, aMsgWindow, aInbox, aUrlListener);
   }
   // listener might be counting on us to send a notification.
   else if (aUrlListener)

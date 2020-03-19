@@ -2,13 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* globals cal currentView MozElements MozXULElement Services toggleOrientation */
+/* global cal, currentView, calendarNavigationBar, MozElements, MozXULElement, Services,
+   toggleOrientation */
 
 "use strict";
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+  const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 
   /**
    * Calendar observer for calendar view elements. Used in CalendarBaseView class.
@@ -53,11 +54,7 @@
         }
       }
 
-      const occs = item.getOccurrencesBetween(
-        this.calView.startDate,
-        this.calView.queryEndDate,
-        {}
-      );
+      const occs = item.getOccurrencesBetween(this.calView.startDate, this.calView.queryEndDate);
       for (const occ of occs) {
         if (cal.item.isToDo(occ)) {
           this.calView.doAddItem(occ.QueryInterface(Ci.calITodo));
@@ -72,11 +69,7 @@
         return;
       }
       if (!cal.item.isToDo(oldItem) || oldItem.entryDate || oldItem.dueDate) {
-        let occs = oldItem.getOccurrencesBetween(
-          this.calView.startDate,
-          this.calView.queryEndDate,
-          {}
-        );
+        let occs = oldItem.getOccurrencesBetween(this.calView.startDate, this.calView.queryEndDate);
         for (const occ of occs) {
           if (cal.item.isToDo(occ)) {
             this.calView.doDeleteItem(occ.QueryInterface(Ci.calITodo));
@@ -94,11 +87,7 @@
         }
       }
 
-      let occs = newItem.getOccurrencesBetween(
-        this.calView.startDate,
-        this.calView.queryEndDate,
-        {}
-      );
+      let occs = newItem.getOccurrencesBetween(this.calView.startDate, this.calView.queryEndDate);
       for (const occ of occs) {
         if (cal.item.isToDo(occ)) {
           this.calView.doAddItem(occ.QueryInterface(Ci.calITodo));
@@ -121,11 +110,7 @@
         }
       }
 
-      const occs = item.getOccurrencesBetween(
-        this.calView.startDate,
-        this.calView.queryEndDate,
-        {}
-      );
+      const occs = item.getOccurrencesBetween(this.calView.startDate, this.calView.queryEndDate);
       for (const occ of occs) {
         if (cal.item.isToDo(occ)) {
           this.calView.doDeleteItem(occ.QueryInterface(Ci.calITodo));
@@ -237,7 +222,7 @@
       }
     }
 
-    onGetResult(opCalendar, status, itemType, detail, count, items) {
+    onGetResult(opCalendar, status, itemType, detail, items) {
       if (this.cancelled || !Components.isSuccessCode(status)) {
         return;
       }
@@ -559,11 +544,11 @@
     }
 
     set rotated(rotated) {
-      return (this.orient = rotated ? "horizontal" : "vertical");
+      return this.setAttribute("orient", rotated ? "horizontal" : "vertical");
     }
 
     get rotated() {
-      return this.orient == "horizontal";
+      return this.getAttribute("orient") == "horizontal";
     }
 
     get supportsRotation() {
@@ -727,7 +712,7 @@
      * @param {boolean} forceShortName  Whether to force the use of a short name.
      */
     adjustWeekdayLength(forceShortName) {
-      const labelDayBoxKids = this.labeldaybox.childNodes;
+      const labelDayBoxKids = this.labeldaybox.children;
       let useShortNames = false;
 
       if (!labelDayBoxKids || !labelDayBoxKids[0] || forceShortName === true) {
@@ -757,7 +742,7 @@
       if (this.mLongWeekdayTotalPixels <= 0) {
         let maxDayWidth = 0;
 
-        for (const label of this.labeldaybox.childNodes) {
+        for (const label of this.labeldaybox.children) {
           if (label.localName == "calendar-day-label") {
             label.shortWeekNames = false;
             const curPixelLength = label.getLongWeekdayPixels();
@@ -765,7 +750,7 @@
           }
         }
         if (maxDayWidth > 0) {
-          this.mLongWeekdayTotalPixels = maxDayWidth * this.labeldaybox.childNodes.length + 10;
+          this.mLongWeekdayTotalPixels = maxDayWidth * this.labeldaybox.children.length + 10;
         }
       }
       return this.mLongWeekdayTotalPixels;
@@ -940,27 +925,25 @@
     }
 
     setDateRange(startDate, endDate) {
-      cal.navigationBar.setDateRange(startDate, endDate);
+      calendarNavigationBar.setDateRange(startDate, endDate);
     }
 
-    getSelectedItems(count) {
-      count.value = this.mSelectedItems.length;
+    getSelectedItems() {
       return this.mSelectedItems;
     }
 
-    setSelectedItems(count, items) {
+    setSelectedItems(items) {
       this.mSelectedItems = items.concat([]);
       return this.mSelectedItems;
     }
 
-    getDateList(count, dates) {
+    getDateList() {
       const start = this.startDate.clone();
       const dateList = [];
       while (start.compare(this.endDate) <= 0) {
         dateList.push(start);
         start.day++;
       }
-      count.value = dateList.length;
       return dateList;
     }
 

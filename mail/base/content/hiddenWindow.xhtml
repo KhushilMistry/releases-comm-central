@@ -1,0 +1,174 @@
+<?xml version="1.0"?>
+
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#ifdef XP_MACOSX
+<!DOCTYPE window [
+<!ENTITY % brandDTD SYSTEM "chrome://branding/locale/brand.dtd" >
+%brandDTD;
+<!ENTITY % messengerDTD SYSTEM "chrome://messenger/locale/messenger.dtd" >
+%messengerDTD;
+<!ENTITY % utilityDTD SYSTEM "chrome://communicator/locale/utilityOverlay.dtd">
+%utilityDTD;
+<!ENTITY % msgViewPickerDTD SYSTEM "chrome://messenger/locale/msgViewPickerOverlay.dtd" >
+%msgViewPickerDTD;
+<!ENTITY % baseMenuOverlayDTD SYSTEM "chrome://messenger/locale/baseMenuOverlay.dtd">
+%baseMenuOverlayDTD;
+<!ENTITY % charsetDTD SYSTEM "chrome://global/locale/charsetMenu.dtd">
+%charsetDTD;
+<!ENTITY % viewZoomOverlayDTD SYSTEM "chrome://messenger/locale/viewZoomOverlay.dtd">
+%viewZoomOverlayDTD;
+<!ENTITY % msgReadSMIMEDTD SYSTEM "chrome://messenger-smime/locale/msgReadSMIMEOverlay.dtd">
+%msgReadSMIMEDTD;
+<!ENTITY % quickFilterBarDTD SYSTEM "chrome://messenger/locale/quickFilterBar.dtd">
+%quickFilterBarDTD;
+<!ENTITY % msgViewPickerDTD SYSTEM "chrome://messenger/locale/msgViewPickerOverlay.dtd" >
+%msgViewPickerDTD;
+<!ENTITY % msgHdrViewOverlayDTD SYSTEM "chrome://messenger/locale/msgHdrViewOverlay.dtd">
+%msgHdrViewOverlayDTD;
+<!ENTITY % lightningDTD SYSTEM "chrome://lightning/locale/lightning.dtd">
+%lightningDTD;
+<!ENTITY % calendarDTD SYSTEM "chrome://calendar/locale/calendar.dtd">
+%calendarDTD;
+<!ENTITY % calendarMenuOverlayDTD SYSTEM "chrome://calendar/locale/menuOverlay.dtd">
+%calendarMenuOverlayDTD;
+<!ENTITY % toolbarDTD SYSTEM "chrome://lightning/locale/lightning-toolbar.dtd">
+%toolbarDTD;
+<!ENTITY % eventDialogDTD SYSTEM "chrome://calendar/locale/calendar-event-dialog.dtd">
+%eventDialogDTD;
+]>
+
+<window id="hidden-window"
+        xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" xmlns:html="http://www.w3.org/1999/xhtml"
+        onload="hiddenWindowStartup();">
+
+<script src="chrome://global/content/globalOverlay.js"/>
+<script src="chrome://messenger/content/commandglue.js"/>
+<script src="chrome://messenger/content/mailWindow.js"/>
+<script src="chrome://messenger/content/msgMail3PaneWindow.js"/>
+<script src="chrome://messenger/content/mail3PaneWindowCommands.js"/>
+<script src="chrome://messenger/content/searchBar.js"/>
+<script src="chrome://messenger/content/hiddenWindow.js"/>
+<script src="chrome://messenger/content/mailCommands.js"/>
+<script src="chrome://messenger/content/junkCommands.js"/>
+<script src="chrome://messenger/content/mailWindowOverlay.js"/>
+<script src="chrome://messenger/content/mailTabs.js"/>
+<script src="chrome://messenger/content/messageDisplay.js"/>
+<script src="chrome://messenger/content/folderDisplay.js"/>
+<script src="chrome://messenger-newsblog/content/newsblogOverlay.js"/>
+<script src="chrome://messenger/content/mail-offline.js"/>
+<script src="chrome://global/content/printUtils.js"/>
+<script src="chrome://messenger/content/msgViewPickerOverlay.js"/>
+<script src="chrome://messenger/content/viewZoomOverlay.js"/>
+<script src="chrome://communicator/content/utilityOverlay.js"/>
+<script src="chrome://messenger/content/mailCore.js"/>
+<script src="chrome://messenger/content/quickFilterBar.js"/>
+<script src="chrome://messenger/content/newmailaccount/uriListener.js"/>
+<script src="chrome://messenger-smime/content/msgReadSMIMEOverlay.js"/>
+<script src="chrome://messenger/content/customizable-toolbar.js"/>
+#ifdef XP_MACOSX
+<script src="chrome://global/content/macWindowMenu.js"/>
+#endif
+
+<script src="chrome://lightning/content/lightning-utils.js"/>
+<script src="chrome://lightning/content/imip-bar.js"/>
+<script src="chrome://calendar/content/calendar-management.js"/>
+<script src="chrome://calendar/content/calendar-ui-utils.js"/>
+<script src="chrome://lightning/content/messenger-overlay-sidebar.js"/>
+<script src="chrome://calendar/content/calendar-day-label.js"/>
+<script src="chrome://calendar/content/calendar-clipboard.js"/>
+<script src="chrome://calendar/content/import-export.js"/>
+<script src="chrome://calendar/content/publish.js"/>
+<script src="chrome://calendar/content/calendar-item-editing.js"/>
+<script src="chrome://calendar/content/calendar-chrome-startup.js"/>
+<script src="chrome://calendar/content/mouseoverPreviews.js"/>
+<script src="chrome://calendar/content/calendar-views-utils.js"/>
+<script src="chrome://calendar/content/calendar-base-view.js"/>
+<script src="chrome://calendar/content/calendar-month-base-view.js"/>
+<script src="chrome://calendar/content/widgets/calendar-dnd-widgets.js"/>
+<script src="chrome://calendar/content/calendar-multiday-base-view.js"/>
+<script src="chrome://calendar/content/calendar-views.js"/>
+<script src="chrome://calendar/content/calendar-editable-item.js"/>
+<script src="chrome://calendar/content/calendar-month-view.js"/>
+<script src="chrome://calendar/content/calendar-multiday-view.js"/>
+<script src="chrome://calendar/content/calendar-event-column.js"/>
+<script src="chrome://calendar/content/calendar-creation.js"/>
+<script src="chrome://calendar/content/calendar-dnd-listener.js"/>
+<script src="chrome://calendar/content/calendar-statusbar.js"/>
+<script src="chrome://calendar/content/widgets/calendar-minimonth.js"/>
+<script src="chrome://calendar/content/widgets/calendar-modebox.js"/>
+<script src="chrome://calendar/content/calendar-task-editing.js"/>
+<script src="chrome://calendar/content/calendar-extract.js"/>
+<script src="chrome://calendar/content/calendar-invitations-manager.js"/>
+<script src="chrome://lightning/content/lightning-item-panel.js"/>
+<script src="chrome://calendar/content/calendar-command-controller.js"/>
+<script src="chrome://calendar/content/agenda-listbox.js"/>
+<script src="chrome://calendar/content/today-pane.js"/>
+<script src="chrome://calendar/content/agenda-listbox-utils.js"/>
+<script src="chrome://calendar/content/calendar-unifinder.js"/>
+<script src="chrome://calendar/content/calFilter.js"/>
+<script src="chrome://calendar/content/calendar-task-tree-utils.js"/>
+<script src="chrome://calendar/content/calendar-task-tree-view.js"/>
+<script src="chrome://calendar/content/calendar-task-tree.js"/>
+<script src="chrome://calendar/content/calendar-task-view.js"/>
+<script src="chrome://calendar/content/calendar-dialog-utils.js"/>
+<script src="chrome://calendar/content/calApplicationUtils.js"/>
+<script src="chrome://calendar/content/calendar-item-bindings.js"/>
+<script src="chrome://calendar/content/calendar-menus.js"/>
+<script src="chrome://calendar/content/calendar-event-gripbar.js"/>
+<script src="chrome://calendar/content/calendar-migration.js"/>
+
+<stringbundle id="bundle_messenger" src="chrome://messenger/locale/messenger.properties"/>
+<stringbundle id="bundle_brand" src="chrome://branding/locale/brand.properties"/>
+<stringbundle id="bundle_search" src="chrome://messenger/locale/search.properties"/>
+<stringbundle id="bundle_offlinePrompts" src="chrome://messenger/locale/offline.properties"/>
+<stringbundle id="charsetBundle" src="chrome://communicator/content/labelsencodings.properties"/>
+
+<!-- keys are appended from the overlay -->
+<keyset id="mailKeys">
+#include mainKeySet.inc.xhtml
+  <keyset id="tasksKeys">
+    <key id="key_newMessage" key="&newMessageCmd.key;" command="cmd_newMessage"
+         modifiers="accel,shift"/>
+    <key id="key_newMessage2" key="&newMessageCmd2.key;" command="cmd_newMessage"
+         modifiers="accel"/>
+  </keyset>
+</keyset>
+
+<commandset id="mailCommands">
+#include mainCommandSet.inc.xhtml
+  <commandset id="mailSearchMenuItems"/>
+  <commandset id="globalEditMenuItems"
+              commandupdater="true"
+              events="create-menu-edit"
+              oncommandupdate="goUpdateGlobalEditMenuItems()"/>
+  <commandset id="selectEditMenuItems"
+              commandupdater="true"
+              events="create-menu-edit"
+              oncommandupdate="goUpdateSelectEditMenuItems()"/>
+  <commandset id="clipboardEditMenuItems"
+              commandupdater="true"
+              events="clipboard"
+              oncommandupdate="goUpdatePasteMenuItems()"/>
+  <commandset id="tasksCommands">
+    <command id="cmd_newMessage" oncommand="goOpenNewMessage();"/>
+    <command id="cmd_newCard" oncommand="openNewCardDialog()"/>
+  </commandset>
+</commandset>
+
+  <!-- it's the whole mailWindowOverlay.xhtml menubar! hidden windows need to
+       have a menubar for situations where they're the only window remaining
+       on a platform that wants to leave the app running, like the Mac.
+  -->
+
+#include mainNavigationToolbox.inc.xhtml
+  </toolbox>
+#include mainMailToolbox.inc.xhtml
+
+<browser id="hiddenBrowser" disablehistory="true"/>
+
+</window>
+
+#endif

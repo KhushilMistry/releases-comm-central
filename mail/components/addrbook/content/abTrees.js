@@ -14,21 +14,12 @@ var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
-var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.js");
+var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.jsm");
 
 const DIRTYPE_JS = 101;
 
 // Tree Sort helper methods.
-var AB_ORDER = [
-  "aab",
-  "pab",
-  "mork",
-  "js",
-  "ldap",
-  "mapi+other",
-  "anyab",
-  "cab",
-];
+var AB_ORDER = ["aab", "pab", "js", "ldap", "mapi+other", "anyab", "cab"];
 
 function getDirectoryValue(aDir, aKey) {
   if (aKey == "ab_type") {
@@ -41,10 +32,7 @@ function getDirectoryValue(aDir, aKey) {
     if (aDir._directory.URI == kCollectedAddressbookURI) {
       return "cab";
     }
-    if (aDir._directory instanceof Ci.nsIAbMDBDirectory) {
-      return "mork";
-    }
-    if (aDir._directory.dirType == DIRTYPE_JS) {
+    if (aDir._directory.URI.startsWith("jsaddrbook://")) {
       return "js";
     }
     if (aDir._directory instanceof Ci.nsIAbLDAPDirectory) {
@@ -135,10 +123,8 @@ abDirTreeItem.prototype = {
         myEnum = this._directory.childNodes;
       }
 
-      while (myEnum.hasMoreElements()) {
-        var abItem = new abDirTreeItem(
-          myEnum.getNext().QueryInterface(Ci.nsIAbDirectory)
-        );
+      for (let dir of myEnum) {
+        var abItem = new abDirTreeItem(dir);
         if (
           gDirectoryTreeView &&
           this.id == kAllDirectoryRoot + "?" &&
@@ -178,6 +164,7 @@ abDirTreeItem.prototype = {
 function directoryTreeView() {}
 directoryTreeView.prototype = {
   __proto__: new PROTO_TREE_VIEW(),
+  QueryInterface: ChromeUtils.generateQI([Ci.nsITreeView, Ci.nsIAbListener]),
 
   hasRemoteAB: false,
 
@@ -233,8 +220,19 @@ directoryTreeView.prototype = {
     this._rowMap = [];
 
     // Make an entry for All Address Books.
-    let rootAB = MailServices.ab.getDirectory(kAllDirectoryRoot + "?");
-    rootAB.dirName = gAddressBookBundle.getString("allAddressBooks");
+    let rootAB = {
+      QueryInterface: ChromeUtils.generateQI([Ci.nsIAbDirectory]),
+
+      dirName: gAddressBookBundle.getString("allAddressBooks"),
+      isMailList: false,
+      isRemote: false,
+      isSecure: false,
+      URI: kAllDirectoryRoot + "?",
+
+      get childNodes() {
+        return MailServices.ab.directories;
+      },
+    };
     this._rowMap.push(new abDirTreeItem(rootAB));
 
     // Sort our addressbooks now
@@ -259,7 +257,9 @@ directoryTreeView.prototype = {
 
   // nsIAbListener interfaces
   onItemAdded(aParent, aItem) {
-    if (!(aItem instanceof Ci.nsIAbDirectory)) {
+    try {
+      aItem.QueryInterface(Ci.nsIAbDirectory);
+    } catch (ex) {
       return;
     }
     // XXX we can optimize this later
@@ -279,7 +279,9 @@ directoryTreeView.prototype = {
   },
 
   onItemRemoved(aParent, aItem) {
-    if (!(aItem instanceof Ci.nsIAbDirectory)) {
+    try {
+      aItem.QueryInterface(Ci.nsIAbDirectory);
+    } catch (ex) {
       return;
     }
     // XXX we can optimize this later
@@ -291,6 +293,7 @@ directoryTreeView.prototype = {
 
     // If we're deleting a top-level address-book, just select the first book
     if (
+      !aParent ||
       aParent.URI == kAllDirectoryRoot ||
       aParent.URI == kAllDirectoryRoot + "?"
     ) {
@@ -308,7 +311,9 @@ directoryTreeView.prototype = {
   },
 
   onItemPropertyChanged(aItem, aProp, aOld, aNew) {
-    if (!(aItem instanceof Ci.nsIAbDirectory)) {
+    try {
+      aItem.QueryInterface(Ci.nsIAbDirectory);
+    } catch (ex) {
       return;
     }
 

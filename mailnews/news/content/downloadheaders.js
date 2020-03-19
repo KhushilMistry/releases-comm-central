@@ -37,7 +37,7 @@ function OnLoad() {
     ]);
     setText("info", infotext);
     let okButtonText = newsBundle.getString("okButtonText");
-    let okbutton = document.documentElement.getButton("accept");
+    let okbutton = document.querySelector("dialog").getButton("accept");
     okbutton.setAttribute("label", okButtonText);
     okbutton.focus();
     setText("newsgroupLabel", args.groupName);
@@ -58,8 +58,8 @@ function setText(id, value) {
     return;
   }
 
-  if (element.hasChildNodes()) {
-    element.firstChild.remove();
+  while (element.lastChild) {
+    element.lastChild.remove();
   }
   let textNode = document.createTextNode(value);
   element.appendChild(textNode);

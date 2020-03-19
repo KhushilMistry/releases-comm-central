@@ -17,15 +17,6 @@ var { AddonTestUtils } = ChromeUtils.import(
   "resource://testing-common/AddonTestUtils.jsm"
 );
 
-// Ensure the profile directory is set up
-do_get_profile();
-
-// Windows (Outlook Express) Address Book deactivation. (Bug 448859)
-Services.prefs.deleteBranch("ldap_2.servers.oe.");
-
-// OSX Address Book deactivation (Bug 955842)
-Services.prefs.deleteBranch("ldap_2.servers.osx.");
-
 var createHttpServer = (...args) => {
   AddonTestUtils.maybeInit(this);
   return AddonTestUtils.createHttpServer(...args);
@@ -33,10 +24,7 @@ var createHttpServer = (...args) => {
 
 function createAccount() {
   MailServices.accounts.createLocalMailAccount();
-  let account = MailServices.accounts.accounts
-    .enumerate()
-    .getNext()
-    .QueryInterface(Ci.nsIMsgAccount);
+  let account = MailServices.accounts.accounts[0];
   account.incomingServer = MailServices.accounts.localFoldersServer;
   info(`Created account ${account.toString()}`);
 
@@ -49,7 +37,7 @@ function cleanUpAccount(account) {
 }
 
 registerCleanupFunction(() => {
-  [...MailServices.accounts.accounts.enumerate()].forEach(cleanUpAccount);
+  MailServices.accounts.accounts.forEach(cleanUpAccount);
 });
 
 function addIdentity(account, email = "xpcshell@localhost") {
@@ -64,14 +52,17 @@ function addIdentity(account, email = "xpcshell@localhost") {
 
 function createMessages(folder, count) {
   const { MessageGenerator } = ChromeUtils.import(
-    "resource://testing-common/mailnews/messageGenerator.js"
+    "resource://testing-common/mailnews/MessageGenerator.jsm"
   );
-  let messages = new MessageGenerator().makeMessages({
+  if (!createMessages.messageGenerator) {
+    createMessages.messageGenerator = new MessageGenerator();
+  }
+  let messages = createMessages.messageGenerator.makeMessages({
     count,
     age_incr: { days: 2 },
   });
   let messageStrings = messages.map(message => message.toMboxString());
   folder.QueryInterface(Ci.nsIMsgLocalMailFolder);
-  folder.addMessageBatch(messageStrings.length, messageStrings);
+  folder.addMessageBatch(messageStrings);
   folder.callFilterPlugins(null);
 }

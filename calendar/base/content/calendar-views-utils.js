@@ -2,19 +2,21 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* exported switchToView, getSelectedDay, scheduleMidnightUpdate,
+/* exported switchToView, getSelectedDay, scheduleMidnightUpdate, minimonthPick,
  *          observeViewDaySelect, toggleOrientation,
  *          toggleWorkdaysOnly, toggleTasksInView, toggleShowCompletedInView,
  *          goToDate, getLastCalendarView, deleteSelectedEvents,
- *          editSelectedEvents, selectAllEvents
+ *          editSelectedEvents, selectAllEvents, calendarNavigationBar
  */
 
 /* import-globals-from calendar-chrome-startup.js */
 /* import-globals-from calendar-item-editing.js */
 /* global gCurrentMode */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
-var { countOccurrences } = ChromeUtils.import("resource://calendar/modules/calRecurrenceUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
+var { countOccurrences } = ChromeUtils.import(
+  "resource:///modules/calendar/calRecurrenceUtils.jsm"
+);
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 /**
@@ -28,7 +30,7 @@ var calendarViewController = {
    * Creates a new event
    * @see calICalendarViewController
    */
-  createNewEvent: function(calendar, startTime, endTime, forceAllday) {
+  createNewEvent(calendar, startTime, endTime, forceAllday) {
     // if we're given both times, skip the dialog
     if (startTime && endTime && !startTime.isDate && !endTime.isDate) {
       let item = cal.createEvent();
@@ -44,7 +46,7 @@ var calendarViewController = {
    * Modifies the given occurrence
    * @see calICalendarViewController
    */
-  modifyOccurrence: function(occurrence, newStartTime, newEndTime, newTitle) {
+  modifyOccurrence(occurrence, newStartTime, newEndTime, newTitle) {
     // if modifying this item directly (e.g. just dragged to new time),
     // then do so; otherwise pop up the dialog
     if (newStartTime || newEndTime || newTitle) {
@@ -89,13 +91,7 @@ var calendarViewController = {
    * Deletes the given occurrences
    * @see calICalendarViewController
    */
-  deleteOccurrences: function(
-    count,
-    occurrencesArg,
-    useParentItems,
-    doNotConfirm,
-    extResponseArg = null
-  ) {
+  deleteOccurrences(occurrencesArg, useParentItems, doNotConfirm, extResponseArg = null) {
     startBatchTransaction();
     let recurringItems = {};
     let extResponse = extResponseArg || { responseMode: Ci.calIItipItem.USER };
@@ -203,7 +199,7 @@ function switchToView(viewType) {
   let currentSelection = [];
 
   // Set up the view commands
-  let views = viewDeck.childNodes;
+  let views = viewDeck.children;
   for (let i = 0; i < views.length; i++) {
     let view = views[i];
     let commandId = "calendar_" + view.id + "_command";
@@ -253,7 +249,7 @@ function switchToView(viewType) {
 
   try {
     selectedDay = viewDeck.selectedPanel.selectedDay;
-    currentSelection = viewDeck.selectedPanel.getSelectedItems({});
+    currentSelection = viewDeck.selectedPanel.getSelectedItems();
   } catch (ex) {
     // This dies if no view has even been chosen this session, but that's
     // ok because we'll just use cal.dtz.now() below.
@@ -279,7 +275,7 @@ function switchToView(viewType) {
   }
 
   view.goToDay(selectedDay);
-  view.setSelectedItems(currentSelection.length, currentSelection);
+  view.setSelectedItems(currentSelection);
 
   view.onResize(view);
 }
@@ -332,7 +328,7 @@ function scheduleMidnightUpdate(refreshCallback) {
   // workaround bug 291386.  If we don't, we stand a decent chance of getting
   // stuck in an infinite loop.
   let udCallback = {
-    notify: function(timer) {
+    notify(timer) {
       refreshCallback();
     },
   };
@@ -411,6 +407,23 @@ function observeViewDaySelect(event) {
 }
 
 /**
+ * Shows the given date in the current view, if in calendar mode.
+ *
+ * @param aNewDate      The new date as a JSDate.
+ */
+function minimonthPick(aNewDate) {
+  if (gCurrentMode == "calendar" || gCurrentMode == "task") {
+    let cdt = cal.dtz.jsDateToDateTime(aNewDate, currentView().timezone);
+    cdt.isDate = true;
+    currentView().goToDay(cdt);
+
+    // update date filter for task tree
+    let tree = document.getElementById("calendar-task-tree");
+    tree.updateFilter();
+  }
+}
+
+/**
  * Provides a neutral way to get the minimonth, regardless of whether we're in
  * Sunbird or Lightning.
  *
@@ -429,7 +442,7 @@ function toggleOrientation() {
   cmd.setAttribute("checked", newValue);
 
   let deck = getViewDeck();
-  for (let view of deck.childNodes) {
+  for (let view of deck.children) {
     view.rotated = newValue == "true";
   }
 
@@ -448,7 +461,7 @@ function toggleWorkdaysOnly() {
   cmd.setAttribute("checked", newValue);
 
   let deck = getViewDeck();
-  for (let view of deck.childNodes) {
+  for (let view of deck.children) {
     view.workdaysOnly = newValue == "true";
   }
 
@@ -465,7 +478,7 @@ function toggleTasksInView() {
   cmd.setAttribute("checked", newValue);
 
   let deck = getViewDeck();
-  for (let view of deck.childNodes) {
+  for (let view of deck.children) {
     view.tasksInView = newValue == "true";
   }
 
@@ -482,7 +495,7 @@ function toggleShowCompletedInView() {
   cmd.setAttribute("checked", newValue);
 
   let deck = getViewDeck();
-  for (let view of deck.childNodes) {
+  for (let view of deck.children) {
     view.showCompleted = newValue == "true";
   }
 
@@ -514,7 +527,7 @@ function getLastCalendarView() {
       "view-deck",
       "selectedIndex"
     );
-    let viewNode = deck.childNodes[selectedIndex];
+    let viewNode = deck.children[selectedIndex];
     return viewNode.id.replace(/-view/, "");
   }
 
@@ -526,17 +539,17 @@ function getLastCalendarView() {
  * Deletes items currently selected in the view and clears selection.
  */
 function deleteSelectedEvents() {
-  let selectedItems = currentView().getSelectedItems({});
-  calendarViewController.deleteOccurrences(selectedItems.length, selectedItems, false, false);
+  let selectedItems = currentView().getSelectedItems();
+  calendarViewController.deleteOccurrences(selectedItems, false, false);
   // clear selection
-  currentView().setSelectedItems(0, [], true);
+  currentView().setSelectedItems([], true);
 }
 
 /**
  * Edit the items currently selected in the view with the event dialog.
  */
 function editSelectedEvents() {
-  let selectedItems = currentView().getSelectedItems({});
+  let selectedItems = currentView().getSelectedItems();
   if (selectedItems && selectedItems.length >= 1) {
     modifyEventWithDialog(selectedItems[0], null, true);
   }
@@ -549,10 +562,10 @@ function selectAllEvents() {
   let items = [];
   let listener = {
     QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-    onOperationComplete: function(calendar, status, operationType, id, detail) {
-      currentView().setSelectedItems(items.length, items, false);
+    onOperationComplete(calendar, status, operationType, id, detail) {
+      currentView().setSelectedItems(items, false);
     },
-    onGetResult: function(calendar, status, itemType, detail, count, itemsArg) {
+    onGetResult(calendar, status, itemType, detail, itemsArg) {
       for (let item of itemsArg) {
         items.push(item);
       }
@@ -580,8 +593,8 @@ function selectAllEvents() {
   composite.getItems(filter, 0, currentView().startDay, end, listener);
 }
 
-cal.navigationBar = {
-  setDateRange: function(startDate, endDate) {
+var calendarNavigationBar = {
+  setDateRange(startDate, endDate) {
     let docTitle = "";
     if (startDate) {
       let intervalLabel = document.getElementById("intervalDescription");
@@ -624,13 +637,13 @@ cal.navigationBar = {
  */
 var timeIndicator = {
   timer: null,
-  start: function(interval, thisArg) {
+  start(interval, thisArg) {
     timeIndicator.timer = setInterval(
       () => thisArg.updateTimeIndicatorPosition(false),
       interval * 1000
     );
   },
-  cancel: function() {
+  cancel() {
     if (timeIndicator.timer) {
       clearTimeout(timeIndicator.timer);
       timeIndicator.timer = null;
@@ -640,7 +653,7 @@ var timeIndicator = {
 };
 
 var timezoneObserver = {
-  observe: function() {
+  observe() {
     let minimonth = getMinimonth();
     minimonth.update(minimonth.value);
   },

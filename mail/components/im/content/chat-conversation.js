@@ -63,8 +63,10 @@
 
           switch (topic) {
             case "new-text":
-              if (this.loaded) {
-                this.addMsg(subject);
+              if (this.loaded && this.addMsg(subject)) {
+                // This will mark the conv as read, but also update the conv title
+                // with the new unread count etc.
+                this.tab.update();
               }
               break;
 
@@ -79,7 +81,7 @@
 
             case "target-prpl-conversation-changed":
             case "update-conv-title":
-              if (this.tab) {
+              if (this.tab && this.conv) {
                 this.tab.setAttribute("label", this.conv.title);
               }
               break;
@@ -104,30 +106,25 @@
               if (!this._isConversationSelected) {
                 break;
               }
-              subject.QueryInterface(Ci.nsISimpleEnumerator);
-              while (subject.hasMoreElements()) {
-                this.insertBuddy(this.createBuddy(subject.getNext()));
+              for (let nick of subject.QueryInterface(Ci.nsISimpleEnumerator)) {
+                this.insertBuddy(this.createBuddy(nick));
               }
               this.updateParticipantCount();
               break;
 
             case "chat-buddy-remove":
-              subject.QueryInterface(Ci.nsISimpleEnumerator);
               if (!this._isConversationSelected) {
-                while (subject.hasMoreElements()) {
-                  let name = subject
-                    .getNext()
-                    .QueryInterface(Ci.nsISupportsString)
-                    .toString();
+                for (let nick of subject.QueryInterface(
+                  Ci.nsISimpleEnumerator
+                )) {
+                  let name = nick.toString();
                   if (this._isBuddyActive(name)) {
                     delete this._activeBuddies[name];
                   }
                 }
                 break;
               }
-              while (subject.hasMoreElements()) {
-                let nick = subject.getNext();
-                nick.QueryInterface(Ci.nsISupportsString);
+              for (let nick of subject.QueryInterface(Ci.nsISimpleEnumerator)) {
                 this.removeBuddy(nick.toString());
               }
               this.updateParticipantCount();
@@ -176,15 +173,11 @@
       this.setAttribute("flex", "1");
       this.classList.add("convBox");
 
-      this.convTop = document.createXULElement("hbox");
+      this.convTop = document.createXULElement("vbox");
       this.convTop.setAttribute("flex", "1");
       this.convTop.classList.add("conv-top");
 
-      this.notification = document.createXULElement("hbox");
-      this.notification.setAttribute("flex", "1");
-
-      let nbox = document.createXULElement("vbox");
-      nbox.setAttribute("flex", "1");
+      this.notification = document.createXULElement("vbox");
 
       this.convBrowser = document.createXULElement("browser", {
         is: "conversation-browser",
@@ -201,11 +194,10 @@
       this.findbar = document.createXULElement("findbar");
       this.findbar.setAttribute("reversed", "true");
 
-      nbox.appendChild(this.convBrowser);
-      nbox.appendChild(this.progressBar);
-      nbox.appendChild(this.findbar);
-      this.notification.appendChild(nbox);
       this.convTop.appendChild(this.notification);
+      this.convTop.appendChild(this.convBrowser);
+      this.convTop.appendChild(this.progressBar);
+      this.convTop.appendChild(this.findbar);
 
       this.splitter = document.createXULElement("splitter");
       this.splitter.setAttribute("orient", "vertical");
@@ -233,9 +225,6 @@
 
       this.charCounter = document.createXULElement("description");
       this.charCounter.classList.add("conv-counter");
-      this.charCounter.setAttribute("right", "0");
-      this.charCounter.setAttribute("bottom", "0");
-
       this.convBottom.appendChild(this.inputBox);
       this.convBottom.appendChild(this.charCounter);
 
@@ -301,15 +290,15 @@
     }
 
     get msgNotificationBar() {
-      delete this.msgNotificationBar;
+      delete this._msgNotificationBar;
 
       let newNotificationBox = new MozElements.NotificationBox(element => {
         element.setAttribute("flex", "1");
         element.setAttribute("notificationside", "top");
-        this.notification.append(element);
+        this.notification.prepend(element);
       });
 
-      return (this.msgNotificationBar = newNotificationBox);
+      return (this._msgNotificationBar = newNotificationBox);
     }
 
     destroy() {
@@ -346,6 +335,12 @@
       }
       messages.forEach(this.addMsg.bind(this));
       delete this._writingContextMessages;
+
+      if (this.tab && this.tab.selected && document.hasFocus()) {
+        // This will mark the conv as read, but also update the conv title
+        // with the new unread count etc.
+        this.tab.update();
+      }
     }
 
     displayStatusText() {
@@ -367,7 +362,7 @@
         // The conversation has already been destroyed,
         // probably because the window was closed.
         // Return without doing anything.
-        return;
+        return false;
       }
 
       // Ugly hack... :(
@@ -418,18 +413,12 @@
           // we had context messages.
           delete this._writingContextMessages;
         }
-        return;
+        return false;
       }
 
       if (isUnreadMessage && (!aMsg.conversation.isChat || aMsg.containsNick)) {
         this._lastPing = aMsg.who;
         this._lastPingTime = aMsg.time;
-      }
-
-      if (isTabFocused) {
-        // Porting note: This will mark the conv as read, but also update
-        // the conv title with the new unread count etc. as required for TB.
-        this.tab.update();
       }
 
       if (shouldSetUnreadFlag) {
@@ -438,6 +427,8 @@
         }
         this.tab.setAttribute("unread", "true");
       }
+
+      return isTabFocused;
     }
 
     sendMsg(aMsg) {
@@ -1170,9 +1161,9 @@
 
       if (
         event.charCode == 0 && // it's not a character, it's a command key
-        (event.keyCode != 13 && // Return
+        event.keyCode != 13 && // Return
         event.keyCode != 8 && // Backspace
-          event.keyCode != 46)
+        event.keyCode != 46
       ) {
         // Delete
         return;
@@ -1287,12 +1278,12 @@
         }
       }
       if (image) {
-        aItem.firstChild.setAttribute(
+        aItem.firstElementChild.setAttribute(
           "src",
           "chrome://messenger/skin/" + image + ".png"
         );
       } else {
-        aItem.firstChild.removeAttribute("src");
+        aItem.firstElementChild.removeAttribute("src");
       }
     }
 
@@ -1394,7 +1385,7 @@
           nick <
           nicklist
             .getItemAtIndex(middle)
-            .firstChild.nextSibling.getAttribute("value")
+            .firstElementChild.nextElementSibling.getAttribute("value")
             .toLowerCase()
         ) {
           end = middle;

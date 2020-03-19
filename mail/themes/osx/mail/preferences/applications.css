@@ -12,13 +12,11 @@
  */
 .actionsMenu {
   margin-inline-start: -2px;
-  margin-top: 0;
-  margin-bottom: -1px;
+  margin-block: 0 -1px;
 }
 
 .actionsMenu > menupopup > menuitem > .menu-iconic-left {
-  padding-inline-start: 3px;
-  padding-inline-end: 1px;
+  padding-inline: 3px 1px;
 }
 
 /**
@@ -26,15 +24,16 @@
  */
 
 .cloudfileAccount description{
-  padding-left: 3px;
+  padding-inline-start: 3px;
 }
 
 .cloudfileAccount .typeIcon {
   margin-inline-end: 5px;
 }
 
-.cloudfileAccount > textbox {
-  min-height: unset;
-  margin: 0;
-  padding-inline-start: 4px;
+.cloudfileAccount > input {
+  min-height: unset !important;
+  margin: 0 !important;
+  padding-block: 2px 3px !important;
+  padding-inline: 4px 3px !important;
 }

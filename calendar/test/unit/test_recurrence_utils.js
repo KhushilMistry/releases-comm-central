@@ -2,7 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { countOccurrences } = ChromeUtils.import("resource://calendar/modules/calRecurrenceUtils.jsm");
+var { countOccurrences } = ChromeUtils.import(
+  "resource:///modules/calendar/calRecurrenceUtils.jsm"
+);
 
 function run_test() {
   do_calendar_startup(run_next_test);
@@ -355,7 +357,7 @@ add_task(async function countOccurrences_test() {
     let ics = getIcs(test.input);
     let parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
     parser.parseString(ics);
-    let items = parser.getItems({});
+    let items = parser.getItems();
 
     ok(items.length > 0, "parsing input succeeded (test #" + i + ")");
     for (let item of items) {

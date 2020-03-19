@@ -14,10 +14,9 @@ var PREF_EXTENSIONS_GETMOREPROTOCOLSURL = "extensions.getMoreProtocolsURL";
 
 var accountWizard = {
   onload() {
-    document.documentElement.addEventListener(
-      "wizardfinish",
-      this.createAccount.bind(this)
-    );
+    document
+      .querySelector("wizard")
+      .addEventListener("wizardfinish", this.createAccount.bind(this));
     let accountProtocolPage = document.getElementById("accountprotocol");
     accountProtocolPage.addEventListener(
       "pageadvanced",
@@ -103,7 +102,7 @@ var accountWizard = {
   },
 
   checkUsername() {
-    var wizard = document.getElementById("accountWizard");
+    var wizard = document.querySelector("wizard");
     var name = accountWizard.getUsername();
     var duplicateWarning = document.getElementById("duplicateAccount");
     if (!name) {
@@ -206,7 +205,7 @@ var accountWizard = {
   },
 
   hideUsernamePage() {
-    document.getElementById("accountWizard").canAdvance = true;
+    document.querySelector("wizard").canAdvance = true;
     var next = "account" + (this.proto.noPassword ? "advanced" : "password");
     document.getElementById("accountusername").next = next;
   },
@@ -235,7 +234,9 @@ var accountWizard = {
       var bundle = document.getElementById("accountsBundle");
       document.getElementById(
         "protoSpecificCaption"
-      ).value = bundle.getFormattedString("protoOptions", [this.proto.name]);
+      ).textContent = bundle.getFormattedString("protoOptions", [
+        this.proto.name,
+      ]);
     }
   },
 
@@ -312,22 +313,22 @@ var accountWizard = {
         continue;
       }
       switch (opt.type) {
-        case opt.typeBool:
+        case Ci.prplIPref.typeBool:
           if (val != opt.getBool()) {
             this.prefs.push({ opt, name, value: !!val });
           }
           break;
-        case opt.typeInt:
+        case Ci.prplIPref.typeInt:
           if (val != opt.getInt()) {
             this.prefs.push({ opt, name, value: val });
           }
           break;
-        case opt.typeString:
+        case Ci.prplIPref.typeString:
           if (val != opt.getString()) {
             this.prefs.push({ opt, name, value: val });
           }
           break;
-        case opt.typeList:
+        case Ci.prplIPref.typeList:
           if (val != opt.getListDefault()) {
             this.prefs.push({ opt, name, value: val });
           }
@@ -414,8 +415,13 @@ var accountWizard = {
     if ("selectedItem" in elt) {
       return elt.selectedItem.value;
     }
-    // Strangely for <input type="number"> "checked" is also set.
-    if (elt.getAttribute("type") != "number" && "checked" in elt) {
+    // Strangely various input types also have a "checked" property defined,
+    // so we check for the expected elements explicitly.
+    if (
+      ((elt.localName == "input" && elt.getAttribute("type") == "checkbox") ||
+        elt.localName == "checkbox") &&
+      "checked" in elt
+    ) {
       return elt.checked;
     }
     if ("value" in elt) {
@@ -428,8 +434,8 @@ var accountWizard = {
   },
 
   *getIter(aEnumerator) {
-    while (aEnumerator.hasMoreElements()) {
-      yield aEnumerator.getNext();
+    for (let iter of aEnumerator) {
+      yield iter;
     }
   },
   getProtocols() {

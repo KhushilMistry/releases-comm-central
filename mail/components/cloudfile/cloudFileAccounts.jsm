@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = ["cloudFileAccounts"];
+const EXPORTED_SYMBOLS = ["cloudFileAccounts"];
 
 var ACCOUNT_ROOT = "mail.cloud_files.accounts.";
 
@@ -187,14 +187,9 @@ var cloudFileAccounts = new (class extends EventEmitter {
   }
 
   getDisplayName(aKeyOrAccount) {
-    try {
-      let key = this._ensureKey(aKeyOrAccount);
-      return Services.prefs.getCharPref(ACCOUNT_ROOT + key + ".displayName");
-    } catch (e) {
-      // If no display name has been set, we return the empty string.
-      Cu.reportError(e);
-      return "";
-    }
+    // If no display name has been set, we return the empty string.
+    let key = this._ensureKey(aKeyOrAccount);
+    return Services.prefs.getCharPref(ACCOUNT_ROOT + key + ".displayName", "");
   }
 
   setDisplayName(aKeyOrAccount, aDisplayName) {

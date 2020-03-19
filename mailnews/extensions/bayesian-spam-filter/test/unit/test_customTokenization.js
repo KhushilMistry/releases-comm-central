@@ -123,14 +123,13 @@ function run_test() {
 
 var listener = {
   // nsIMsgTraitClassificationListener implementation
-  onMessageTraitsClassified(aMsgURI, aTraitCount, aTraits, aPercents) {
+  onMessageTraitsClassified(aMsgURI, aTraits, aPercents) {
     startCommand();
   },
 
   onMessageTraitDetails(
     aMsgURI,
     aProTrait,
-    aTokenCount,
     aTokenString,
     aTokenPercents,
     aRunningPercents
@@ -171,11 +170,9 @@ function startCommand() {
       // train message
 
       MailServices.junk.setMsgTraitClassification(
-        getSpec(gTest.fileName), // in string aMsgURI
-        0,
-        null, // in nsIArray aOldTraits
-        kProArray.length,
-        kProArray, // in nsIArray aNewTraits
+        getSpec(gTest.fileName), // aMsgURI
+        [], // aOldTraits
+        kProArray, // aNewTraits
         listener
       ); // [optional] in nsIMsgTraitClassificationListener aTraitListener
       // null,      // [optional] in nsIMsgWindow aMsgWindow

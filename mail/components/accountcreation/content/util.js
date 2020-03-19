@@ -8,7 +8,7 @@
 
 /* import-globals-from emailWizard.js */
 
-var { logException } = ChromeUtils.import("resource:///modules/errUtils.js");
+var { logException } = ChromeUtils.import("resource:///modules/ErrUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 // --------------------------
@@ -487,7 +487,10 @@ function PriorityOrderAbortable(successCallback, errorCallback) {
     }
     if (!this._successfulCall) {
       // all failed
-      errorCallback(this._calls[0].e, this._calls.map(call => call.e)); // see docs above
+      errorCallback(
+        this._calls[0].e,
+        this._calls.map(call => call.e)
+      ); // see docs above
     }
   });
 }
@@ -664,7 +667,7 @@ function deepCopy(org) {
 }
 
 if (typeof gEmailWizardLogger == "undefined") {
-  var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+  var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
   var gEmailWizardLogger = Log4Moz.getConfiguredLogger("mail.setup");
   gEmailWizardLogger.level = Log4Moz.Level.Info;
   gEmailWizardLogger.addAppender(

@@ -6,7 +6,7 @@ var { XPCOMUtils } = ChromeUtils.import(
   "resource://gre/modules/XPCOMUtils.jsm"
 );
 var { localAccountUtils } = ChromeUtils.import(
-  "resource://testing-common/mailnews/localAccountUtils.js"
+  "resource://testing-common/mailnews/LocalAccountUtils.jsm"
 );
 
 var test = null;
@@ -24,7 +24,7 @@ var gDEPTH = "../../../../";
 
 // Import the servers
 var { fsDebugAll, gThreadManager, nsMailServer } = ChromeUtils.import(
-  "resource://testing-common/mailnews/maild.js"
+  "resource://testing-common/mailnews/Maild.jsm"
 );
 var {
   newsArticle,
@@ -33,7 +33,7 @@ var {
   NNTP_RFC4643_extension,
   NNTP_RFC977_handler,
   nntpDaemon,
-} = ChromeUtils.import("resource://testing-common/mailnews/nntpd.js");
+} = ChromeUtils.import("resource://testing-common/mailnews/Nntpd.jsm");
 
 var kSimpleNewsArticle =
   "From: John Doe <john.doe@example.com>\n" +
@@ -63,11 +63,7 @@ function setupNNTPDaemon() {
   });
 
   var auto_add = do_get_file("postings/auto-add/");
-  var files = [];
-  var enumerator = auto_add.directoryEntries;
-  while (enumerator.hasMoreElements()) {
-    files.push(enumerator.nextFile);
-  }
+  var files = [...auto_add.directoryEntries];
 
   files.sort(function(a, b) {
     if (a.leafName == b.leafName) {
@@ -196,11 +192,7 @@ function create_post(baseURL, file) {
 }
 
 function resetFolder(folder) {
-  var headerEnum = folder.messages;
-  var headers = [];
-  while (headerEnum.hasMoreElements()) {
-    headers.push(headerEnum.getNext().QueryInterface(Ci.nsIMsgDBHdr));
-  }
+  var headers = [...folder.messages];
 
   var db = folder.msgDatabase;
   db.dBFolderInfo.knownArtsSet = "";

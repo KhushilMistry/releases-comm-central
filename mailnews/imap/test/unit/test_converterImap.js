@@ -15,11 +15,11 @@ Services.prefs.setCharPref(
 
 /* import-globals-from ../../../test/resources/logHelper.js */
 /* import-globals-from ../../../test/resources/asyncTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 /* import-globals-from ../../../test/resources/alertTestUtils.js */
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 load("../../../resources/alertTestUtils.js");
 
 var log = Log.repository.getLogger("MailStoreConverter");
@@ -37,10 +37,7 @@ var gMsgId4 = "bugmail7.m47LtAEf007542@mrapp51.mozilla.org";
 var gMsgId5 = "bugmail6.m47LtAEf007542@mrapp51.mozilla.org";
 
 function checkConversion(aSource, aTarget) {
-  let sourceContents = aSource.directoryEntries;
-
-  while (sourceContents.hasMoreElements()) {
-    let sourceContent = sourceContents.nextFile;
+  for (let sourceContent of aSource.directoryEntries) {
     let sourceContentName = sourceContent.leafName;
     let ext = sourceContentName.slice(-4);
     let targetFile = FileUtils.File(
@@ -60,12 +57,7 @@ function checkConversion(aSource, aTarget) {
       let tmp = FileUtils.File(OS.Path.join(targetFile.path, "tmp"));
       Assert.ok(tmp.exists());
       if (targetFile.leafName == "INBOX") {
-        let curContents = cur.directoryEntries;
-        let curContentsCount = 0;
-        while (curContents.hasMoreElements()) {
-          curContents.nextFile;
-          curContentsCount += 1;
-        }
+        let curContentsCount = [...cur.directoryEntries].length;
         Assert.equal(curContentsCount, 8);
       }
     }

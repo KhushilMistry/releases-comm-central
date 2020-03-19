@@ -109,12 +109,15 @@ window.addEventListener(
     Preferences.addSyncToPrefListener(element, () =>
       gConnectionsDialog.writeDnsOverHttpsMode()
     );
+    document.documentElement.addEventListener("beforeaccept", e =>
+      gConnectionsDialog.beforeAccept(e)
+    );
   },
   { once: true, capture: true }
 );
 
 var gConnectionsDialog = {
-  beforeAccept() {
+  beforeAccept(event) {
     let dnsOverHttpsResolverChoice = document.getElementById(
       "networkDnsOverHttpsResolverChoices"
     ).value;
@@ -137,11 +140,11 @@ var gConnectionsDialog = {
     var proxyTypePref = Preferences.get("network.proxy.type");
     if (proxyTypePref.value == 2) {
       this.doAutoconfigURLFixup();
-      return true;
+      return;
     }
 
     if (proxyTypePref.value != 1) {
-      return true;
+      return;
     }
 
     var httpProxyURLPref = Preferences.get("network.proxy.http");
@@ -157,22 +160,23 @@ var gConnectionsDialog = {
       );
       let proxyPref = Preferences.get("network.proxy." + prefName);
       // Only worry about ports which are currently active. If the share option is on, then ignore
-      // all ports except the HTTP port
+      // all ports except the HTTP and SOCKS port
       if (
         proxyPref.value != "" &&
         proxyPortPref.value == 0 &&
-        (prefName == "http" || !shareProxiesPref.value)
+        (prefName == "http" || prefName == "socks" || !shareProxiesPref.value)
       ) {
         document
           .getElementById("networkProxy" + prefName.toUpperCase() + "_Port")
           .focus();
-        return false;
+        event.preventDefault();
+        return;
       }
     }
 
     // In the case of a shared proxy preference, backup the current values and update with the HTTP value
     if (shareProxiesPref.value) {
-      var proxyPrefs = ["ssl", "socks"];
+      var proxyPrefs = ["ssl"];
       for (var i = 0; i < proxyPrefs.length; ++i) {
         var proxyServerURLPref = Preferences.get(
           "network.proxy." + proxyPrefs[i]
@@ -195,8 +199,6 @@ var gConnectionsDialog = {
     }
 
     this.sanitizeNoProxiesPref();
-
-    return true;
   },
 
   checkForSystemProxy() {
@@ -288,7 +290,7 @@ var gConnectionsDialog = {
       );
 
       // Restore previous per-proxy custom settings, if present.
-      if (!shareProxiesPref.value) {
+      if (proxyPrefs[i] != "socks" && !shareProxiesPref.value) {
         var backupServerURLPref = Preferences.get(
           "network.proxy.backup." + proxyPrefs[i]
         );
@@ -307,26 +309,27 @@ var gConnectionsDialog = {
 
       proxyServerURLPref.updateElements();
       proxyPortPref.updateElements();
-      proxyServerURLPref.disabled =
-        proxyTypePref.value != 1 || shareProxiesPref.value;
+      let prefIsShared = proxyPrefs[i] != "socks" && shareProxiesPref.value;
+      proxyServerURLPref.disabled = proxyTypePref.value != 1 || prefIsShared;
       proxyPortPref.disabled = proxyServerURLPref.disabled;
     }
     var socksVersionPref = Preferences.get("network.proxy.socks_version");
-    socksVersionPref.disabled =
-      proxyTypePref.value != 1 || shareProxiesPref.value;
+    socksVersionPref.disabled = proxyTypePref.value != 1;
     this.updateDNSPref();
     return undefined;
   },
 
   readProxyProtocolPref(aProtocol, aIsPort) {
-    var shareProxiesPref = Preferences.get(
-      "network.proxy.share_proxy_settings"
-    );
-    if (shareProxiesPref.value) {
-      var pref = Preferences.get(
-        "network.proxy.http" + (aIsPort ? "_port" : "")
+    if (aProtocol != "socks") {
+      var shareProxiesPref = Preferences.get(
+        "network.proxy.share_proxy_settings"
       );
-      return pref.value;
+      if (shareProxiesPref.value) {
+        var pref = Preferences.get(
+          "network.proxy.http" + (aIsPort ? "_port" : "")
+        );
+        return pref.value;
+      }
     }
 
     var backupPref = Preferences.get(
@@ -389,7 +392,7 @@ var gConnectionsDialog = {
     return [
       ...controlGroup.querySelectorAll(":scope > radio"),
       ...controlGroup.querySelectorAll("label"),
-      ...controlGroup.querySelectorAll("textbox"),
+      ...controlGroup.querySelectorAll("input"),
       ...controlGroup.querySelectorAll("checkbox"),
       ...document.querySelectorAll("#networkProxySOCKSVersion > radio"),
       ...document.querySelectorAll("#ConnectionsDialogPane > checkbox"),

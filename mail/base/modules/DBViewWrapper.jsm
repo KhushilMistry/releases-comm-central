@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = ["DBViewWrapper", "IDBViewWrapperListener"];
+const EXPORTED_SYMBOLS = ["DBViewWrapper", "IDBViewWrapperListener"];
 
 const { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
@@ -12,7 +12,7 @@ const { MailViewConstants, MailViewManager } = ChromeUtils.import(
 );
 const { SearchSpec } = ChromeUtils.import("resource:///modules/SearchSpec.jsm");
 const { VirtualFolderHelper } = ChromeUtils.import(
-  "resource:///modules/virtualFolderWrapper.js"
+  "resource:///modules/VirtualFolderWrapper.jsm"
 );
 
 var MSG_VIEW_FLAG_DUMMY = 0x20000000;
@@ -1402,8 +1402,8 @@ DBViewWrapper.prototype = {
     if (this.isVirtual) {
       if (
         this.isMultiFolder &&
-        (changedFlags & Ci.nsMsgViewFlagsType.kThreadedDisplay &&
-          !(changedFlags & Ci.nsMsgViewFlagsType.kGroupBySort))
+        changedFlags & Ci.nsMsgViewFlagsType.kThreadedDisplay &&
+        !(changedFlags & Ci.nsMsgViewFlagsType.kGroupBySort)
       ) {
         reSort = true;
       }

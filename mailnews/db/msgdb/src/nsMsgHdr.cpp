@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -514,22 +514,21 @@ NS_IMETHODIMP nsMsgHdr::GetMime2DecodedRecipients(nsAString &resultRecipients) {
       GetMDBRow(), m_mdb->m_recipientsColumnToken, resultRecipients);
 }
 
-NS_IMETHODIMP nsMsgHdr::GetAuthorCollationKey(uint32_t *len,
-                                              uint8_t **resultAuthor) {
+NS_IMETHODIMP nsMsgHdr::GetAuthorCollationKey(nsTArray<uint8_t> &resultAuthor) {
   return m_mdb->RowCellColumnToAddressCollationKey(
-      GetMDBRow(), m_mdb->m_senderColumnToken, resultAuthor, len);
+      GetMDBRow(), m_mdb->m_senderColumnToken, resultAuthor);
 }
 
-NS_IMETHODIMP nsMsgHdr::GetSubjectCollationKey(uint32_t *len,
-                                               uint8_t **resultSubject) {
+NS_IMETHODIMP nsMsgHdr::GetSubjectCollationKey(
+    nsTArray<uint8_t> &resultSubject) {
   return m_mdb->RowCellColumnToCollationKey(
-      GetMDBRow(), m_mdb->m_subjectColumnToken, resultSubject, len);
+      GetMDBRow(), m_mdb->m_subjectColumnToken, resultSubject);
 }
 
-NS_IMETHODIMP nsMsgHdr::GetRecipientsCollationKey(uint32_t *len,
-                                                  uint8_t **resultRecipients) {
+NS_IMETHODIMP nsMsgHdr::GetRecipientsCollationKey(
+    nsTArray<uint8_t> &resultRecipients) {
   return m_mdb->RowCellColumnToCollationKey(
-      GetMDBRow(), m_mdb->m_recipientsColumnToken, resultRecipients, len);
+      GetMDBRow(), m_mdb->m_recipientsColumnToken, resultRecipients);
 }
 
 NS_IMETHODIMP nsMsgHdr::GetCharset(char **aCharset) {
@@ -669,7 +668,7 @@ const char *nsMsgHdr::GetNextReference(const char *startNextRef,
         // intentional fallthrough so whitespaceEndedAt will definitely have
         //  a non-NULL value, just in case the message-id is not valid (no '>')
         //  and the old-school support is desired.
-        MOZ_FALLTHROUGH;
+        [[fallthrough]];
       default:
         if (!whitespaceEndedAt) whitespaceEndedAt = ptr;
         break;
@@ -857,7 +856,6 @@ NS_IMETHODIMP nsMsgHdr::GetIsKilled(bool *isKilled) {
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "nsIStringEnumerator.h"
-#include "nsAutoPtr.h"
 #define NULL_MORK_COLUMN 0
 class nsMsgPropertyEnumerator : public nsStringEnumeratorBase {
  public:

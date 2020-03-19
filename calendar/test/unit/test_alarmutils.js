@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 function run_test() {
   do_calendar_startup(run_next_test);
@@ -17,7 +17,7 @@ add_task(async function test_setDefaultValues_events() {
   Services.prefs.setIntPref("calendar.alarms.eventalarmlen", 60);
   item = cal.createEvent();
   cal.alarms.setDefaultValues(item);
-  alarm = item.getAlarms({})[0];
+  alarm = item.getAlarms()[0];
   ok(alarm);
   equal(alarm.related, alarm.ALARM_RELATED_START);
   equal(alarm.action, "DISPLAY");
@@ -28,7 +28,7 @@ add_task(async function test_setDefaultValues_events() {
   Services.prefs.setIntPref("calendar.alarms.eventalarmlen", 20);
   item = cal.createEvent();
   cal.alarms.setDefaultValues(item);
-  alarm = item.getAlarms({})[0];
+  alarm = item.getAlarms()[0];
   ok(alarm);
   equal(alarm.related, alarm.ALARM_RELATED_START);
   equal(alarm.action, "DISPLAY");
@@ -37,10 +37,10 @@ add_task(async function test_setDefaultValues_events() {
   Services.prefs.setIntPref("calendar.alarms.onforevents", 0);
   item = cal.createEvent();
   cal.alarms.setDefaultValues(item);
-  equal(item.getAlarms({}).length, 0);
+  equal(item.getAlarms().length, 0);
 
   let mockCalendar = {
-    getProperty: function() {
+    getProperty() {
       return ["SHOUT"];
     },
   };
@@ -51,7 +51,7 @@ add_task(async function test_setDefaultValues_events() {
   item = cal.createEvent();
   item.calendar = mockCalendar;
   cal.alarms.setDefaultValues(item);
-  alarm = item.getAlarms({})[0];
+  alarm = item.getAlarms()[0];
   ok(alarm);
   equal(alarm.related, alarm.ALARM_RELATED_START);
   equal(alarm.action, "SHOUT");
@@ -76,7 +76,7 @@ add_task(async function test_setDefaultValues_tasks() {
   item = cal.createTodo();
   equal(item.entryDate, null);
   cal.alarms.setDefaultValues(item);
-  alarm = item.getAlarms({})[0];
+  alarm = item.getAlarms()[0];
   ok(alarm);
   equal(alarm.related, alarm.ALARM_RELATED_START);
   equal(alarm.action, "DISPLAY");
@@ -88,7 +88,7 @@ add_task(async function test_setDefaultValues_tasks() {
   Services.prefs.setIntPref("calendar.alarms.todoalarmlen", 20);
   item = cal.createTodo();
   cal.alarms.setDefaultValues(item);
-  alarm = item.getAlarms({})[0];
+  alarm = item.getAlarms()[0];
   ok(alarm);
   equal(alarm.related, alarm.ALARM_RELATED_START);
   equal(alarm.action, "DISPLAY");
@@ -97,10 +97,10 @@ add_task(async function test_setDefaultValues_tasks() {
   Services.prefs.setIntPref("calendar.alarms.onfortodos", 0);
   item = cal.createTodo();
   cal.alarms.setDefaultValues(item);
-  equal(item.getAlarms({}).length, 0);
+  equal(item.getAlarms().length, 0);
 
   let mockCalendar = {
-    getProperty: function() {
+    getProperty() {
       return ["SHOUT"];
     },
   };
@@ -111,7 +111,7 @@ add_task(async function test_setDefaultValues_tasks() {
   item = cal.createTodo();
   item.calendar = mockCalendar;
   cal.alarms.setDefaultValues(item);
-  alarm = item.getAlarms({})[0];
+  alarm = item.getAlarms()[0];
   ok(alarm);
   equal(alarm.related, alarm.ALARM_RELATED_START);
   equal(alarm.action, "SHOUT");
@@ -202,19 +202,19 @@ add_task(async function test_addReminderImages() {
 
   function checkReminder(node, actions, msg) {
     let actionset = new Set(actions);
-    equal(box.childNodes.length, actions.length);
-    for (let i = 0, len = box.childNodes.length; i < len; i++) {
-      let actionvalue = box.childNodes[i].getAttribute("value");
-      equal(box.childNodes[i].localName, "image", msg + " (is image)");
+    equal(box.children.length, actions.length);
+    for (let i = 0, len = box.children.length; i < len; i++) {
+      let actionvalue = box.children[i].getAttribute("value");
+      equal(box.children[i].localName, "image", msg + " (is image)");
       ok(actionset.has(actionvalue), msg + " (has action)");
-      equal(box.childNodes[i].getAttribute("class"), "reminder-icon", msg + " (has class)");
+      equal(box.children[i].getAttribute("class"), "reminder-icon", msg + " (has class)");
       actionset.delete(actionvalue);
     }
   }
 
   let xul_ns = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
   let doc = cal.xml.parseString("<window xmlns='" + xul_ns + "'><box/></window>");
-  let box = doc.documentElement.firstChild;
+  let box = doc.documentElement.firstElementChild;
 
   let actions = ["DISPLAY"];
   let reminders = createReminders(actions);

@@ -16,7 +16,7 @@
 /* import-globals-from ../../base/content/calendar-ui-utils.js */
 
 // XXX Need to determine which of these we really need here.
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MailServices } = ChromeUtils.import("resource:///modules/MailServices.jsm");
 
@@ -110,7 +110,7 @@ function receiveMessage(aEvent) {
       break;
     }
     case "cancelDialog":
-      document.documentElement.cancelDialog();
+      document.querySelector("dialog").cancelDialog();
       break;
     case "closeWindowOrTab":
       closeWindowOrTab(aEvent.data.iframeId);
@@ -214,6 +214,7 @@ function windowCloseListener(aEvent) {
 function onLoadLightningItemPanel(aIframeId, aUrl) {
   let iframe;
   let iframeSrc;
+  let dialog = document.querySelector("dialog");
 
   if (!gTabmail) {
     gTabmail = document.getElementById("tabmail") || null;
@@ -231,7 +232,7 @@ function onLoadLightningItemPanel(aIframeId, aUrl) {
     iframe = document.createXULElement("iframe");
     iframeSrc = window.arguments[0].useNewItemUI
       ? "chrome://lightning/content/html-item-editing/lightning-item-iframe.html"
-      : "chrome://lightning/content/lightning-item-iframe.xul";
+      : "chrome://lightning/content/lightning-item-iframe.xhtml";
 
     iframe.setAttribute("id", "lightning-item-panel-iframe");
     iframe.setAttribute("flex", "1");
@@ -239,7 +240,7 @@ function onLoadLightningItemPanel(aIframeId, aUrl) {
     let statusbar = document.getElementById("status-bar");
 
     // Note: iframe.contentWindow is undefined before the iframe is inserted here.
-    document.documentElement.insertBefore(iframe, statusbar);
+    dialog.insertBefore(iframe, statusbar);
 
     // Move the args so they are positioned relative to the iframe,
     // for the window dialog just as they are for the tab.
@@ -248,8 +249,8 @@ function onLoadLightningItemPanel(aIframeId, aUrl) {
     iframe.contentWindow.arguments = [window.arguments[0]];
 
     // hide the ok and cancel dialog buttons
-    let accept = document.documentElement.getButton("accept");
-    let cancel = document.documentElement.getButton("cancel");
+    let accept = dialog.getButton("accept");
+    let cancel = dialog.getButton("cancel");
     accept.setAttribute("collapsed", "true");
     cancel.setAttribute("collapsed", "true");
     cancel.parentNode.setAttribute("collapsed", "true");
@@ -272,7 +273,6 @@ function onLoadLightningItemPanel(aIframeId, aUrl) {
     // Enlarge the dialog window so the iframe content fits, and prevent it
     // getting smaller. We don't know the minimum size of the content unless
     // it's overflowing, so don't attempt to enforce what we don't know.
-    let docEl = document.documentElement;
     let overflowListener = () => {
       let { scrollWidth, scrollHeight } = iframe.contentDocument.documentElement;
       let { clientWidth, clientHeight } = iframe;
@@ -285,13 +285,13 @@ function onLoadLightningItemPanel(aIframeId, aUrl) {
       // greater than 1 here, not 0.
       if (diffX > 1) {
         window.resizeBy(diffX, 0);
-        docEl.setAttribute("minwidth", docEl.getAttribute("width"));
+        dialog.setAttribute("minwidth", dialog.getAttribute("width"));
       }
       if (diffY > 1) {
         window.resizeBy(0, diffY);
-        docEl.setAttribute("minheight", docEl.getAttribute("height"));
+        dialog.setAttribute("minheight", dialog.getAttribute("height"));
       }
-      if (docEl.hasAttribute("minwidth") && docEl.hasAttribute("minheight")) {
+      if (dialog.hasAttribute("minwidth") && dialog.hasAttribute("minheight")) {
         iframe.contentWindow.removeEventListener("resize", overflowListener);
       }
     };
@@ -315,9 +315,9 @@ function onLoadLightningItemPanel(aIframeId, aUrl) {
   // for tasks in a window dialog, set the dialog id for CSS selection, etc.
   if (!gTabmail) {
     if (gConfig.isEvent) {
-      setDialogId(document.documentElement, "calendar-event-dialog");
+      setDialogId(dialog, "calendar-event-dialog");
     } else {
-      setDialogId(document.documentElement, "calendar-task-dialog");
+      setDialogId(dialog, "calendar-task-dialog");
     }
   }
 
@@ -483,7 +483,7 @@ function openNewMessage() {
  */
 function openNewCardDialog() {
   window.openDialog(
-    "chrome://messenger/content/addressbook/abNewCardDialog.xul",
+    "chrome://messenger/content/addressbook/abNewCardDialog.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen"
   );
@@ -543,7 +543,7 @@ function updatePrivacy(aArg) {
     let menupopup = document.getElementById("event-privacy-menupopup");
     if (menupopup) {
       // Only update the toolbar if the button is actually there
-      for (let node of menupopup.childNodes) {
+      for (let node of menupopup.children) {
         let currentProvider = node.getAttribute("provider");
         if (node.hasAttribute("privacy")) {
           let currentPrivacyValue = node.getAttribute("privacy");
@@ -573,7 +573,7 @@ function updatePrivacy(aArg) {
     // Update privacy capabilities (menu) but only if we are not in a tab.
     if (!gTabmail) {
       menupopup = document.getElementById("options-privacy-menupopup");
-      for (let node of menupopup.childNodes) {
+      for (let node of menupopup.children) {
         let currentProvider = node.getAttribute("provider");
         if (node.hasAttribute("privacy")) {
           let currentPrivacyValue = node.getAttribute("privacy");
@@ -603,7 +603,7 @@ function updatePrivacy(aArg) {
     // Update privacy capabilities (statusbar)
     let privacyPanel = document.getElementById("status-privacy");
     let hasAnyPrivacyValue = false;
-    for (let node of privacyPanel.childNodes) {
+    for (let node of privacyPanel.children) {
       let currentProvider = node.getAttribute("provider");
       if (node.hasAttribute("privacy")) {
         let currentPrivacyValue = node.getAttribute("privacy");
@@ -697,7 +697,7 @@ function updatePriority(aArg) {
     } else {
       priorityPanel.removeAttribute("collapsed");
       let foundPriority = false;
-      for (let node of priorityPanel.childNodes) {
+      for (let node of priorityPanel.children) {
         if (foundPriority) {
           node.setAttribute("collapsed", "true");
         } else {
@@ -966,7 +966,7 @@ function dialogToolboxCustomizeDone(aToolboxChanged) {
   // Re-enable menu items (disabled during toolbar customization).
   let menubarId = gTabmail ? "mail-menubar" : "event-menubar";
   let menubar = document.getElementById(menubarId);
-  for (let menuitem of menubar.childNodes) {
+  for (let menuitem of menubar.children) {
     menuitem.removeAttribute("disabled");
   }
 
@@ -995,7 +995,7 @@ function onCommandCustomize() {
   // Disable menu items during toolbar customization.
   let menubarId = gTabmail ? "mail-menubar" : "event-menubar";
   let menubar = document.getElementById(menubarId);
-  for (let menuitem of menubar.childNodes) {
+  for (let menuitem of menubar.children) {
     menuitem.setAttribute("disabled", true);
   }
 
@@ -1006,7 +1006,7 @@ function onCommandCustomize() {
   wintype = wintype.replace(/:/g, "");
 
   window.openDialog(
-    "chrome://messenger/content/customizeToolbar.xul",
+    "chrome://messenger/content/customizeToolbar.xhtml",
     "CustomizeToolbar" + wintype,
     "chrome,all,dependent",
     document.getElementById(toolboxId), // toolbox dom node
@@ -1030,7 +1030,7 @@ function loadCloudProviders(aItemObjects) {
    * @param {Node} aParentNode  A menupopup containing menu items
    */
   function deleteAlreadyExisting(aParentNode) {
-    for (let node of aParentNode.childNodes) {
+    for (let node of aParentNode.children) {
       if (node.cloudProviderAccountKey) {
         aParentNode.removeChild(node);
       }
@@ -1098,10 +1098,11 @@ function updateSaveControls(aSendNotSave) {
   let saveBtn = document.getElementById("button-save");
   let saveandcloseBtn = document.getElementById("button-saveandclose");
   let saveMenu =
-    document.getElementById("item-save-menuitem") || document.getElementById("ltnSave");
+    document.getElementById("item-save-menuitem") ||
+    document.getElementById("calendar-save-menuitem");
   let saveandcloseMenu =
     document.getElementById("item-saveandclose-menuitem") ||
-    document.getElementById("ltnSaveAndClose");
+    document.getElementById("calendar-save-and-close-menuitem");
 
   // we store the initial label and tooltip values to be able to reset later
   if (!window.calItemSaveControls) {

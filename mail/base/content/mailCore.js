@@ -46,7 +46,7 @@ XPCOMUtils.defineLazyGetter(this, "gViewSourceUtils", function() {
     }
 
     window.openDialog(
-      "chrome://messenger/content/viewSource.xul",
+      "chrome://messenger/content/viewSource.xhtml",
       "_blank",
       "all,dialog=no",
       aArgs
@@ -81,7 +81,7 @@ Services.obs.addObserver(
                 }
 
                 window.openDialog(
-                  "chrome://messenger/content/viewSource.xul",
+                  "chrome://messenger/content/viewSource.xhtml",
                   "_blank",
                   "all,dialog=no",
                   aArgs
@@ -216,8 +216,8 @@ function overlayRepositionDialog() {
 function CustomizeMailToolbar(toolboxId, customizePopupId) {
   // Disable the toolbar context menu items
   var menubar = document.getElementById("mail-menubar");
-  for (var i = 0; i < menubar.childNodes.length; ++i) {
-    menubar.childNodes[i].setAttribute("disabled", true);
+  for (var i = 0; i < menubar.children.length; ++i) {
+    menubar.children[i].setAttribute("disabled", true);
   }
 
   var customizePopup = document.getElementById(customizePopupId);
@@ -225,7 +225,7 @@ function CustomizeMailToolbar(toolboxId, customizePopupId) {
 
   var toolbox = document.getElementById(toolboxId);
 
-  var customizeURL = "chrome://messenger/content/customizeToolbar.xul";
+  var customizeURL = "chrome://messenger/content/customizeToolbar.xhtml";
   gCustomizeSheet = Services.prefs.getBoolPref(
     "toolbar.customization.usesheet"
   );
@@ -300,8 +300,8 @@ function MailToolboxCustomizeDone(aEvent, customizePopupId) {
 
   // Re-enable parts of the UI we disabled during the dialog
   var menubar = document.getElementById("mail-menubar");
-  for (var i = 0; i < menubar.childNodes.length; ++i) {
-    menubar.childNodes[i].setAttribute("disabled", false);
+  for (var i = 0; i < menubar.children.length; ++i) {
+    menubar.children[i].setAttribute("disabled", false);
   }
 
   // make sure the mail views search box is initialized
@@ -352,8 +352,8 @@ function MailToolboxCustomizeDone(aEvent, customizePopupId) {
       if ("_teardown" in popup) {
         popup._teardown();
       } else {
-        for (let i = popup.childNodes.length - 1; i >= 0; i--) {
-          let child = popup.childNodes[i];
+        for (let i = popup.children.length - 1; i >= 0; i--) {
+          let child = popup.children[i];
           if (child.getAttribute("generated") != "true") {
             continue;
           }
@@ -394,8 +394,8 @@ function onViewToolbarsPopupShowing(
     event.target.querySelector(".panel-subview-body") || event.target;
 
   // Remove all collapsible nodes from the menu.
-  for (let i = popup.childNodes.length - 1; i >= 0; --i) {
-    const deadItem = popup.childNodes[i];
+  for (let i = popup.children.length - 1; i >= 0; --i) {
+    const deadItem = popup.children[i];
 
     if (deadItem.hasAttribute("iscollapsible")) {
       deadItem.remove();
@@ -403,7 +403,7 @@ function onViewToolbarsPopupShowing(
   }
 
   // We insert menuitems before the first child if no insert point is given.
-  const firstMenuItem = insertPoint || popup.firstChild;
+  const firstMenuItem = insertPoint || popup.firstElementChild;
 
   for (const toolboxId of toolboxIds) {
     const toolbox = document.getElementById(toolboxId);
@@ -489,7 +489,10 @@ function toOpenWindowByType(inType, uri) {
 }
 
 function toMessengerWindow() {
-  toOpenWindowByType("mail:3pane", "chrome://messenger/content/messenger.xul");
+  toOpenWindowByType(
+    "mail:3pane",
+    "chrome://messenger/content/messenger.xhtml"
+  );
 }
 
 function focusOnMail(tabNo, event) {
@@ -504,7 +507,7 @@ function focusOnMail(tabNo, event) {
     }
   } else {
     window.open(
-      "chrome://messenger/content/messenger.xul",
+      "chrome://messenger/content/messenger.xhtml",
       "_blank",
       "chrome,extrachrome,menubar,resizable,scrollbars,status,toolbar"
     );
@@ -514,7 +517,7 @@ function focusOnMail(tabNo, event) {
 function toAddressBook() {
   toOpenWindowByType(
     "mail:addressbook",
-    "chrome://messenger/content/addressbook/addressbook.xul"
+    "chrome://messenger/content/addressbook/addressbook.xhtml"
   );
 }
 
@@ -529,7 +532,7 @@ function showChatTab() {
 
 function toImport() {
   window.openDialog(
-    "chrome://messenger/content/importDialog.xul",
+    "chrome://messenger/content/importDialog.xhtml",
     "importDialog",
     "chrome, modal, titlebar, centerscreen"
   );
@@ -553,7 +556,7 @@ function openOptionsDialog(aPaneID, aScrollPaneTo, aOtherArgs) {
 }
 
 function openAddonsMgr(aView) {
-  if (aView) {
+  return new Promise(resolve => {
     let emWindow;
     let browserWindow;
 
@@ -569,51 +572,35 @@ function openAddonsMgr(aView) {
     Services.obs.removeObserver(receivePong, "EM-pong");
 
     if (emWindow) {
-      emWindow.loadView(aView);
+      if (aView) {
+        emWindow.loadView(aView);
+      }
       let tabmail = browserWindow.document.getElementById("tabmail");
       tabmail.switchToTab(tabmail.getBrowserForDocument(emWindow));
       emWindow.focus();
+      resolve(emWindow);
       return;
     }
-  }
 
-  let addonSiteRegExp = Services.prefs.getCharPref(
-    "extensions.getAddons.siteRegExp"
-  );
-  let tab = openContentTab("about:addons", "tab", addonSiteRegExp);
-  tab.browser.droppedLinkHandler = event =>
-    tab.browser.contentWindow.gDragDrop.onDrop(event);
-
-  if (aView) {
     // This must be a new load, else the ping/pong would have
     // found the window above.
-    Services.obs.addObserver(function loadViewOnLoad(aSubject, aTopic, aData) {
-      Services.obs.removeObserver(loadViewOnLoad, aTopic);
-      aSubject.loadView(aView);
-    }, "EM-loaded");
-  }
-}
-
-/**
- * Open a dialog with addon preferences.
- *
- * @option aURL  Chrome URL for the preferences XUL file of the addon.
- */
-function openAddonPrefs(aURL, aOptionsType) {
-  if (aOptionsType == "addons") {
-    openAddonsMgr(aURL);
-  } else if (aOptionsType == "tab") {
-    switchToTabHavingURI(aURL, true);
-  } else {
-    let instantApply = Services.prefs.getBoolPref(
-      "browser.preferences.instantApply"
+    let addonSiteRegExp = Services.prefs.getCharPref(
+      "extensions.getAddons.siteRegExp"
     );
-    let features =
-      "chrome,titlebar,toolbar,centerscreen" +
-      (instantApply ? ",dialog=no" : ",modal");
+    let tab = openContentTab("about:addons", "tab", addonSiteRegExp);
+    // Also in `contentTabType.restoreTab` in specialTabs.js.
+    tab.browser.droppedLinkHandler = event =>
+      tab.browser.contentWindow.gDragDrop.onDrop(event);
 
-    window.openDialog(aURL, "addonPrefs", features);
-  }
+    Services.obs.addObserver(function observer(aSubject, aTopic, aData) {
+      Services.obs.removeObserver(observer, aTopic);
+      if (aView) {
+        aSubject.loadView(aView);
+      }
+      aSubject.focus();
+      resolve(aSubject);
+    }, "EM-loaded");
+  });
 }
 
 function openActivityMgr() {
@@ -629,7 +616,7 @@ function openIMAccountMgr() {
   } else {
     win = Services.ww.openWindow(
       null,
-      "chrome://messenger/content/chat/imAccounts.xul",
+      "chrome://messenger/content/chat/imAccounts.xhtml",
       "Accounts",
       "chrome,resizable,centerscreen",
       null
@@ -640,7 +627,7 @@ function openIMAccountMgr() {
 
 function openIMAccountWizard() {
   const kFeatures = "chrome,centerscreen,modal,titlebar";
-  const kUrl = "chrome://messenger/content/chat/imAccountWizard.xul";
+  const kUrl = "chrome://messenger/content/chat/imAccountWizard.xhtml";
   const kName = "IMAccountWizard";
 
   if (AppConstants.platform == "macosx") {
@@ -691,10 +678,8 @@ function SetBusyCursor(window, enable) {
 }
 
 function openAboutDialog() {
-  let enumerator = Services.wm.getEnumerator("Mail:About");
-  while (enumerator.hasMoreElements()) {
+  for (let win of Services.wm.getEnumerator("Mail:About")) {
     // Only open one about window
-    let win = enumerator.getNext();
     win.focus();
     return;
   }
@@ -709,7 +694,7 @@ function openAboutDialog() {
   }
 
   window.openDialog(
-    "chrome://messenger/content/aboutDialog.xul",
+    "chrome://messenger/content/aboutDialog.xhtml",
     "About",
     features
   );
@@ -817,10 +802,8 @@ function getMostRecentMailWindow() {
   // If we're lucky, this isn't a popup, and we can just return this.
   if (win && win.document.documentElement.getAttribute("chromehidden")) {
     win = null;
-    let windowList = Services.wm.getEnumerator("mail:3pane", true);
     // This is oldest to newest, so this gets a bit ugly.
-    while (windowList.hasMoreElements()) {
-      let nextWin = windowList.getNext();
+    for (let nextWin of Services.wm.getEnumerator("mail:3pane", true)) {
       if (!nextWin.document.documentElement.getAttribute("chromehidden")) {
         win = nextWin;
       }
@@ -849,58 +832,67 @@ function SanitizeAttachmentDisplayName(aAttachment) {
 }
 
 /**
- * Create a TransferData object for a message attachment, either from the
- * message reader or the composer.
+ * Appends a dataTransferItem to the associated event for message attachments,
+ * either from the message reader or the composer.
  *
- * @param aAttachment the attachment object
- * @return the TransferData
+ * @param {Event} event - The associated event.
+ * @param {nsIMsgAttachment[]} attachments - The attachments to setup
  */
-function CreateAttachmentTransferData(aAttachment) {
+function setupDataTransfer(event, attachments) {
   // For now, disallow drag-and-drop on cloud attachments. In the future, we
   // should allow this.
-  if (
-    aAttachment.contentType == "text/x-moz-deleted" ||
-    aAttachment.sendViaCloud
-  ) {
-    return null;
-  }
+  let index = 0;
+  for (let attachment of attachments) {
+    if (
+      attachment.contentType == "text/x-moz-deleted" ||
+      attachment.sendViaCloud
+    ) {
+      return;
+    }
 
-  var name = aAttachment.name || aAttachment.displayName;
+    let name = attachment.name || attachment.displayName;
 
-  var data = new TransferData();
-  if (aAttachment.url && name) {
+    if (!attachment.url || !name) {
+      continue;
+    }
+
     // Only add type/filename info for non-file URLs that don't already
     // have it.
-    var info;
-    if (/(^file:|&filename=)/.test(aAttachment.url)) {
-      info = aAttachment.url;
+    let info;
+    if (/(^file:|&filename=)/.test(attachment.url)) {
+      info = attachment.url;
     } else {
       info =
-        aAttachment.url +
+        attachment.url +
         "&type=" +
-        aAttachment.contentType +
+        attachment.contentType +
         "&filename=" +
         encodeURIComponent(name);
     }
 
-    data.addDataForFlavour(
+    event.dataTransfer.mozSetDataAt(
       "text/x-moz-url",
-      info + "\n" + name + "\n" + aAttachment.size
+      info + "\n" + name + "\n" + attachment.size,
+      index
     );
-    data.addDataForFlavour("text/x-moz-url-data", aAttachment.url);
-    data.addDataForFlavour("text/x-moz-url-desc", name);
-    data.addDataForFlavour(
+    event.dataTransfer.mozSetDataAt(
+      "text/x-moz-url-data",
+      attachment.url,
+      index
+    );
+    event.dataTransfer.mozSetDataAt("text/x-moz-url-desc", name, index);
+    event.dataTransfer.mozSetDataAt(
       "application/x-moz-file-promise-url",
-      aAttachment.url
+      attachment.url,
+      index
     );
-    data.addDataForFlavour(
+    event.dataTransfer.mozSetDataAt(
       "application/x-moz-file-promise",
       new nsFlavorDataProvider(),
-      0,
-      Ci.nsISupports
+      index
     );
+    index++;
   }
-  return data;
 }
 
 function nsFlavorDataProvider() {}
@@ -908,15 +900,13 @@ function nsFlavorDataProvider() {}
 nsFlavorDataProvider.prototype = {
   QueryInterface: ChromeUtils.generateQI(["nsIFlavorDataProvider"]),
 
-  getFlavorData(aTransferable, aFlavor, aData, aDataLen) {
+  getFlavorData(aTransferable, aFlavor, aData) {
     // get the url for the attachment
     if (aFlavor == "application/x-moz-file-promise") {
       var urlPrimitive = {};
-      var dataSize = {};
       aTransferable.getTransferData(
         "application/x-moz-file-promise-url",
-        urlPrimitive,
-        dataSize
+        urlPrimitive
       );
 
       var srcUrlPrimitive = urlPrimitive.value.QueryInterface(
@@ -927,8 +917,7 @@ nsFlavorDataProvider.prototype = {
       var dirPrimitive = {};
       aTransferable.getTransferData(
         "application/x-moz-file-promise-dir",
-        dirPrimitive,
-        dataSize
+        dirPrimitive
       );
       var destDirectory = dirPrimitive.value.QueryInterface(Ci.nsIFile);
 
@@ -956,7 +945,6 @@ nsFlavorDataProvider.prototype = {
           destDirectory
         );
         aData.value = destFilePath.QueryInterface(Ci.nsISupports);
-        aDataLen.value = 4;
       }
     }
   },

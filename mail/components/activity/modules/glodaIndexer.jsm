@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-this.EXPORTED_SYMBOLS = ["glodaIndexerActivity"];
+const EXPORTED_SYMBOLS = ["glodaIndexerActivity"];
 
 var nsActProcess = Components.Constructor(
   "@mozilla.org/activity-process;1",
@@ -20,10 +20,12 @@ const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 const { PluralForm } = ChromeUtils.import(
   "resource://gre/modules/PluralForm.jsm"
 );
-const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
-const { Gloda } = ChromeUtils.import("resource:///modules/gloda/public.js");
+const { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
+const { Gloda } = ChromeUtils.import(
+  "resource:///modules/gloda/GlodaPublic.jsm"
+);
 const { GlodaIndexer } = ChromeUtils.import(
-  "resource:///modules/gloda/indexer.js"
+  "resource:///modules/gloda/GlodaIndexer.jsm"
 );
 
 /**
@@ -228,7 +230,7 @@ var glodaIndexerActivity = {
       event.iconClass = "indexMail";
 
       // Transfer subjects.
-      let subjects = this.currentJob.process.getSubjects({});
+      let subjects = this.currentJob.process.getSubjects();
       for (let subject of subjects) {
         event.addSubject(subject);
       }

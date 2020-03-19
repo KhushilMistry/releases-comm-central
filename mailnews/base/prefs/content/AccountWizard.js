@@ -50,6 +50,7 @@ var okCallback = null;
 */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
+var { FeedUtils } = ChromeUtils.import("resource:///modules/FeedUtils.jsm");
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
@@ -79,11 +80,13 @@ var gDefaultSpecialFolderPickerMode = "0";
 
 // event handlers
 function onAccountWizardLoad() {
-  document.documentElement.addEventListener("wizardcancel", onCancel);
-  document.documentElement.addEventListener("wizardfinish", FinishAccount);
+  document.querySelector("wizard").addEventListener("wizardcancel", onCancel);
+  document
+    .querySelector("wizard")
+    .addEventListener("wizardfinish", FinishAccount);
   let accounttypePage = document.getElementById("accounttype");
   accounttypePage.addEventListener("pageshow", () => {
-    document.documentElement.canAdvance = true;
+    document.querySelector("wizard").canAdvance = true;
   });
   accounttypePage.addEventListener("pageadvanced", acctTypePageUnload);
   let identityPage = document.getElementById("identitypage");
@@ -424,6 +427,11 @@ function PageDataToAccountData(pageData, accountData) {
 function createAccount(accountData) {
   // Retrieve the server (data) from the account data.
   var server = accountData.incomingServer;
+
+  // Use createRssAccount for Feed accounts.
+  if (server.type == "rss") {
+    return FeedUtils.createRssAccount(server.prettyName);
+  }
 
   // for news, username is always null
   var username = server.type == "nntp" ? null : server.username;
@@ -803,7 +811,7 @@ function checkForInvalidAccounts() {
 
     setupWizardPanels();
     // Set the page index to identity page.
-    document.documentElement.pageIndex = 1;
+    document.querySelector("wizard").pageIndex = 1;
   }
 }
 

@@ -12,7 +12,6 @@
 
 #include "mozilla/Attributes.h"
 #include "nsMsgDBFolder.h" /* include the interface we are going to support */
-#include "nsAutoPtr.h"
 #include "nsICopyMessageListener.h"
 #include "nsMsgTxn.h"
 #include "nsIMsgMessageService.h"
@@ -184,7 +183,7 @@ class nsMsgLocalMailFolder : public nsMsgDBFolder,
   // Used when headers_only is TRUE
   NS_IMETHOD DownloadMessagesForOffline(nsIArray *aMessages,
                                         nsIMsgWindow *aWindow) override;
-  NS_IMETHOD FetchMsgPreviewText(nsMsgKey *aKeysToFetch, uint32_t aNumKeys,
+  NS_IMETHOD FetchMsgPreviewText(nsTArray<nsMsgKey> const &aKeysToFetch,
                                  bool aLocalOnly, nsIUrlListener *aUrlListener,
                                  bool *aAsyncResults) override;
   NS_IMETHOD AddKeywordsToMessages(nsIArray *aMessages,

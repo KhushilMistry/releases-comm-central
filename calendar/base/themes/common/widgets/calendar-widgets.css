@@ -49,7 +49,7 @@ checkbox.treenode-checkbox > .checkbox-label-center-box > .checkbox-label-box > 
 .view-navigation-button {
   -moz-context-properties: fill;
   fill: currentColor;
-  list-style-image: url(chrome://calendar-common/skin/view-cycler.svg);
+  list-style-image: url(chrome://calendar/skin/shared/view-cycler.svg);
   -moz-user-focus: normal;
 }
 
@@ -121,12 +121,11 @@ checkbox.treenode-checkbox > .checkbox-label-center-box > .checkbox-label-box > 
 }
 
 /*
- * Note that #calendar-list is used for 3 separate lists that look similar,
+ * Note that #calendar-list is used for 2 separate lists that look similar,
  * but are otherwise independent:
  *
- * - calendar-providerUninstall-dialog.xul
- * - messenger-overlay-sidebar.xul
- * - gdata-calendar-creation.xul
+ * - calendar-providerUninstall-dialog.xhtml
+ * - messenger-overlay-sidebar.xhtml
  *
  * Please be careful when changing the following CSS.
  */
@@ -206,9 +205,9 @@ checkbox.treenode-checkbox > .checkbox-label-center-box > .checkbox-label-box > 
 }
 
 #calendar-list > richlistitem[calendar-readonly="true"] > .calendar-readstatus {
-  list-style-image: url(chrome://calendar-common/skin/icons/locked.svg);
+  list-style-image: url(chrome://calendar/skin/shared/icons/locked.svg);
 }
 
 #calendar-list > richlistitem[calendar-readfailed="true"] > .calendar-readstatus {
-  list-style-image: url(chrome://calendar-common/skin/icons/warn.svg);
+  list-style-image: url(chrome://calendar/skin/shared/icons/warn.svg);
 }

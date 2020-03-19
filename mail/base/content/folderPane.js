@@ -24,7 +24,7 @@ var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
 var { MailUtils } = ChromeUtils.import("resource:///modules/MailUtils.jsm");
-var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.js");
+var { IOUtils } = ChromeUtils.import("resource:///modules/IOUtils.jsm");
 var { FeedUtils } = ChromeUtils.import("resource:///modules/FeedUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
@@ -144,19 +144,21 @@ var gFolderTreeView = {
   messengerBundle: null,
 
   /**
-   * Called when the window is initially loaded.  This function initializes the
+   * Called when the window is initially loaded. This function initializes the
    * folder-pane to the view last shown before the application was closed.
    */
   load(aTree, aJSONFile) {
     this._treeElement = aTree;
     this.messengerBundle = document.getElementById("bundle_messenger");
 
-    // the folder pane can be used for other trees which may not have these elements.
+    // The folder pane can be used for other trees which may not have these
+    // elements. Collapse them if no account is currently available.
+    let hasAccounts = MailServices.accounts.accounts.length > 0;
     if (document.getElementById("folderpane_splitter")) {
-      document.getElementById("folderpane_splitter").collapsed = false;
+      document.getElementById("folderpane_splitter").collapsed = !hasAccounts;
     }
     if (document.getElementById("folderPaneBox")) {
-      document.getElementById("folderPaneBox").collapsed = false;
+      document.getElementById("folderPaneBox").collapsed = !hasAccounts;
     }
 
     try {
@@ -516,7 +518,7 @@ var gFolderTreeView = {
     }
 
     let modeSelector = document.getElementById("folderpane-mode-selector")
-      .firstChild;
+      .firstElementChild;
     // Can't use modeSelector.removeAllItems() here as it would remove the menupopup too, with its attributes.
     while (modeSelector.menupopup.hasChildNodes()) {
       modeSelector.menupopup.lastChild.remove();
@@ -564,7 +566,7 @@ var gFolderTreeView = {
       if (!modeSelector.querySelector('[value="' + aMode + '"]')) {
         this._initFolderModeSelector();
       }
-      modeSelector.firstChild.value = aMode;
+      modeSelector.firstElementChild.value = aMode;
     }
   },
 
@@ -1974,12 +1976,10 @@ var gFolderTreeView = {
       __proto__: IFolderTreeMode,
 
       generateMap(ftv) {
-        const MAXRECENT = 15;
-
-        // Get 15 (MAXRECENT) most recently accessed folders.
+        // Get the most recently accessed folders.
         let recentFolders = getMostRecentFolders(
           ftv._enumerateFolders,
-          MAXRECENT,
+          Services.prefs.getIntPref("mail.folder_widget.max_recent"),
           "MRUTime",
           null
         );
@@ -2365,8 +2365,8 @@ var gFolderTreeView = {
         );
       } else {
         // otherwise, go after the last child
-        let lastChild = aParent._children[newChildNum - 1];
-        let lastChildIndex = this.getIndexOfFolder(lastChild._folder);
+        let lastElementChild = aParent._children[newChildNum - 1];
+        let lastChildIndex = this.getIndexOfFolder(lastElementChild._folder);
         newChildIndex = Number(lastChildIndex) + 1;
         while (
           newChildIndex < this.rowCount &&
@@ -2508,7 +2508,7 @@ var gFolderTreeView = {
     this._addChildToView(parent, parentIndex, newChild);
   },
 
-  OnItemRemoved(aRDFParentItem, aItem) {
+  OnItemRemoved(aParentItem, aItem) {
     if (!(aItem instanceof Ci.nsIMsgFolder)) {
       return;
     }
@@ -2520,7 +2520,7 @@ var gFolderTreeView = {
       return;
     }
     // forget our parent's children; they'll get rebuilt
-    if (aRDFParentItem && this._rowMap[index]._parent) {
+    if (aParentItem && this._rowMap[index]._parent) {
       this._rowMap[index]._parent._children = null;
     }
     let kidCount = 1;
@@ -2535,6 +2535,10 @@ var gFolderTreeView = {
     this._rowMap.splice(index, kidCount);
     this._tree.rowCountChanged(index, -1 * kidCount);
     this._tree.invalidateRow(index);
+
+    if (aParentItem === null && MailServices.accounts.accounts.length === 0) {
+      gFolderDisplay.show();
+    }
   },
 
   OnItemPropertyChanged(aItem, aProperty, aOld, aNew) {},
@@ -2889,7 +2893,7 @@ var gFolderTreeController = {
     }
 
     window.openDialog(
-      "chrome://messenger/content/newFolderDialog.xul",
+      "chrome://messenger/content/newFolderDialog.xhtml",
       "",
       "chrome,modal,resizable=no,centerscreen",
       { folder, dualUseFolders, okCallback: newFolderCallback }
@@ -2941,7 +2945,12 @@ var gFolderTreeController = {
           offlineStore.remove(true);
         }
       }
-      gFolderDisplay.view.close();
+
+      // We may be rebuilding a folder that is not the displayed one.
+      let sameFolder = gFolderDisplay.displayedFolder == folder;
+      if (sameFolder) {
+        gFolderDisplay.view.close();
+      }
 
       // Send a notification that we are triggering a database rebuild.
       MailServices.mfn.notifyItemEvent(
@@ -2962,11 +2971,13 @@ var gFolderTreeController = {
         folder.ForceDBClosed();
       }
       folder.updateFolder(msgWindow);
-      gFolderDisplay.show(folder);
+      if (sameFolder) {
+        gFolderDisplay.show(folder);
+      }
     }
 
     window.openDialog(
-      "chrome://messenger/content/folderProps.xul",
+      "chrome://messenger/content/folderProps.xhtml",
       "",
       "chrome,modal,centerscreen",
       {
@@ -3005,7 +3016,7 @@ var gFolderTreeController = {
       folder.rename(aName, msgWindow);
     }
     window.openDialog(
-      "chrome://messenger/content/renameFolderDialog.xul",
+      "chrome://messenger/content/renameFolderDialog.xhtml",
       "",
       "chrome,modal,centerscreen",
       {
@@ -3070,7 +3081,15 @@ var gFolderTreeController = {
     }
 
     let array = toXPCOMArray([folder], Ci.nsIMutableArray);
-    folder.parent.deleteSubFolders(array, msgWindow);
+    try {
+      folder.parent.deleteSubFolders(array, msgWindow);
+    } catch (ex) {
+      // Ignore known errors from canceled warning dialogs.
+      const NS_MSG_ERROR_COPY_FOLDER_ABORTED = 0x8055001a;
+      if (ex.result != NS_MSG_ERROR_COPY_FOLDER_ABORTED) {
+        throw ex;
+      }
+    }
   },
 
   /**
@@ -3129,9 +3148,8 @@ var gFolderTreeController = {
     }
 
     // Delete any subfolders this folder might have
-    let iter = folder.subFolders;
-    while (iter.hasMoreElements()) {
-      folder.propagateDelete(iter.getNext(), true, msgWindow);
+    for (let subFolder of folder.subFolders) {
+      folder.propagateDelete(subFolder, true, msgWindow);
     }
 
     // Now delete the messages
@@ -3199,7 +3217,7 @@ var gFolderTreeController = {
     }
 
     window.openDialog(
-      "chrome://messenger/content/virtualFolderProperties.xul",
+      "chrome://messenger/content/virtualFolderProperties.xhtml",
       "",
       "chrome,modal,centerscreen",
       { folder, searchTerms: aSearchTerms, newFolderName: name }
@@ -3220,7 +3238,7 @@ var gFolderTreeController = {
       }
     }
     window.openDialog(
-      "chrome://messenger/content/virtualFolderProperties.xul",
+      "chrome://messenger/content/virtualFolderProperties.xhtml",
       "",
       "chrome,modal,centerscreen",
       {
@@ -3473,9 +3491,7 @@ var gFolderStatsHelpers = {
   getSubfoldersSize(aFolder) {
     let folderSize = 0;
     if (aFolder.hasSubFolders) {
-      let subFolders = aFolder.subFolders;
-      while (subFolders.hasMoreElements()) {
-        let subFolder = subFolders.getNext().QueryInterface(Ci.nsIMsgFolder);
+      for (let subFolder of aFolder.subFolders) {
         let subSize = this.getFolderSize(subFolder);
         let subSubSize = this.getSubfoldersSize(subFolder);
         if (subSize == this.kUnknownSize || subSubSize == this.kUnknownSize) {

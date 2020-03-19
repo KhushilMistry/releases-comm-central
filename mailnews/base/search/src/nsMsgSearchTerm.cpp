@@ -859,7 +859,7 @@ nsresult nsMsgSearchTerm::MatchBody(nsIMsgSearchScopeTerm *scope,
       compare.Append(buf);
       // If this line ends with a soft line break, loop around
       // and get the next line before looking for the search string.
-      // This assumes the message can't end on a QP soft-line break.
+      // This assumes the message can't end on a QP soft line break.
       // That seems like a pretty safe assumption.
       if (softLineBreak) continue;
       if (!compare.IsEmpty()) {
@@ -983,7 +983,7 @@ nsresult nsMsgSearchTerm::MatchString(const nsACString &stringToMatch,
     }
     if (NS_FAILED(rv)) {
       // No charset or conversion failed, maybe due to a bad charset, try UTF-8.
-      if (MsgIsUTF8(stringToMatch)) {
+      if (mozilla::IsUtf8(stringToMatch)) {
         CopyUTF8toUTF16(stringToMatch, utf16StrToMatch);
       } else {
         // Bad luck, let's assume ASCII/windows-1252 then.

@@ -1,0 +1,188 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, you can obtain one at http://mozilla.org/MPL/2.0/.
+    <html:fieldset data-category="paneCalendar">
+        <html:legend>&pref.alarmgoesoff.label;</html:legend>
+        <vbox id="alarm-sound-box">
+            <hbox align="center">
+                <checkbox id="alarmSoundCheckbox"
+                          preference="calendar.alarms.playsound"
+                          label="&pref.playasound;"
+                          accesskey="&pref.calendar.alarms.playsound.accessKey;"/>
+                <spacer flex="1"/>
+                <button id="calendar.prefs.alarm.sound.play"
+                        label="&pref.calendar.alarms.sound.play.label;"
+                        accesskey="&pref.calendar.alarms.sound.play.accessKey;"
+                        oncommand="gAlarmsPane.previewAlarm()"/>
+            </hbox>
+            <radiogroup id="alarmSoundType"
+                        class="indent"
+                        orient="vertical"
+                        preference="calendar.alarms.soundType"
+                        aria-labelledby="alarmSoundCheckbox">
+                <hbox>
+                    <radio id="alarmSoundSystem"
+                           value="0"
+                           label="&pref.calendar.alarms.sound.useDefault.label;"
+                           accesskey="&pref.calendar.alarms.sound.useDefault.accessKey;"/>
+                </hbox>
+                <hbox>
+                    <radio id="alarmSoundCustom"
+                           value="1"
+                           label="&pref.calendar.alarms.sound.useCustom.label;"
+                           accesskey="&pref.calendar.alarms.sound.useCustom.accessKey;"/>
+                </hbox>
+            </radiogroup>
+            <hbox align="center" class="input-container">
+                <html:input id="alarmSoundFileField"
+                            type="text"
+                            class="input-filefield indent"
+                            readonly="readonly"
+                            preference="calendar.alarms.soundURL"
+                            preference-editable="true"
+                            aria-labelledby="alarmSoundCustom"/>
+                <button id="calendar.prefs.alarm.sound.browse"
+                        label="&pref.calendar.alarms.sound.browse.label;"
+                        accesskey="&pref.calendar.alarms.sound.browse.accessKey;"
+                        oncommand="gAlarmsPane.browseAlarm()"/>
+            </hbox>
+        </vbox>
+        <hbox align="center" flex="1">
+            <checkbox id="alarmshow"
+                      preference="calendar.alarms.show"
+                      label="&pref.showalarmbox;"
+                      accesskey="&pref.calendar.alarms.showAlarmBox.accessKey;"/>
+        </hbox>
+        <hbox align="center" flex="1">
+            <checkbox id="missedalarms"
+                      preference="calendar.alarms.showmissed"
+                      label="&pref.missedalarms2;"
+                      accesskey="&pref.calendar.alarms.missedAlarms.accessKey;"/>
+        </hbox>
+    </html:fieldset>
+
+    <html:fieldset data-category="paneCalendar">
+        <html:legend>&pref.calendar.alarms.defaults.label;</html:legend>
+        <hbox align="center">
+            <label value="&pref.defaultsnoozelength.label;"
+                   accesskey="&pref.defaultsnoozelength.accesskey;"
+                   control="defaultsnoozelength"/>
+            <html:input id="defaultsnoozelength" type="number" class="size3"
+                        min="0"
+                        preference="calendar.alarms.defaultsnoozelength"
+                        onselect="updateUnitLabelPlural('defaultsnoozelength', 'defaultsnoozelengthunit', 'minutes')"
+                        oninput="updateUnitLabelPlural('defaultsnoozelength', 'defaultsnoozelengthunit', 'minutes')"/>
+            <label id="defaultsnoozelengthunit"/>
+        </hbox>
+        <hbox>
+            <html:table id="alarm-defaults-table">
+                <html:tr>
+                    <html:td>
+                        <label value="&pref.defalarm4events.label;"
+                               accesskey="&pref.defalarm4events.accesskey;"
+                               control="eventdefalarm"/>
+                    </html:td>
+                    <html:td>
+                        <menulist id="eventdefalarm"
+                                  crop="none"
+                                  preference="calendar.alarms.onforevents">
+                            <menupopup id="eventdefalarmpopup">
+                                <menuitem id="eventdefalarmon"
+                                          label="&pref.alarm.on;"
+                                          value="1"/>
+                                <menuitem id="eventdefalarmoff"
+                                          label="&pref.alarm.off;"
+                                          value="0"
+                                          selected="true"/>
+                            </menupopup>
+                        </menulist>
+                    </html:td>
+                </html:tr>
+                <html:tr>
+                    <html:td>
+                        <label value="&pref.defalarm4todos.label;"
+                               accesskey="&pref.defalarm4todos.accesskey;"
+                               control="tododefalarm"/>
+                    </html:td>
+                    <html:td>
+                        <menulist id="tododefalarm"
+                                  crop="none"
+                                  preference="calendar.alarms.onfortodos">
+                            <menupopup id="tododefalarmpopup">
+                                <menuitem id="tododefalarmon"
+                                          label="&pref.alarm.on;"
+                                          value="1"/>
+                                <menuitem id="tododefalarmoff"
+                                          label="&pref.alarm.off;"
+                                          value="0"
+                                          selected="true"/>
+                            </menupopup>
+                        </menulist>
+                    </html:td>
+                </html:tr>
+                <html:tr>
+                    <html:td>
+                        <label value="&pref.defalarmlen4events.label;"
+                               accesskey="&pref.defalarmlen4events.accesskey;"
+                               control="eventdefalarmlen"/>
+                    </html:td>
+                    <html:td>
+                        <hbox class="defaultTimeBox"
+                              align="center"
+                              flex="1">
+                            <html:input id="eventdefalarmlen" type="number" class="size3" min="0"
+                                        preference="calendar.alarms.eventalarmlen"
+                                        onselect="updateMenuLabelsPlural('eventdefalarmlen', 'eventdefalarmunit')"
+                                        oninput="updateMenuLabelsPlural('eventdefalarmlen', 'eventdefalarmunit')"/>
+                            <menulist id="eventdefalarmunit"
+                                      flex="1"
+                                      crop="none"
+                                      preference="calendar.alarms.eventalarmunit">
+                                <menupopup id="eventdefalarmunitpopup">
+                                    <menuitem id="eventdefalarmunitmin"
+                                              value="minutes"
+                                              selected="true"/>
+                                    <menuitem id="eventdefalarmunithour"
+                                              value="hours"/>
+                                    <menuitem id="eventdefalarmunitday"
+                                              value="days"/>
+                                </menupopup>
+                            </menulist>
+                        </hbox>
+                    </html:td>
+                </html:tr>
+                <html:tr>
+                    <html:td>
+                        <label value="&pref.defalarmlen4todos.label;"
+                               accesskey="&pref.defalarmlen4todos.accesskey;"
+                               control="tododefalarmlen"/>
+                    </html:td>
+                    <html:td>
+                        <hbox class="defaultTimeBox"
+                              align="center"
+                              flex="1">
+                            <html:input id="tododefalarmlen" type="number" class="size3" min="0"
+                                        preference="calendar.alarms.todoalarmlen"
+                                        onselect="updateMenuLabelsPlural('tododefalarmlen', 'tododefalarmunit')"
+                                        oninput="updateMenuLabelsPlural('tododefalarmlen', 'tododefalarmunit')"/>
+                            <menulist id="tododefalarmunit"
+                                      flex="1"
+                                      crop="none"
+                                      preference="calendar.alarms.todoalarmunit">
+                                <menupopup id="tododefalarmunitpopup">
+                                    <menuitem id="tododefalarmunitmin"
+                                              value="minutes"
+                                              selected="true"/>
+                                    <menuitem id="tododefalarmunithour"
+                                              value="hours"/>
+                                    <menuitem id="tododefalarmunitday"
+                                              value="days"/>
+                                </menupopup>
+                            </menulist>
+                        </hbox>
+                    </html:td>
+                </html:tr>
+            </html:table>
+            <spacer flex="1"/>
+        </hbox>
+    </html:fieldset>

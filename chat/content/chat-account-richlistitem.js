@@ -38,6 +38,7 @@
         return;
       }
 
+      this.setAttribute("is", "chat-account-richlistitem");
       this.addEventListener("dblclick", event => {
         if (event.button == 0) {
           // If we double clicked on a widget that has already done
@@ -55,7 +56,7 @@
         MozXULElement.parseXULToFragment(
           `
           <vbox flex="1">
-            <hbox flex="1" align="top">
+            <hbox flex="1" align="start">
               <vbox>
                 <stack>
                   <image class="accountIcon"></image>
@@ -76,7 +77,6 @@
                 <spacer flex="1"></spacer>
               </vbox>
               <checkbox label="&account.autoSignOn.label;"
-                        dir="reverse"
                         class="autoSignOn"
                         accesskey="&account.autoSignOn.accesskey;"
                         oncommand="gAccountManager.autologin()"></checkbox>
@@ -339,6 +339,10 @@
       this.activeButton.click();
     }
   }
+
+  MozXULElement.implementCustomInterface(MozChatAccountRichlistitem, [
+    Ci.nsIDOMXULSelectControlItemElement,
+  ]);
 
   customElements.define(
     "chat-account-richlistitem",

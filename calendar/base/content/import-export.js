@@ -5,7 +5,7 @@
 /* import-globals-from calendar-item-editing.js */
 
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 /* exported loadEventsFromFile, exportEntireCalendar */
 
@@ -40,7 +40,7 @@ function loadEventsFromFile(aCalendar) {
         cal.WARN("Could not initialize importer: " + contractid + "\nError: " + e);
         continue;
       }
-      let types = importer.getFileTypes({});
+      let types = importer.getFileTypes();
       for (let type of types) {
         picker.appendFilter(type.description, type.extensionFilter);
         if (type.extensionFilter == "*." + picker.defaultExtension) {
@@ -74,7 +74,7 @@ function loadEventsFromFile(aCalendar) {
 
       try {
         inputStream.init(picker.file, MODE_RDONLY, parseInt("0444", 8), {});
-        items = importer.importFromStream(inputStream, {});
+        items = importer.importFromStream(inputStream);
       } catch (ex) {
         exception = ex;
         switch (ex.result) {
@@ -101,7 +101,7 @@ function loadEventsFromFile(aCalendar) {
         return;
       }
 
-      let calendars = cal.getCalendarManager().getCalendars({});
+      let calendars = cal.getCalendarManager().getCalendars();
       calendars = calendars.filter(cal.acl.isCalendarWritable);
 
       if (calendars.length == 1) {
@@ -119,7 +119,7 @@ function loadEventsFromFile(aCalendar) {
         args.calendars = calendars;
         args.promptText = cal.l10n.getCalString("importPrompt");
         openDialog(
-          "chrome://calendar/content/chooseCalendarDialog.xul",
+          "chrome://calendar/content/chooseCalendarDialog.xhtml",
           "_blank",
           "chrome,titlebar,modal,resizable",
           args
@@ -236,7 +236,7 @@ function saveEventsToFile(calendarEventArray, aDefaultFileName) {
       cal.WARN("Could not initialize exporter: " + contractid + "\nError: " + e);
       continue;
     }
-    let types = exporter.getFileTypes({});
+    let types = exporter.getFileTypes();
     for (let type of types) {
       picker.appendFilter(type.description, type.extensionFilter);
       if (type.extensionFilter == "*." + picker.defaultExtension) {
@@ -264,7 +264,7 @@ function saveEventsToFile(calendarEventArray, aDefaultFileName) {
 
     let filePath = picker.file.path;
     if (!filePath.includes(".")) {
-      filePath += "." + exporter.getFileTypes({})[0].defaultExtension;
+      filePath += "." + exporter.getFileTypes()[0].defaultExtension;
     }
 
     const nsIFile = Ci.nsIFile;
@@ -287,7 +287,7 @@ function saveEventsToFile(calendarEventArray, aDefaultFileName) {
 
       // XXX Do the right thing with unicode and stuff. Or, again, should the
       //     exporter handle that?
-      exporter.exportToStream(outputStream, calendarEventArray.length, calendarEventArray, null);
+      exporter.exportToStream(outputStream, calendarEventArray, null);
       outputStream.close();
     } catch (ex) {
       cal.showError(cal.l10n.getCalString("unableToWrite") + filePath, window);
@@ -305,10 +305,10 @@ function exportEntireCalendar(aCalendar) {
   let itemArray = [];
   let getListener = {
     QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-    onOperationComplete: function(aOpCalendar, aStatus, aOperationType, aId, aDetail) {
+    onOperationComplete(aOpCalendar, aStatus, aOperationType, aId, aDetail) {
       saveEventsToFile(itemArray, aOpCalendar.name);
     },
-    onGetResult: function(aOpCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
+    onGetResult(aOpCalendar, aStatus, aItemType, aDetail, aItems) {
       for (let item of aItems) {
         itemArray.push(item);
       }
@@ -322,10 +322,9 @@ function exportEntireCalendar(aCalendar) {
   if (aCalendar) {
     getItemsFromCal(aCalendar);
   } else {
-    let count = {};
-    let calendars = cal.getCalendarManager().getCalendars(count);
+    let calendars = cal.getCalendarManager().getCalendars();
 
-    if (count.value == 1) {
+    if (calendars.length == 1) {
       // There's only one calendar, so it's silly to ask what calendar
       // the user wants to import into.
       getItemsFromCal(calendars[0]);
@@ -335,7 +334,7 @@ function exportEntireCalendar(aCalendar) {
       args.onOk = getItemsFromCal;
       args.promptText = cal.l10n.getCalString("exportPrompt");
       openDialog(
-        "chrome://calendar/content/chooseCalendarDialog.xul",
+        "chrome://calendar/content/chooseCalendarDialog.xhtml",
         "_blank",
         "chrome,titlebar,modal,resizable",
         args

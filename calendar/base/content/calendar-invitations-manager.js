@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 /* exported getInvitationsManager */
@@ -19,7 +19,7 @@ var gInvitationsRequestManager = {
    * @param calendar    The calendar to add for.
    * @param op          The operation to add
    */
-  addRequestStatus: function(calendar, operation) {
+  addRequestStatus(calendar, operation) {
     if (operation) {
       this.mRequestStatusList[calendar.id] = operation;
     }
@@ -28,7 +28,7 @@ var gInvitationsRequestManager = {
   /**
    * Cancel all pending requests
    */
-  cancelPendingRequests: function() {
+  cancelPendingRequests() {
     for (let id in this.mRequestStatusList) {
       let request = this.mRequestStatusList[id];
       if (request && request.isPending) {
@@ -84,7 +84,7 @@ InvitationsManager.prototype = {
    * @param firstDelay          The timeout before the operation should start.
    * @param operationListener   The calIGenericOperationListener to notify.
    */
-  scheduleInvitationsUpdate: function(firstDelay, operationListener) {
+  scheduleInvitationsUpdate(firstDelay, operationListener) {
     this.cancelInvitationsUpdate();
 
     this.mTimer = setTimeout(() => {
@@ -100,7 +100,7 @@ InvitationsManager.prototype = {
   /**
    * Cancel pending any pending invitations update.
    */
-  cancelInvitationsUpdate: function() {
+  cancelInvitationsUpdate() {
     clearTimeout(this.mTimer);
   },
 
@@ -112,7 +112,7 @@ InvitationsManager.prototype = {
    * @param operationListener2    (optional) The second operation listener to
    *                                notify.
    */
-  getInvitations: function(operationListener1, operationListener2) {
+  getInvitations(operationListener1, operationListener2) {
     let listeners = [];
     if (operationListener1) {
       listeners.push(operationListener1);
@@ -125,7 +125,7 @@ InvitationsManager.prototype = {
     this.updateStartDate();
     this.deleteAllItems();
 
-    let cals = cal.getCalendarManager().getCalendars({});
+    let cals = cal.getCalendarManager().getCalendars();
 
     let opListener = {
       QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
@@ -135,7 +135,7 @@ InvitationsManager.prototype = {
       mHandledItems: {},
 
       // calIOperationListener
-      onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+      onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
         if (--this.mCount == 0) {
           this.mInvitationsManager.mItemList.sort((a, b) => {
             return a.startDate.compare(b.startDate);
@@ -149,7 +149,6 @@ InvitationsManager.prototype = {
                   Cr.NS_OK,
                   Ci.calIItemBase,
                   null,
-                  this.mInvitationsManager.mItemList.length,
                   this.mInvitationsManager.mItemList
                 );
               }
@@ -167,7 +166,7 @@ InvitationsManager.prototype = {
         }
       },
 
-      onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
+      onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
         if (Components.isSuccessCode(aStatus)) {
           for (let item of aItems) {
             // we need to retrieve by occurrence to properly filter exceptions,
@@ -231,7 +230,7 @@ InvitationsManager.prototype = {
    * @param finishedCallBack          A callback function to call when the
    *                                    dialog has completed.
    */
-  openInvitationsDialog: function(onLoadOpListener, finishedCallBack) {
+  openInvitationsDialog(onLoadOpListener, finishedCallBack) {
     let args = {};
     args.onLoadOperationListener = onLoadOpListener;
     args.queue = [];
@@ -242,7 +241,7 @@ InvitationsManager.prototype = {
     window.setCursor("wait");
     // open the dialog
     window.openDialog(
-      "chrome://calendar/content/calendar-invitations-dialog.xul",
+      "chrome://calendar/content/calendar-invitations-dialog.xhtml",
       "_blank",
       "chrome,titlebar,resizable",
       args
@@ -258,7 +257,7 @@ InvitationsManager.prototype = {
    * @param jobQueueFinishedCallBack      A callback function called when
    *                                        job has finished.
    */
-  processJobQueue: function(queue, jobQueueFinishedCallBack) {
+  processJobQueue(queue, jobQueueFinishedCallBack) {
     // TODO: undo/redo
     function operationListener(mgr, queueCallback, oldItem_) {
       this.mInvitationsManager = mgr;
@@ -267,7 +266,7 @@ InvitationsManager.prototype = {
     }
     operationListener.prototype = {
       QueryInterface: ChromeUtils.generateQI([Ci.calIOperationListener]),
-      onOperationComplete: function(aCalendar, aStatus, aOperationType, aId, aDetail) {
+      onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {
         if (
           Components.isSuccessCode(aStatus) &&
           aOperationType == Ci.calIOperationListener.MODIFY
@@ -282,7 +281,7 @@ InvitationsManager.prototype = {
         }
       },
 
-      onGetResult: function(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {},
+      onGetResult(calendar, status, itemType, detail, items) {},
     };
 
     this.mJobsPending = 0;
@@ -315,7 +314,7 @@ InvitationsManager.prototype = {
    * @param item      The item to look for.
    * @return          A boolean value indicating if the item was found.
    */
-  hasItem: function(item) {
+  hasItem(item) {
     let hid = item.hashId;
     return this.mItemList.some(item_ => hid == item_.hashId);
   },
@@ -326,11 +325,11 @@ InvitationsManager.prototype = {
    *
    * @param item      The item to add.
    */
-  addItem: function(item) {
+  addItem(item) {
     let recInfo = item.recurrenceInfo;
     if (recInfo && !cal.itip.isOpenInvitation(item)) {
       // scan exceptions:
-      let ids = recInfo.getExceptionIds({});
+      let ids = recInfo.getExceptionIds();
       for (let id of ids) {
         let ex = recInfo.getExceptionFor(id);
         if (ex && this.validateItem(ex) && !this.hasItem(ex)) {
@@ -348,7 +347,7 @@ InvitationsManager.prototype = {
    *
    * @param item      The item to remove.
    */
-  deleteItem: function(item) {
+  deleteItem(item) {
     let id = item.id;
     this.mItemList.filter(item_ => id != item_.id);
   },
@@ -357,7 +356,7 @@ InvitationsManager.prototype = {
    * Remove all items from the internal item list
    * XXXdbo       Please document these correctly.
    */
-  deleteAllItems: function() {
+  deleteAllItems() {
     this.mItemList = [];
   },
 
@@ -367,7 +366,7 @@ InvitationsManager.prototype = {
    *
    * @return      Potential start date.
    */
-  getStartDate: function() {
+  getStartDate() {
     let date = cal.dtz.now();
     date.second = 0;
     date.minute = 0;
@@ -380,7 +379,7 @@ InvitationsManager.prototype = {
    * from this.getStartDate(), unless the previously existing start date is
    * the same or after what getStartDate() returned.
    */
-  updateStartDate: function() {
+  updateStartDate() {
     if (this.mStartDate) {
       let startDate = this.getStartDate();
       if (startDate.compare(this.mStartDate) > 0) {
@@ -399,7 +398,7 @@ InvitationsManager.prototype = {
    * @param item      The item to check
    * @return          A boolean indicating if the item is a valid invitation.
    */
-  validateItem: function(item) {
+  validateItem(item) {
     if (item.calendar instanceof Ci.calISchedulingSupport && !item.calendar.isInvitation(item)) {
       return false; // exclude if organizer has invited himself
     }

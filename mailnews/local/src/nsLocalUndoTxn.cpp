@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -42,7 +42,7 @@ nsresult nsLocalMoveCopyMsgTxn::Init(nsIMsgFolder *srcFolder,
   nsCString protocolType;
   rv = srcFolder->GetURI(protocolType);
   protocolType.SetLength(protocolType.FindChar(':'));
-  if (MsgLowerCaseEqualsLiteral(protocolType, "imap")) m_srcIsImap4 = true;
+  if (protocolType.LowerCaseEqualsLiteral("imap")) m_srcIsImap4 = true;
   return nsMsgTxn::Init();
 }
 nsresult nsLocalMoveCopyMsgTxn::GetSrcIsImap(bool *isImap) {
@@ -267,8 +267,7 @@ nsresult nsLocalMoveCopyMsgTxn::UndoTransactionInternal() {
     srcDB->SetSummaryValid(true);
   }
 
-  dstDB->DeleteMessages(m_dstKeyArray.Length(), m_dstKeyArray.Elements(),
-                        nullptr);
+  dstDB->DeleteMessages(m_dstKeyArray, nullptr);
   dstDB->SetSummaryValid(true);
 
   return rv;
@@ -340,8 +339,7 @@ nsLocalMoveCopyMsgTxn::RedoTransaction() {
         localFolder->MarkMsgsOnPop3Server(srcMessages,
                                           POP3_DELETE /*deleteMsgs*/);
 
-      rv = srcDB->DeleteMessages(m_srcKeyArray.Length(),
-                                 m_srcKeyArray.Elements(), nullptr);
+      rv = srcDB->DeleteMessages(m_srcKeyArray, nullptr);
       srcDB->SetSummaryValid(true);
     } else {
       nsCOMPtr<nsIMsgDBHdr> srcHdr;
@@ -398,8 +396,8 @@ NS_IMETHODIMP nsLocalMoveCopyMsgTxn::OnItemRemoved(nsIMsgFolder *parentItem,
 }
 
 NS_IMETHODIMP nsLocalMoveCopyMsgTxn::OnItemPropertyChanged(
-    nsIMsgFolder *item, const nsACString &property, const char *oldValue,
-    const char *newValue) {
+    nsIMsgFolder *item, const nsACString &property, const nsACString &oldValue,
+    const nsACString &newValue) {
   return NS_OK;
 }
 
@@ -416,8 +414,8 @@ NS_IMETHODIMP nsLocalMoveCopyMsgTxn::OnItemBoolPropertyChanged(
 }
 
 NS_IMETHODIMP nsLocalMoveCopyMsgTxn::OnItemUnicharPropertyChanged(
-    nsIMsgFolder *item, const nsACString &property, const char16_t *oldValue,
-    const char16_t *newValue) {
+    nsIMsgFolder *item, const nsACString &property, const nsAString &oldValue,
+    const nsAString &newValue) {
   return NS_OK;
 }
 
@@ -453,8 +451,8 @@ NS_IMETHODIMP nsLocalUndoFolderListener::OnItemRemoved(nsIMsgFolder *parentItem,
 }
 
 NS_IMETHODIMP nsLocalUndoFolderListener::OnItemPropertyChanged(
-    nsIMsgFolder *item, const nsACString &property, const char *oldValue,
-    const char *newValue) {
+    nsIMsgFolder *item, const nsACString &property, const nsACString &oldValue,
+    const nsACString &newValue) {
   return NS_OK;
 }
 
@@ -471,8 +469,8 @@ NS_IMETHODIMP nsLocalUndoFolderListener::OnItemBoolPropertyChanged(
 }
 
 NS_IMETHODIMP nsLocalUndoFolderListener::OnItemUnicharPropertyChanged(
-    nsIMsgFolder *item, const nsACString &property, const char16_t *oldValue,
-    const char16_t *newValue) {
+    nsIMsgFolder *item, const nsACString &property, const nsAString &oldValue,
+    const nsAString &newValue) {
   return NS_OK;
 }
 

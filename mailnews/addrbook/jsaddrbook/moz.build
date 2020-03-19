@@ -5,8 +5,8 @@
 EXTRA_JS_MODULES += [
     'AddrBookCard.jsm',
     'AddrBookDirectory.jsm',
-    'AddrBookFactory.jsm',
     'AddrBookMailingList.jsm',
+    'AddrBookManager.jsm',
     'AddrBookUtils.jsm',
 ]
 

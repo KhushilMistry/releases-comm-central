@@ -21,7 +21,7 @@ var { plan_for_modal_dialog, wait_for_modal_dialog } = ChromeUtils.import(
   "resource://testing-common/mozmill/WindowHelpers.jsm"
 );
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 var controller = mozmill.getMail3PaneController();
 var { eid, lookup } = helpersForController(controller);
@@ -62,7 +62,7 @@ add_task(function testBasicFunctionality() {
   );
   controller.assertNode(
     lookup(`
-        ${DAY_VIEW}/${DAYBOX}/[0]/anon({"class":"multiday-column-box-stack"})/anon({"class":"multiday-column-bg-box"})/[9]
+        ${DAY_VIEW}/${DAYBOX}/[0]/{"class":"multiday-column-box-stack"}/{"class":"multiday-column-bg-box"}/[9]
     `)
   );
 

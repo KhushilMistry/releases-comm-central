@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -83,6 +83,7 @@
 #include "nsINSSErrorsService.h"
 #include "mozilla/Logging.h"
 #include "mozilla/Preferences.h"
+#include "mozilla/UniquePtr.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -169,7 +170,7 @@ static nsresult StripOutGroupNames(char *addresses) {
           group = false;
         // end of the group, act like a recipient separator now...
         /* NO BREAK */
-        MOZ_FALLTHROUGH;
+        [[fallthrough]];
       case ',':
         if (!quoted) {
           atFound = false;
@@ -340,7 +341,7 @@ nsresult nsMsgComposeAndSend::GetNotificationCallbacks(
     msgWindow->GetNotificationCallbacks(getter_AddRefs(notificationCallbacks));
     if (notificationCallbacks) {
       nsCOMPtr<nsIInterfaceRequestor> aggregrateIR;
-      MsgNewInterfaceRequestorAggregation(notificationCallbacks, ir,
+      NS_NewInterfaceRequestorAggregation(notificationCallbacks, ir,
                                           getter_AddRefs(aggregrateIR));
       ir = aggregrateIR;
     }
@@ -715,7 +716,8 @@ nsMsgComposeAndSend::GatherMimeAttachments() {
 
     // Convert the blocks of headers into a single string for emission.
     nsAutoCString headers;
-    outputHeaders->BuildMimeText(headers);
+    outputHeaders->BuildMimeText(
+        Preferences::GetBool("mail.sanitize_date_header", false), headers);
 
     // If we converted HTML into plaintext, the plaintext part (plainpart)
     // already has its content-type and content-transfer-encoding ("other")
@@ -741,15 +743,13 @@ nsMsgComposeAndSend::GatherMimeAttachments() {
   // part is empty; we need to add things to skip it if this part is empty.
 
   // Set up encoder for the first part (message body.)
-  //
-  NS_ASSERTION(!m_attachment1_encoder, "not-null m_attachment1_encoder");
   if (!PL_strcasecmp(m_attachment1_encoding, ENCODING_BASE64)) {
-    m_attachment1_encoder =
-        MimeEncoder::GetBase64Encoder(mime_encoder_output_fn, this);
+    mainbody->SetEncoder(
+        MimeEncoder::GetBase64Encoder(mime_encoder_output_fn, this));
   } else if (!PL_strcasecmp(m_attachment1_encoding,
                             ENCODING_QUOTED_PRINTABLE)) {
-    m_attachment1_encoder =
-        MimeEncoder::GetQPEncoder(mime_encoder_output_fn, this);
+    mainbody->SetEncoder(
+        MimeEncoder::GetQPEncoder(mime_encoder_output_fn, this));
   }
 
   // If we converted HTML into plaintext, the plaintext part
@@ -774,8 +774,6 @@ nsMsgComposeAndSend::GatherMimeAttachments() {
   }
 
   PR_FREEIF(hdrs);
-
-  mainbody->SetEncoder(m_attachment1_encoder.forget());
 
   //
   // Now we need to process attachments and slot them in the
@@ -1006,7 +1004,7 @@ int32_t nsMsgComposeAndSend::PreProcessPart(
   status = part->SetFile(ma->mTmpFile);
   if (NS_FAILED(status)) return 0;
   if (ma->m_encoder) {
-    part->SetEncoder(ma->m_encoder.forget());
+    part->SetEncoder(ma->m_encoder.release());
   }
 
   ma->m_current_column = 0;
@@ -1844,8 +1842,8 @@ nsresult nsMsgComposeAndSend::AddCompFieldLocalAttachments() {
                       // rtf and vcs files may look like text to sniffers,
                       // but they're not human readable.
                       if (type.IsEmpty() && !fileExt.IsEmpty() &&
-                          (MsgLowerCaseEqualsLiteral(fileExt, "rtf") ||
-                           MsgLowerCaseEqualsLiteral(fileExt, "vcs")))
+                          (fileExt.LowerCaseEqualsLiteral("rtf") ||
+                           fileExt.LowerCaseEqualsLiteral("vcs")))
                         m_attachments[newLoc]->m_type =
                             APPLICATION_OCTET_STREAM;
                     }
@@ -2376,7 +2374,7 @@ nsresult nsMsgComposeAndSend::InitCompositionFields(
         nsCString uri;
         GetFolderURIFromUserPrefs(nsMsgDeliverNow, mUserIdentity, uri);
         mCompFields->SetFcc(
-            MsgLowerCaseEqualsLiteral(uri, "nocopy://") ? "" : uri.get());
+            uri.LowerCaseEqualsLiteral("nocopy://") ? "" : uri.get());
       }
     }
   }

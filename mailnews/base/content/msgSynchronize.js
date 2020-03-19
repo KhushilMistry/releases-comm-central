@@ -66,7 +66,7 @@ function syncOkButton() {
 
 function OnSelect() {
   top.window.openDialog(
-    "chrome://messenger/content/msgSelectOfflineFolders.xul",
+    "chrome://messenger/content/msgSelectOfflineFolders.xhtml",
     "",
     "centerscreen,chrome,modal,titlebar,resizable=yes"
   );
@@ -106,7 +106,7 @@ function selectOnLoad() {
 function SortSynchronizePane(column, sortKey) {
   var node = FindInWindow(window, column);
   if (!node) {
-    dump("Couldnt find sort column\n");
+    dump("Couldn't find sort column\n");
     return;
   }
 

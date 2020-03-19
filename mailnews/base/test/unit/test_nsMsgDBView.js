@@ -16,15 +16,15 @@ load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
 load("../../../resources/abSetup.js");
 
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 /* import-globals-from ../../../test/resources/messageModifier.js */
 /* import-globals-from ../../../test/resources/messageInjection.js */
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 load("../../../resources/messageModifier.js");
 load("../../../resources/messageInjection.js");
 
 const { JSTreeSelection } = ChromeUtils.import(
-  "resource:///modules/jsTreeSelection.js"
+  "resource:///modules/JsTreeSelection.jsm"
 );
 
 // Items used to add messages to the folder
@@ -308,9 +308,7 @@ function setup_view(aViewType, aViewFlags, aTestFolder) {
   ) {
     let searchNotify = gDBView.QueryInterface(Ci.nsIMsgSearchNotify);
     searchNotify.onNewSearch();
-    let enumerator = aTestFolder.msgDatabase.EnumerateMessages();
-    while (enumerator.hasMoreElements()) {
-      let msgHdr = enumerator.getNext().QueryInterface(Ci.nsIMsgDBHdr);
+    for (let msgHdr of aTestFolder.msgDatabase.EnumerateMessages()) {
       searchNotify.onSearchHit(msgHdr, msgHdr.folder);
     }
     searchNotify.onSearchDone(Cr.NS_OK);

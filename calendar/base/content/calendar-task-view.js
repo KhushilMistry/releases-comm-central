@@ -8,9 +8,9 @@
 /* import-globals-from calendar-item-editing.js */
 /* import-globals-from calendar-ui-utils.js */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { recurrenceRule2String } = ChromeUtils.import(
-  "resource://calendar/modules/calRecurrenceUtils.jsm"
+  "resource:///modules/calendar/calRecurrenceUtils.jsm"
 );
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { AppConstants } = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
@@ -22,7 +22,7 @@ var taskDetailsView = {
    * XXXberend Please document this function, possibly also consolidate since
    * its the only function in taskDetailsView.
    */
-  onSelect: function(event) {
+  onSelect(event) {
     function displayElement(id, flag) {
       setBooleanAttribute(id, "hidden", !flag);
       return flag;
@@ -123,7 +123,7 @@ var taskDetailsView = {
           }
         }
       }
-      let categories = item.getCategories({});
+      let categories = item.getCategories();
       if (
         !document
           .getElementById("calendar-task-details-category-row")
@@ -174,7 +174,7 @@ var taskDetailsView = {
       textbox.readOnly = true;
       let attachmentRows = document.getElementById("calendar-task-details-attachment-rows");
       removeChildren(attachmentRows);
-      let attachments = item.getAttachments({});
+      let attachments = item.getAttachments();
       if (displayElement("calendar-task-details-attachment-row", attachments.length > 0)) {
         displayElement("calendar-task-details-attachment-rows", true);
         for (let attachment of attachments) {
@@ -192,11 +192,11 @@ var taskDetailsView = {
     }
   },
 
-  loadCategories: function() {
+  loadCategories() {
     let categoryPopup = document.getElementById("task-actions-category-popup");
     let item = document.getElementById("calendar-task-tree").currentTask;
 
-    let itemCategories = item.getCategories({});
+    let itemCategories = item.getCategories();
     let categoryList = cal.category.fromPrefs();
     for (let cat of itemCategories) {
       if (!categoryList.includes(cat)) {
@@ -208,7 +208,7 @@ var taskDetailsView = {
     let maxCount = item.calendar.getProperty("capabilities.categories.maxCount");
 
     while (categoryPopup.childElementCount > 2) {
-      categoryPopup.lastElementChild.remove();
+      categoryPopup.lastChild.remove();
     }
     if (maxCount == 1) {
       let menuitem = document.createXULElement("menuitem");
@@ -233,11 +233,11 @@ var taskDetailsView = {
     }
   },
 
-  saveCategories: function(event) {
+  saveCategories(event) {
     let categoryPopup = document.getElementById("task-actions-category-popup");
     let item = document.getElementById("calendar-task-tree").currentTask;
 
-    let oldCategories = item.getCategories({});
+    let oldCategories = item.getCategories();
     let categories = Array.from(
       categoryPopup.querySelectorAll("menuitem.calendar-category[checked]"),
       menuitem => menuitem.value
@@ -249,7 +249,7 @@ var taskDetailsView = {
 
     if (!unchanged) {
       let newItem = item.clone();
-      newItem.setCategories(categories.length, categories);
+      newItem.setCategories(categories);
       doTransaction("modify", newItem, newItem.calendar, item, null);
       return false;
     }
@@ -257,7 +257,7 @@ var taskDetailsView = {
     return true;
   },
 
-  categoryTextboxKeypress: function(event) {
+  categoryTextboxKeypress(event) {
     let category = event.target.value;
     let categoryPopup = document.getElementById("task-actions-category-popup");
 
@@ -337,7 +337,7 @@ var taskDetailsView = {
 
       let item = document.getElementById("calendar-task-tree").currentTask;
       let newItem = item.clone();
-      newItem.setCategories(categories.length, categories);
+      newItem.setCategories(categories);
       doTransaction("modify", newItem, newItem.calendar, item, null);
     }
 
@@ -352,9 +352,14 @@ var taskDetailsView = {
  * @param {String} [filter] - The filter name to set.
  */
 function taskViewUpdate(filter) {
+  if (!filter) {
+    let taskFilterGroup = document.getElementById("task-tree-filtergroup");
+    filter = taskFilterGroup.value || "all";
+  }
+
   let tree = document.getElementById("calendar-task-tree");
   let oldFilter = tree.getAttribute("filterValue");
-  if (filter && filter != oldFilter) {
+  if (filter != oldFilter) {
     tree.setAttribute("filterValue", filter);
     document
       .querySelectorAll(
@@ -375,7 +380,7 @@ function taskViewUpdate(filter) {
       radio.radioGroup.selectedItem = radio;
     }
   }
-  tree.updateFilter(filter || "all");
+  tree.updateFilter(filter);
 }
 
 /**
@@ -416,8 +421,7 @@ function taskViewObserveDisplayDeckChange(event) {
 
   // In case we find that the task view has been made visible, we refresh the view.
   if (deck.selectedPanel && deck.selectedPanel.id == "calendar-task-box") {
-    let taskFilterGroup = document.getElementById("task-tree-filtergroup");
-    taskViewUpdate(taskFilterGroup.value || "all");
+    taskViewUpdate();
   }
 }
 

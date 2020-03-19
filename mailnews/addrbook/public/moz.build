@@ -8,25 +8,17 @@ XPIDL_SOURCES += [
     'nsIAbAutoCompleteResult.idl',
     'nsIAbBooleanExpression.idl',
     'nsIAbCard.idl',
-    'nsIAbCollection.idl',
     'nsIAbDirectory.idl',
     'nsIAbDirectoryQuery.idl',
     'nsIAbDirectoryQueryProxy.idl',
-    'nsIAbDirectorySearch.idl',
-    'nsIAbDirFactory.idl',
-    'nsIAbDirFactoryService.idl',
     'nsIAbDirSearchListener.idl',
-    'nsIAbItem.idl',
     'nsIAbLDAPAttributeMap.idl',
     'nsIAbLDIFService.idl',
     'nsIAbListener.idl',
     'nsIAbManager.idl',
-    'nsIAbMDBDirectory.idl',
     'nsIAbView.idl',
     'nsIAddbookUrl.idl',
     'nsIAddrDatabase.idl',
-    'nsIAddrDBAnnouncer.idl',
-    'nsIAddrDBListener.idl',
     'nsIMsgVCardService.idl',
 ]
 
@@ -37,6 +29,11 @@ if CONFIG['MOZ_LDAP_XPCOM']:
         'nsIAbLDAPReplicationData.idl',
         'nsIAbLDAPReplicationQuery.idl',
         'nsIAbLDAPReplicationService.idl',
+    ]
+
+if CONFIG['OS_ARCH'] == 'WINNT' and CONFIG['MOZ_MAPI_SUPPORT']:
+    XPIDL_SOURCES += [
+        'nsIAbOutlookInterface.idl',
     ]
 
 XPIDL_MODULE = 'addrbook'

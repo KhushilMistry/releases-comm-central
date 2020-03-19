@@ -57,18 +57,18 @@
                          tooltiptext="&onemonthbackward.tooltip;"></toolbarbutton>
           <deck class="monthheader minimonth-month-name"
                 tabindex="-1">
-            <text value="&month.1.name;"></text>
-            <text value="&month.2.name;"></text>
-            <text value="&month.3.name;"></text>
-            <text value="&month.4.name;"></text>
-            <text value="&month.5.name;"></text>
-            <text value="&month.6.name;"></text>
-            <text value="&month.7.name;"></text>
-            <text value="&month.8.name;"></text>
-            <text value="&month.9.name;"></text>
-            <text value="&month.10.name;"></text>
-            <text value="&month.11.name;"></text>
-            <text value="&month.12.name;"></text>
+            <html:div>&month.1.name;</html:div>
+            <html:div>&month.2.name;</html:div>
+            <html:div>&month.3.name;</html:div>
+            <html:div>&month.4.name;</html:div>
+            <html:div>&month.5.name;</html:div>
+            <html:div>&month.6.name;</html:div>
+            <html:div>&month.7.name;</html:div>
+            <html:div>&month.8.name;</html:div>
+            <html:div>&month.9.name;</html:div>
+            <html:div>&month.10.name;</html:div>
+            <html:div>&month.11.name;</html:div>
+            <html:div>&month.12.name;</html:div>
           </deck>
           <toolbarbutton class="months-forward-button minimonth-nav-btns"
                          dir="1"
@@ -78,8 +78,7 @@
                          dir="-1"
                          oncommand="this.kMinimonth.advanceYear(parseInt(this.getAttribute('dir'), 10))"
                          tooltiptext="&oneyearbackward.tooltip;"></toolbarbutton>
-          <text class="yearcell minimonth-year-name"
-                tabindex="-1"></text>
+          <label class="yearcell minimonth-year-name" tabindex="-1"></label>
           <toolbarbutton class="years-forward-button minimonth-nav-btns"
                          dir="1"
                          oncommand="this.kMinimonth.advanceYear(parseInt(this.getAttribute('dir'), 10))"
@@ -310,7 +309,7 @@
 
     onOperationComplete(aCalendar, aStatus, aOperationType, aId, aDetail) {}
 
-    onGetResult(aCalendar, aStatus, aItemType, aDetail, aCount, aItems) {
+    onGetResult(aCalendar, aStatus, aItemType, aDetail, aItems) {
       if (Components.isSuccessCode(aStatus)) {
         aItems.forEach(item => this.setBusyDaysForOccurrence(item, true));
       }
@@ -318,7 +317,7 @@
 
     setBusyDaysForItem(aItem, aState) {
       let items = aItem.recurrenceInfo
-        ? aItem.getOccurrencesBetween(this.firstDate, this.lastDate, {})
+        ? aItem.getOccurrencesBetween(this.firstDate, this.lastDate)
         : [aItem];
       items.forEach(item => this.setBusyDaysForOccurrence(item, aState));
     }
@@ -467,6 +466,7 @@
       switch (aData) {
         case "calendar.week.start":
         case "calendar.view-minimonth.showWeekNumber":
+          delete this.mDayMap; // Days have moved, force a refresh of the grid.
           this.refreshDisplay();
           break;
       }
@@ -589,7 +589,9 @@
         let ymd =
           this.value.getFullYear() + "-" + this.value.getMonth() + "-" + this.value.getDate();
         this.mSelected = this.mDayMap[ymd];
-        this.mSelected.setAttribute("selected", "true");
+        if (this.mSelected) {
+          this.mSelected.setAttribute("selected", "true");
+        }
         return;
       }
 
@@ -903,7 +905,7 @@
     _getEndDate(aMainDate) {
       let date = this._getStartDate(aMainDate);
       let calbox = this.querySelector(".minimonth-calendar");
-      let days = (calbox.childNodes.length - 1) * 7;
+      let days = (calbox.children.length - 1) * 7;
       date.setDate(date.getDate() + days - 1);
       return date;
     }

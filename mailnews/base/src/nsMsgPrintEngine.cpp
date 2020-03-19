@@ -27,7 +27,6 @@
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
 #include "nsThreadUtils.h"
-#include "nsAutoPtr.h"
 #include "mozilla/Services.h"
 #include "mozilla/dom/LoadURIOptionsBinding.h"
 
@@ -39,6 +38,9 @@
 #include "nsContentUtils.h"
 #include "nsIChannel.h"
 #include "nsServiceManagerUtils.h"
+#include "mozilla/dom/Element.h"
+#include "mozilla/dom/XULFrameElement.h"
+#include "nsFrameLoader.h"
 
 static const char *kPrintingPromptService =
     "@mozilla.org/embedcomp/printingprompt-service;1";
@@ -216,20 +218,17 @@ nsMsgPrintEngine::SetWindow(mozIDOMWindowProxy *aWin) {
 
   window->GetDocShell()->SetAppType(nsIDocShell::APP_TYPE_MAIL);
 
-  nsCOMPtr<nsIDocShellTreeItem> docShellAsItem = window->GetDocShell();
-  NS_ENSURE_TRUE(docShellAsItem, NS_ERROR_FAILURE);
-
-  nsCOMPtr<nsIDocShellTreeItem> rootAsItem;
-  docShellAsItem->GetInProcessSameTypeRootTreeItem(getter_AddRefs(rootAsItem));
-
-  nsCOMPtr<nsIDocShellTreeItem> childItem;
-  rootAsItem->FindChildWithName(NS_LITERAL_STRING("content"), true, false,
-                                nullptr, nullptr, getter_AddRefs(childItem));
-
-  mDocShell = do_QueryInterface(childItem);
-
-  if (mDocShell) SetupObserver();
-
+  nsIDocShell *rootShell = window->GetDocShell();
+  RefPtr<mozilla::dom::Element> el =
+      rootShell->GetDocument()->GetElementById(NS_LITERAL_STRING("content"));
+  RefPtr<mozilla::dom::XULFrameElement> frame =
+      mozilla::dom::XULFrameElement::FromNodeOrNull(el);
+  NS_ENSURE_TRUE(frame, NS_ERROR_FAILURE);
+  RefPtr<mozilla::dom::Document> doc = frame->GetContentDocument();
+  NS_ENSURE_TRUE(doc, NS_ERROR_FAILURE);
+  mDocShell = doc->GetDocShell();
+  NS_ENSURE_TRUE(mDocShell, NS_ERROR_FAILURE);
+  SetupObserver();
   return NS_OK;
 }
 
@@ -335,7 +334,7 @@ nsresult nsMsgPrintEngine::ShowProgressDialog(bool aIsForPrinting,
       }
 
       rv = mPrintPromptService->ShowPrintProgressDialog(
-          domWin, mWebBrowserPrint, mPrintSettings, this, aIsForPrinting,
+          domWin, mPrintSettings, this, aIsForPrinting,
           getter_AddRefs(mPrintProgressListener),
           getter_AddRefs(mPrintProgressParams), &aDoNotify);
       if (NS_SUCCEEDED(rv)) {
@@ -529,11 +528,11 @@ void nsMsgPrintEngine::PrintMsgWindow() {
 
   mDocShell->GetContentViewer(getter_AddRefs(mContentViewer));
   if (mContentViewer) {
-    mWebBrowserPrint = do_QueryInterface(mContentViewer);
-    if (mWebBrowserPrint) {
+    nsCOMPtr<nsIWebBrowserPrint> webBrowserPrint =
+        do_QueryInterface(mContentViewer);
+    if (webBrowserPrint) {
       if (!mPrintSettings) {
-        mWebBrowserPrint->GetGlobalPrintSettings(
-            getter_AddRefs(mPrintSettings));
+        webBrowserPrint->GetGlobalPrintSettings(getter_AddRefs(mPrintSettings));
       }
 
       // fix for bug #118887 and bug #176016
@@ -550,12 +549,12 @@ void nsMsgPrintEngine::PrintMsgWindow() {
         }
       } else {
         mPrintSettings->SetPrintSilent(mCurrentlyPrintingURI != 0);
-        rv = mWebBrowserPrint->Print(mPrintSettings,
-                                     (nsIWebProgressListener *)this);
+        rv = webBrowserPrint->Print(mPrintSettings,
+                                    (nsIWebProgressListener *)this);
       }
 
       if (NS_FAILED(rv)) {
-        mWebBrowserPrint = nullptr;
+        webBrowserPrint = nullptr;
         mContentViewer = nullptr;
         bool isPrintingCancelled = false;
         if (mPrintSettings) {

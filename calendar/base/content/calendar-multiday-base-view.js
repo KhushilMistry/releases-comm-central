@@ -2,14 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* global currentView, MozElements, MozXULElement, Services,
+/* global calendarNavigationBar, currentView, MozElements, MozXULElement, Services,
    setAttributeToChildren, setBooleanAttribute, timeIndicator, gCurrentMode */
 
 "use strict";
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+  var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
   /**
    * The time bar that displays time divisions to the side or top of a multiday (day or week) view.
    */
@@ -90,7 +90,7 @@
         this.mDayStartHour = dayStartHour;
 
         const topbox = this.querySelector(".topbox");
-        if (topbox.childNodes.length) {
+        if (topbox.children.length) {
           // This only needs to be re-done if the initial relayout has already
           // happened.  (If it hasn't happened, this will be done when it does happen.)
           const start = this.mStartMin / 60;
@@ -98,9 +98,9 @@
 
           for (let hour = start; hour < end; hour++) {
             if (hour < this.mDayStartHour || hour >= this.mDayEndHour) {
-              topbox.childNodes[hour].setAttribute("off-time", "true");
+              topbox.children[hour].setAttribute("off-time", "true");
             } else {
-              topbox.childNodes[hour].removeAttribute("off-time");
+              topbox.children[hour].removeAttribute("off-time");
             }
           }
         }
@@ -396,9 +396,8 @@
         return this.mStartDate;
       } else if (this.mDateList && this.mDateList.length > 0) {
         return this.mDateList[0];
-      } else {
-        return null;
       }
+      return null;
     }
 
     get endDate() {
@@ -406,9 +405,8 @@
         return this.mEndDate;
       } else if (this.mDateList && this.mDateList.length > 0) {
         return this.mDateList[this.mDateList.length - 1];
-      } else {
-        return null;
       }
+      return null;
     }
 
     set selectedDay(day) {
@@ -455,7 +453,7 @@
     // End calICalendarView Properties
 
     get daysInView() {
-      return this.labeldaybox.childNodes && this.labeldaybox.childNodes.length;
+      return this.labeldaybox.children && this.labeldaybox.children.length;
     }
 
     set selectedDateTime(dateTime) {
@@ -505,15 +503,6 @@
       }
 
       return count;
-    }
-
-    set orient(orient) {
-      this.setAttribute("orient", orient);
-      return orient;
-    }
-
-    get orient() {
-      return this.getAttribute("orient") || "vertical";
     }
 
     get timebar() {
@@ -623,7 +612,7 @@
       }
       // Update the position of the indicator.
       const position = Math.round(this.mPixPerMin * this.mTimeIndicatorMinutes) - 1;
-      const posAttr = this.orient == "vertical" ? "top: " : "left: ";
+      const posAttr = this.getAttribute("orient") == "vertical" ? "top: " : "left: ";
 
       if (this.timeBarTimeIndicator) {
         this.timeBarTimeIndicator.setAttribute("style", posAttr + position + "px;");
@@ -684,7 +673,7 @@
       const isARelayout = !calViewElem;
 
       const scrollboxRect = this.scrollbox.getBoundingClientRect();
-      const isOrientHorizontal = self.orient == "horizontal";
+      const isOrientHorizontal = self.getAttribute("orient") == "horizontal";
 
       const size = isOrientHorizontal ? scrollboxRect.width : scrollboxRect.height;
 
@@ -827,7 +816,7 @@
 
       // Update the navigation bar only when changes are related to the current view.
       if (this.isVisible()) {
-        cal.navigationBar.setDateRange(viewStart, viewEnd);
+        calendarNavigationBar.setDateRange(viewStart, viewEnd);
       }
 
       // Check whether view range has been changed since last call to relayout().
@@ -842,7 +831,7 @@
       }
     }
 
-    getDateList(count) {
+    getDateList() {
       const dates = [];
       if (this.mStartDate && this.mEndDate) {
         const date = this.mStartDate.clone();
@@ -856,11 +845,10 @@
         }
       }
 
-      count.value = dates.length;
       return dates;
     }
 
-    setSelectedItems(count, items, suppressEvent) {
+    setSelectedItems(items, suppressEvent) {
       if (this.mSelectedItems) {
         for (const item of this.mSelectedItems) {
           for (const occ of this.getItemOccurrencesInView(item)) {
@@ -908,7 +896,7 @@
         let occs = [];
         if (item.recurrenceInfo) {
           // If selected a parent item, show occurrence(s) in view range.
-          occs = item.getOccurrencesBetween(this.startDate, this.queryEndDate, {}, 0);
+          occs = item.getOccurrencesBetween(this.startDate, this.queryEndDate);
         } else {
           occs = [item];
         }
@@ -970,7 +958,7 @@
           minute = lowMinute + (displayDuration - this.mVisibleMinutes) / 2;
         } else if (this.mSelectedItems.length == 1) {
           // If the displayDuration doesn't fit into the visible minutes, but
-          // ony one event is selected, then go ahead and center the event start.
+          // only one event is selected, then go ahead and center the event start.
 
           minute = Math.max(0, lowMinute - this.mVisibleMinutes / 2);
         }
@@ -1007,7 +995,7 @@
     getItemOccurrencesInView(item) {
       if (item.recurrenceInfo && item.recurrenceStartDate) {
         // If a parent item is selected, show occurrence(s) in view range.
-        return item.getOccurrencesBetween(this.startDate, this.queryEndDate, {}, 0);
+        return item.getOccurrencesBetween(this.startDate, this.queryEndDate);
       } else if (item.recurrenceStartDate) {
         return [item];
       }
@@ -1114,7 +1102,7 @@
 
       // Deselect the previously selected event upon switching views, otherwise those events
       // will stay selected forever, if other events are selected after changing the view.
-      this.setSelectedItems(0, [], true);
+      this.setSelectedItems([], true);
 
       const daybox = this.querySelector(".daybox");
       const headerdaybox = this.querySelector(".headerdaybox");
@@ -1156,9 +1144,9 @@
       // Get today's date.
       const today = this.today();
       let counter = 0;
-      const dayboxkids = daybox.childNodes;
-      const headerboxkids = headerdaybox.childNodes;
-      const labelboxkids = this.labeldaybox.childNodes;
+      const dayboxkids = daybox.children;
+      const headerboxkids = headerdaybox.children;
+      const labelboxkids = this.labeldaybox.children;
       let updateTimeIndicator = false;
 
       for (const date of computedDateList) {
@@ -1236,7 +1224,7 @@
             // setting an attribute we can use in CSS. For more
             // information about this hack, see bug 455045.
             if (
-              dayHeaderBox == headerdaybox.childNodes[headerdaybox.childNodes.length - 1] &&
+              dayHeaderBox == headerdaybox.children[headerdaybox.children.length - 1] &&
               this.numVisibleDates > 1
             ) {
               headerDayBox.setAttribute("todaylastinview", "true");
@@ -1261,8 +1249,8 @@
 
       // Remove any extra columns that may have been hanging around.
       function removeExtraKids(elem) {
-        while (counter < elem.childNodes.length) {
-          elem.childNodes[counter].remove();
+        while (counter < elem.children.length) {
+          elem.children[counter].remove();
         }
       }
       removeExtraKids(daybox);
@@ -1340,14 +1328,14 @@
      * @param {calIDateTime} date    A date.
      */
     selectColumnHeader(date) {
-      let child = this.labeldaybox.firstChild;
+      let child = this.labeldaybox.firstElementChild;
       while (child) {
         if (child.date.compare(date) == 0) {
           child.setAttribute("selected", "true");
         } else {
           child.removeAttribute("selected");
         }
-        child = child.nextSibling;
+        child = child.nextElementSibling;
       }
     }
 
@@ -1412,12 +1400,11 @@
         finishDate.day++;
       }
 
-      if (!targetDate.isDate) {
-        // Set the time to 00:00 so that we get all the boxes.
-        targetDate.hour = 0;
-        targetDate.minute = 0;
-        targetDate.second = 0;
-      }
+      // Set the time to 00:00 so that we get all the boxes.
+      targetDate.isDate = false;
+      targetDate.hour = 0;
+      targetDate.minute = 0;
+      targetDate.second = 0;
 
       if (targetDate.compare(finishDate) == 0) {
         // We have also to handle zero length events in particular for

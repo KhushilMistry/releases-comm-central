@@ -1384,6 +1384,8 @@ void nsImapServerResponseParser::xaolenvelope_data() {
 }
 
 void nsImapServerResponseParser::parse_address(nsAutoCString &addressLine) {
+  // NOTE: Not sure this function correctly handling group address syntax.
+  // See Bug 1609846.
   if (!strcmp(fNextToken, "NIL")) return;
   bool firstAddress = true;
   // should really look at chars here
@@ -1406,11 +1408,13 @@ void nsImapServerResponseParser::parse_address(nsAutoCString &addressLine) {
         AdvanceToNextToken();
         char *hostName = CreateNilString();
         AdvanceToNextToken();
-        addressLine += mailboxName;
+        if (mailboxName) {
+          addressLine += mailboxName;
+        }
         if (hostName) {
           addressLine += '@';
           addressLine += hostName;
-          free(hostName);
+          PR_Free(hostName);
         }
         if (personalName) {
           addressLine += " (";
@@ -1418,6 +1422,7 @@ void nsImapServerResponseParser::parse_address(nsAutoCString &addressLine) {
           addressLine += ')';
         }
       }
+      PR_Free(mailboxName);
     }
     PR_Free(personalName);
     PR_Free(atDomainList);
@@ -1596,8 +1601,6 @@ void nsImapServerResponseParser::text() { skip_to_CRLF(); }
 void nsImapServerResponseParser::parse_folder_flags(bool calledForFlags) {
   uint16_t labelFlags = 0;
   uint16_t junkNotJunkFlags = 0;
-  bool storeUserFlags = calledForFlags && fFlagState;
-  uint16_t numOtherKeywords = 0;
 
   do {
     AdvanceToNextToken();
@@ -1619,54 +1622,34 @@ void nsImapServerResponseParser::parse_folder_flags(bool calledForFlags) {
       fSupportsUserDefinedFlags |= kImapMsgSupportForwardedFlag;
       fSupportsUserDefinedFlags |= kImapMsgSupportMDNSentFlag;
       fSupportsUserDefinedFlags |= kImapMsgLabelFlags;
-    } else {
-      // Treat special and built-in $LabelX's as user defined if a
-      // store occurs below. Include $Junk/$NotJunk in this too.
-      if (!PL_strncasecmp(fNextToken, "$MDNSent", 8))
-        fSupportsUserDefinedFlags |= kImapMsgSupportMDNSentFlag;
-      else if (!PL_strncasecmp(fNextToken, "$Forwarded", 10))
-        fSupportsUserDefinedFlags |= kImapMsgSupportForwardedFlag;
-      else if (!PL_strncasecmp(fNextToken, "$Label1", 7))
-        labelFlags |= 1;
-      else if (!PL_strncasecmp(fNextToken, "$Label2", 7))
-        labelFlags |= 2;
-      else if (!PL_strncasecmp(fNextToken, "$Label3", 7))
-        labelFlags |= 4;
-      else if (!PL_strncasecmp(fNextToken, "$Label4", 7))
-        labelFlags |= 8;
-      else if (!PL_strncasecmp(fNextToken, "$Label5", 7))
-        labelFlags |= 16;
-      else if (!PL_strncasecmp(fNextToken, "$Junk", 5))
-        junkNotJunkFlags |= 1;
-      else if (!PL_strncasecmp(fNextToken, "$NotJunk", 8))
-        junkNotJunkFlags |= 2;
-
-      // Store user keywords defined for mailbox, usually by other clients.
-      // But only do this for FLAGS response, not PERMANENTFLAGS response.
-      // This is only needed if '\*' does not appear in a PERMANENTFLAGS
-      // response indicating the user defined keywords are not allowed. But this
-      // is not known until this function is called for PERMANENTFLAGS which
-      // typically occurs after FLAGS, so must store them regardless.
-      if (storeUserFlags && *fNextToken != '\r') {
-        if (*(fNextToken + strlen(fNextToken) - 1) != ')') {
-          // Token doesn't end in ')' so save it as is.
-          fFlagState->SetOtherKeywords(numOtherKeywords++,
-                                       nsDependentCString(fNextToken));
-        } else {
-          // Token ends in ')' so end of list. Save all but ending ')'.
-          fFlagState->SetOtherKeywords(
-              numOtherKeywords++,
-              nsDependentCSubstring(fNextToken, strlen(fNextToken) - 1));
-        }
-      }
     }
+    // Treat special and built-in $LabelX's as user defined and include
+    // $Junk/$NotJunk too.
+    else if (!PL_strncasecmp(fNextToken, "$MDNSent", 8))
+      fSupportsUserDefinedFlags |= kImapMsgSupportMDNSentFlag;
+    else if (!PL_strncasecmp(fNextToken, "$Forwarded", 10))
+      fSupportsUserDefinedFlags |= kImapMsgSupportForwardedFlag;
+    else if (!PL_strncasecmp(fNextToken, "$Label1", 7))
+      labelFlags |= 1;
+    else if (!PL_strncasecmp(fNextToken, "$Label2", 7))
+      labelFlags |= 2;
+    else if (!PL_strncasecmp(fNextToken, "$Label3", 7))
+      labelFlags |= 4;
+    else if (!PL_strncasecmp(fNextToken, "$Label4", 7))
+      labelFlags |= 8;
+    else if (!PL_strncasecmp(fNextToken, "$Label5", 7))
+      labelFlags |= 16;
+    else if (!PL_strncasecmp(fNextToken, "$Junk", 5))
+      junkNotJunkFlags |= 1;
+    else if (!PL_strncasecmp(fNextToken, "$NotJunk", 8))
+      junkNotJunkFlags |= 2;
   } while (!fAtEndOfLine && ContinueParse());
 
   if (labelFlags == 31) fSupportsUserDefinedFlags |= kImapMsgLabelFlags;
 
   if (fFlagState) fFlagState->OrSupportedUserFlags(fSupportsUserDefinedFlags);
 
-  if (storeUserFlags) {
+  if (calledForFlags) {
     // Set true if both "$Junk" and "$NotJunk" appear in FLAGS.
     fStdJunkNotJunkUseOk = (junkNotJunkFlags == 3);
   }
@@ -2024,6 +2007,8 @@ void nsImapServerResponseParser::capability_data() {
       else if (token.Equals("HIGHESTMODSEQ",
                             nsCaseInsensitiveCStringComparator()))
         fCapabilityFlag |= kHasHighestModSeqCapability;
+      else if (token.Equals("CLIENTID", nsCaseInsensitiveCStringComparator()))
+        fCapabilityFlag |= kHasClientIDCapability;
     }
   } while (fNextToken && endToken < 0 && !fAtEndOfLine && ContinueParse());
 
@@ -2671,7 +2656,7 @@ void nsImapServerResponseParser::ResetCapabilityFlag() {}
  */
 
 // Processes a message body, header or message part fetch response. Typically
-// the full message, header or part are proccessed in one call (effectively, one
+// the full message, header or part are processed in one call (effectively, one
 // chunk), and parameter `chunk` is false and `origin` (offset into the
 // response) is 0. But under some conditions and larger messages, multiple calls
 // will occur to process the message in multiple chunks and parameter `chunk`

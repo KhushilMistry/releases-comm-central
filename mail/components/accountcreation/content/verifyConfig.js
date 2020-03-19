@@ -11,10 +11,10 @@ var { MailServices } = ChromeUtils.import(
 var { OAuth2Providers } = ChromeUtils.import(
   "resource:///modules/OAuth2Providers.jsm"
 );
-var { logException } = ChromeUtils.import("resource:///modules/errUtils.js");
+var { logException } = ChromeUtils.import("resource:///modules/ErrUtils.jsm");
 
 if (typeof gEmailWizardLogger == "undefined") {
-  var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+  var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
   var gEmailWizardLogger = Log4Moz.getConfiguredLogger("mail.wizard");
 }
 
@@ -203,13 +203,6 @@ function verifyLogon(
   }
 }
 
-/**
- * The url listener also implements nsIBadCertListener2.  Its job is to prevent
- * "bad cert" security dialogs from being shown to the user.  Currently it puts
- * up the cert override dialog, though we'd like to give the user more detailed
- * information in the future.
- */
-
 function urlListener(
   config,
   server,
@@ -387,21 +380,7 @@ urlListener.prototype = {
     this.mErrorCallback(ex);
   },
 
-  // Suppress any certificate errors
-  notifyCertProblem(socketInfo, status, targetSite) {
-    this.mCertError = true;
-    this._log.error("cert error");
-    let self = this;
-    setTimeout(function() {
-      try {
-        self.informUserOfCertError(socketInfo, status, targetSite);
-      } catch (e) {
-        logException(e);
-      }
-    }, 0);
-    return true;
-  },
-
+  // TODO: Add new error handling that uses this code. See bug 1547096.
   informUserOfCertError(socketInfo, secInfo, targetSite) {
     var params = {
       exceptionAdded: false,
@@ -410,7 +389,7 @@ urlListener.prototype = {
       location: targetSite,
     };
     window.openDialog(
-      "chrome://pippki/content/exceptionDialog.xul",
+      "chrome://pippki/content/exceptionDialog.xhtml",
       "",
       "chrome,centerscreen,modal",
       params
@@ -443,7 +422,6 @@ urlListener.prototype = {
 
   // nsISupports
   QueryInterface: ChromeUtils.generateQI([
-    "nsIBadCertListener2",
     "nsIInterfaceRequestor",
     "nsIUrlListener",
   ]),

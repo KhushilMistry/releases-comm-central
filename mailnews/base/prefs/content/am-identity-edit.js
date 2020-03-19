@@ -22,17 +22,6 @@ function onLoadIdentityProperties() {
   gAccount = window.arguments[0].account;
   let prefBundle = document.getElementById("bundle_prefs");
 
-  // Make the dialog the same height and 90% of the width of the main Account
-  // manager page when the Account manager is not maximized.
-  let accountDialog = Services.wm.getMostRecentWindow("mailnews:accountmanager")
-    .document;
-  if (accountDialog.documentElement.getAttribute("sizemode") != "maximized") {
-    document.getElementById("identityDialog").style.width =
-      accountDialog.getElementById("accountManager").clientWidth * 0.9 + "px";
-    document.getElementById("identityDialog").style.height =
-      accountDialog.getElementById("accountManager").clientHeight + "px";
-  }
-
   if (gIdentity) {
     let listName = gIdentity.identityName;
     document.title = prefBundle.getFormattedString("identityDialogTitleEdit", [
@@ -83,7 +72,7 @@ function initIdentityValues(identity) {
       identity.escapedVCard;
     initSmtpServer(identity.smtpServerKey);
 
-    // This field does not exist for the default identity shown in the am-main.xul pane.
+    // This field does not exist for the default identity shown in the am-main.xhtml pane.
     let idLabel = document.getElementById("identity.label");
     if (idLabel) {
       idLabel.value = identity.label;
@@ -212,6 +201,7 @@ function onOk(event) {
   saveAddressingAndCompositionSettings(gIdentity);
 
   window.arguments[0].result = true;
+  window.dispatchEvent(new CustomEvent("prefchange"));
 }
 
 // returns false and prompts the user if
@@ -440,18 +430,18 @@ function editVCardCallback(escapedVCardStr) {
 
 function editVCard() {
   var escapedVCard = document.getElementById("identity.escapedVCard");
+  let args = {
+    escapedVCardStr: escapedVCard.value,
+    okCallback: editVCardCallback,
+    titleProperty: "editVCardTitle",
+    hideABPicker: true,
+  };
 
   // read vCard hidden value from UI
-  window.openDialog(
-    "chrome://messenger/content/addressbook/abNewCardDialog.xul",
-    "",
-    "chrome,modal,resizable=no,centerscreen",
-    {
-      escapedVCardStr: escapedVCard.value,
-      okCallback: editVCardCallback,
-      titleProperty: "editVCardTitle",
-      hideABPicker: true,
-    }
+  parent.gSubDialog.open(
+    "chrome://messenger/content/addressbook/abNewCardDialog.xhtml",
+    "resizable=no",
+    args
   );
 }
 
@@ -464,7 +454,6 @@ function getAccountForFolderPickerState() {
  */
 function loadSMTPServerList() {
   var smtpServerList = document.getElementById("identity.smtpServerKey");
-  let servers = MailServices.smtp.servers;
   let defaultServer = MailServices.smtp.defaultServer;
   let currentValue = smtpServerList.value;
 
@@ -473,9 +462,7 @@ function loadSMTPServerList() {
     smtpPopup.lastChild.remove();
   }
 
-  while (servers.hasMoreElements()) {
-    var server = servers.getNext();
-
+  for (let server of MailServices.smtp.servers) {
     if (server instanceof Ci.nsISmtpServer) {
       var serverName = "";
       if (server.description) {
@@ -509,9 +496,12 @@ function editCurrentSMTP() {
     smtpKey === ""
       ? MailServices.smtp.defaultServer
       : MailServices.smtp.getServerByKey(smtpKey);
+  let args = { server, result: false, addSmtpServer: "" };
 
-  let args = editSMTPServer(server);
-  if (args.result) {
-    loadSMTPServerList();
-  }
+  parent.gSubDialog.open(
+    "chrome://messenger/content/SmtpServerEdit.xhtml",
+    null,
+    args,
+    loadSMTPServerList
+  );
 }

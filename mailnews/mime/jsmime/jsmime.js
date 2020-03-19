@@ -416,7 +416,7 @@
         // B) "Mark, Nonspacing" (Mn)
         // C) "Other, Control" (Cc)
         // D) "Other, Format" (Cf)
-        // Unfortuantely, no support for the needed regexp Unicode property escapes
+        // Unfortunately, no support for the needed regexp Unicode property escapes
         // in our engine. So we need to hand-roll it. Used the regexpu tool for
         // that: https://mothereff.in/regexpu.
         // This should be updated regularly, to take into account new additions
@@ -897,7 +897,8 @@
       // Indicators of current state
       let inAngle = false,
         inComment = false,
-        needsSpace = false;
+        needsSpace = false,
+        afterAddress = false;
       let preserveSpace = false;
       let commentClosed = false;
 
@@ -957,7 +958,7 @@
         }
         // Clear pending flags and variables.
         name = localPart = address = lastComment = "";
-        inAngle = inComment = needsSpace = false;
+        inAngle = inComment = needsSpace = afterAddress = false;
       }
 
       // Main parsing loop
@@ -976,7 +977,7 @@
             results = results.concat(addrlist);
           }
           addrlist = [];
-        } else if (token === "<") {
+        } else if (token === "<" && !afterAddress) {
           if (inAngle) {
             // Interpret the address we were parsing as a name.
             if (address.length > 0) {
@@ -986,10 +987,11 @@
           } else {
             inAngle = true;
           }
-        } else if (token === ">") {
+        } else if (token === ">" && !afterAddress) {
           inAngle = false;
           // Forget addr-spec comments.
           lastComment = "";
+          afterAddress = true;
         } else if (token === "(") {
           inComment = true;
           // The needsSpace flag may not always be set even if it should be,
@@ -1016,6 +1018,9 @@
           commentClosed = true;
           continue;
         } else if (token === "@") {
+          if (afterAddress) {
+            continue;
+          }
           // An @ means we see an email address. If we're not within <> brackets,
           // then we just parsed an email address instead of a display name. Empty
           // out the display name for the current production.
@@ -1032,6 +1037,7 @@
           // name, add it to the result list. If we don't, then our input looks like
           // To: , , -> don't bother adding an empty entry.
           addToAddrList(name, address);
+          afterAddress = false;
         } else if (token === ";") {
           // Add pending name to the list
           addToAddrList(name, address);
@@ -1070,7 +1076,9 @@
           } else if (inAngle) {
             address += spacedToken;
           } else {
-            name += spacedToken;
+            if (!afterAddress) {
+              name += spacedToken;
+            }
             // Never add a space to the local-part, if we just ignored a comment.
             if (commentClosed) {
               localPart += token;
@@ -2846,6 +2854,8 @@
     function HeaderEmitter(handler, options) {
       // The inferred value of options.useASCII
       this._useASCII = options.useASCII === undefined ? true : options.useASCII;
+      this._sanitizeDate =
+        options.sanitizeDate === undefined ? false : options.sanitizeDate;
       // The handler to use.
       this._handler = handler;
       /**
@@ -3450,9 +3460,40 @@
         throw new Error("Cannot encode an invalid date");
       }
 
+      let fullYear,
+        month,
+        dayOfMonth,
+        dayOfWeek,
+        hours,
+        minutes,
+        seconds,
+        tzOffset;
+
+      if (this._sanitizeDate) {
+        fullYear = date.getUTCFullYear();
+        month = date.getUTCMonth();
+        dayOfMonth = date.getUTCDate();
+        dayOfWeek = date.getUTCDay();
+        hours = date.getUTCHours();
+        minutes = date.getUTCMinutes();
+        // To reduce the chance of fingerprinting the clock offset,
+        // round the time down to the nearest minute.
+        seconds = 0;
+        tzOffset = 0;
+      } else {
+        fullYear = date.getFullYear();
+        month = date.getMonth();
+        dayOfMonth = date.getDate();
+        dayOfWeek = date.getDay();
+        hours = date.getHours();
+        minutes = date.getMinutes();
+        seconds = date.getSeconds();
+        tzOffset = date.getTimezoneOffset();
+      }
+
       // RFC 5322 says years can't be before 1900. The after 9999 is a bit that
       // derives from the specification saying that years have 4 digits.
-      if (date.getFullYear() < 1900 || date.getFullYear() > 9999) {
+      if (fullYear < 1900 || fullYear > 9999) {
         throw new Error("Date year is out of encodable range");
       }
 
@@ -3460,7 +3501,6 @@
       // the the 0-padding is done by hand. Note that the tzoffset we output is in
       // the form ±hhmm, so we need to separate the offset (in minutes) into an hour
       // and minute pair.
-      let tzOffset = date.getTimezoneOffset();
       let tzOffHours = Math.abs(Math.trunc(tzOffset / 60));
       let tzOffMinutes = Math.abs(tzOffset) % 60;
       let tzOffsetStr =
@@ -3471,15 +3511,15 @@
       // Convert the day-time figure into a single value to avoid unwanted line
       // breaks in the middle.
       let dayTime = [
-        kDaysOfWeek[date.getDay()] + ",",
-        date.getDate(),
-        mimeutils.kMonthNames[date.getMonth()],
-        date.getFullYear(),
-        padTo2Digits(date.getHours()) +
+        kDaysOfWeek[dayOfWeek] + ",",
+        dayOfMonth,
+        mimeutils.kMonthNames[month],
+        fullYear,
+        padTo2Digits(hours) +
           ":" +
-          padTo2Digits(date.getMinutes()) +
+          padTo2Digits(minutes) +
           ":" +
-          padTo2Digits(date.getSeconds()),
+          padTo2Digits(seconds),
         tzOffsetStr,
       ].join(" ");
       this.addText(dayTime, false);

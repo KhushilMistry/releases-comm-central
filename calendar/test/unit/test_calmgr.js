@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 /**
@@ -41,24 +41,24 @@ add_test(function test_registration() {
     deleted = false,
     readOnly = false;
   let mgrobs = cal.createAdapter(Ci.calICalendarManagerObserver, {
-    onCalendarRegistered: function(aCalendar) {
+    onCalendarRegistered(aCalendar) {
       if (aCalendar.id == memory.id) {
         registered = true;
       }
     },
-    onCalendarUnregistering: function(aCalendar) {
+    onCalendarUnregistering(aCalendar) {
       if (aCalendar.id == memory.id) {
         unregistered = true;
       }
     },
-    onCalendarDeleting: function(aCalendar) {
+    onCalendarDeleting(aCalendar) {
       if (aCalendar.id == memory.id) {
         deleted = true;
       }
     },
   });
   let calobs = cal.createAdapter(Ci.calIObserver, {
-    onPropertyChanged: function(aCalendar, aName, aValue, aOldValue) {
+    onPropertyChanged(aCalendar, aName, aValue, aOldValue) {
       equal(aCalendar.id, memory.id);
       equal(aName, "readOnly");
       readOnly = aValue;
@@ -77,7 +77,7 @@ add_test(function test_registration() {
 
   // And be in the list of calendars
   equal(memory, calmgr.getCalendarById(memory.id));
-  ok(calmgr.getCalendars({}).some(x => x.id == memory.id));
+  ok(calmgr.getCalendars().some(x => x.id == memory.id));
 
   // Make it readonly and check if the observer caught it
   memory.setProperty("readOnly", true);
@@ -90,7 +90,7 @@ add_test(function test_registration() {
 
   // The calendar shouldn't be in the list of ids
   equal(calmgr.getCalendarById(memory.id), null);
-  ok(calmgr.getCalendars({}).every(x => x.id != memory.id));
+  ok(calmgr.getCalendars().every(x => x.id != memory.id));
 
   // And finally delete it
   calmgr.removeCalendar(memory, Ci.calICalendarManager.REMOVE_NO_UNREGISTER);
@@ -212,9 +212,8 @@ add_test(function test_removeModes() {
     memory.wrappedJSObject.getProperty = function(name) {
       if (name == "capabilities.removeModes") {
         return removeModes;
-      } else {
-        return oldGetProperty.apply(this, arguments);
       }
+      return oldGetProperty.apply(this, arguments);
     };
 
     let oldDeleteCalendar = memory.wrappedJSObject.deleteCalendar;

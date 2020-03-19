@@ -64,6 +64,18 @@ var EXPORTED_SYMBOLS = ["Policies"];
  * The callbacks will be bound to their parent policy object.
  */
 var Policies = {
+  AppAutoUpdate: {
+    onBeforeUIStartup(manager, param) {
+      // Logic feels a bit reversed here, but it's correct. If AppAutoUpdate is
+      // true, we disallow turning off auto updating, and visa versa.
+      if (param) {
+        manager.disallowFeature("app-auto-updates-off");
+      } else {
+        manager.disallowFeature("app-auto-updates-on");
+      }
+    },
+  },
+
   AppUpdateURL: {
     onBeforeAddons(manager, param) {
       setDefaultPref("app.update.url", param.href);
@@ -211,6 +223,38 @@ var Policies = {
     onBeforeAddons(manager, param) {
       if (param) {
         manager.disallowFeature("appUpdate");
+      }
+    },
+  },
+
+  DisabledCiphers: {
+    onBeforeAddons(manager, param) {
+      if ("TLS_DHE_RSA_WITH_AES_128_CBC_SHA" in param) {
+        setAndLockPref("security.ssl3.dhe_rsa_aes_128_sha", false);
+      }
+      if ("TLS_DHE_RSA_WITH_AES_256_CBC_SHA" in param) {
+        setAndLockPref("security.ssl3.dhe_rsa_aes_256_sha", false);
+      }
+      if ("TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA" in param) {
+        setAndLockPref("security.ssl3.ecdhe_rsa_aes_128_sha", false);
+      }
+      if ("TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA" in param) {
+        setAndLockPref("security.ssl3.ecdhe_rsa_aes_256_sha", false);
+      }
+      if ("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" in param) {
+        setAndLockPref("security.ssl3.ecdhe_rsa_aes_128_gcm_sha256", false);
+      }
+      if ("TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" in param) {
+        setAndLockPref("security.ssl3.ecdhe_ecdsa_aes_128_gcm_sha256", false);
+      }
+      if ("TLS_RSA_WITH_AES_128_CBC_SHA" in param) {
+        setAndLockPref("security.ssl3.rsa_aes_128_sha", false);
+      }
+      if ("TLS_RSA_WITH_AES_256_CBC_SHA" in param) {
+        setAndLockPref("security.ssl3.rsa_aes_256_sha", false);
+      }
+      if ("TLS_RSA_WITH_3DES_EDE_CBC_SHA" in param) {
+        setAndLockPref("security.ssl3.rsa_des_ede3_sha", false);
       }
     },
   },
@@ -535,7 +579,7 @@ function addAllowDenyPermissions(permissionName, allowList, blockList) {
  *
  * @param {string} actionName
  *        A given name which will be used to track if this callback has run.
- * @param {Functon} callback
+ * @param {Function} callback
  *        The callback to run only once.
  */
 // eslint-disable-next-line no-unused-vars
@@ -618,9 +662,7 @@ function installAddonFromURL(url, extensionID) {
       onDownloadEnded: install => {
         if (extensionID && install.addon.id != extensionID) {
           log.error(
-            `Add-on downloaded from ${url} had unexpected id (got ${
-              install.addon.id
-            } expected ${extensionID})`
+            `Add-on downloaded from ${url} had unexpected id (got ${install.addon.id} expected ${extensionID})`
           );
           install.removeListener(listener);
           install.cancel();

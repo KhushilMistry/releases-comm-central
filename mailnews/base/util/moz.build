@@ -52,26 +52,25 @@ SOURCES += [
 EXTRA_JS_MODULES += [
     'ABQueryUtils.jsm',
     'converterWorker.js',
-    'errUtils.js',
+    'ErrUtils.jsm',
     'folderUtils.jsm',
     'hostnameUtils.jsm',
-    'IOUtils.js',
+    'IOUtils.jsm',
     'iteratorUtils.jsm',
-    'jsTreeSelection.js',
-    'JXON.js',
-    'mailnewsMigrator.js',
+    'JsTreeSelection.jsm',
+    'JXON.jsm',
+    'MailnewsMigrator.jsm',
     'MailServices.jsm',
     'mailstoreConverter.jsm',
-    'msgDBCacheManager.js',
+    'MsgDBCacheManager.jsm',
     'OAuth2.jsm',
     'OAuth2Providers.jsm',
-    'StringBundle.js',
-    'templateUtils.js',
-    'traceHelper.js',
+    'StringBundle.jsm',
+    'TemplateUtils.jsm',
+    'TraceHelper.jsm',
 ]
 
 LOCAL_INCLUDES += [
-  '/%s/intl/chardet' % CONFIG['mozreltopsrcdir'],
   '/%s/netwerk/base' % CONFIG['mozreltopsrcdir']
 ]
 

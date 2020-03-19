@@ -12,9 +12,6 @@
 #include "msgIOverride.h"
 #include "nsIAbDirectory.h"
 #include "nsAbDirProperty.h"
-#include "nsIAbCollection.h"
-#include "nsIAbItem.h"
-#include "nsAutoPtr.h"
 #include "nsDataHashtable.h"
 #include "nsIInterfaceRequestor.h"
 
@@ -44,9 +41,6 @@ class JaCppAbDirectoryDelegator : public JaBaseCppAbDirectory,
 
   // use mCppBase as a raw pointer where possible
   NS_FORWARD_NSIABDIRECTORY(DELEGATE_JS(mJsIAbDirectory, mMethods, mCppBase)->)
-  NS_FORWARD_NSIABCOLLECTION(
-      DELEGATE_JS(mJsIAbCollection, mMethods, (mCppBase.get()))->)
-  NS_FORWARD_NSIABITEM(DELEGATE_JS(mJsIAbItem, mMethods, (mCppBase.get()))->)
   NS_FORWARD_NSIINTERFACEREQUESTOR(
       DELEGATE_JS(
           mJsIInterfaceRequestor, mMethods,
@@ -58,7 +52,6 @@ class JaCppAbDirectoryDelegator : public JaBaseCppAbDirectory,
  private:
   virtual ~JaCppAbDirectoryDelegator() {}
 
-  // nsIAbDirectory inherits from nsIAbCollection which inherits from nsIAbItem.
   class Super : public nsIAbDirectory, public nsIInterfaceRequestor {
    public:
     explicit Super(JaCppAbDirectoryDelegator* aFakeThis) {
@@ -66,8 +59,6 @@ class JaCppAbDirectoryDelegator : public JaBaseCppAbDirectory,
     }
     NS_DECL_ISUPPORTS
     NS_FORWARD_NSIABDIRECTORY(mFakeThis->JaBaseCppAbDirectory::)
-    NS_FORWARD_NSIABCOLLECTION(mFakeThis->JaBaseCppAbDirectory::)
-    NS_FORWARD_NSIABITEM(mFakeThis->JaBaseCppAbDirectory::)
     NS_FORWARD_NSIINTERFACEREQUESTOR(mFakeThis->JaBaseCppAbDirectory::)
    private:
     virtual ~Super() {}
@@ -76,8 +67,6 @@ class JaCppAbDirectoryDelegator : public JaBaseCppAbDirectory,
 
   // Interfaces that may be overridden by JS.
   nsCOMPtr<nsIAbDirectory> mJsIAbDirectory;
-  nsCOMPtr<nsIAbCollection> mJsIAbCollection;
-  nsCOMPtr<nsIAbItem> mJsIAbItem;
   nsCOMPtr<nsIInterfaceRequestor> mJsIInterfaceRequestor;
 
   nsCOMPtr<nsISupports> mJsISupports;

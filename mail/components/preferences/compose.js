@@ -84,12 +84,12 @@ var gComposePane = {
   },
 
   sendOptionsDialog() {
-    gSubDialog.open("chrome://messenger/content/preferences/sendoptions.xul");
+    gSubDialog.open("chrome://messenger/content/preferences/sendoptions.xhtml");
   },
 
   attachmentReminderOptionsDialog() {
     gSubDialog.open(
-      "chrome://messenger/content/preferences/attachmentReminder.xul",
+      "chrome://messenger/content/preferences/attachmentReminder.xhtml",
       "resizable=no"
     );
   },
@@ -156,7 +156,7 @@ var gComposePane = {
 
   editDirectories() {
     gSubDialog.open(
-      "chrome://messenger/content/addressbook/pref-editdirectories.xul"
+      "chrome://messenger/content/addressbook/pref-editdirectories.xhtml"
     );
   },
 
@@ -171,17 +171,7 @@ var gComposePane = {
       let startupURI = Services.prefs.getCharPref(
         "mail.addr_book.view.startupURI"
       );
-      let dirItem = dirList.querySelector(
-        `menupopup menuitem[value="${startupURI}"]`
-      );
-      // It may happen that the stored URI is not in the list.
-      // In that case select the "none" value and let the AB code clear out
-      // the invalid value, unless the user selects something here.
-      if (dirItem) {
-        dirList.selectedItem = dirItem;
-      } else {
-        dirList.value = "";
-      }
+      dirList.value = startupURI;
     } else {
       // Choose item meaning there is no default startup directory any more.
       dirList.value = "";
@@ -457,7 +447,7 @@ var gCloudFile = {
     let rli = document.createXULElement("richlistitem");
     rli.value = aAccount.accountKey;
     rli.setAttribute("align", "center");
-    rli.setAttribute("class", "cloudfileAccount");
+    rli.classList.add("cloudfileAccount", "input-container");
     rli.setAttribute("value", aAccount.accountKey);
 
     if (aAccount.iconURL) {
@@ -478,12 +468,12 @@ var gCloudFile = {
     label.addEventListener("click", this, true);
     rli.appendChild(label);
 
-    let textBox = document.createXULElement("textbox");
-    textBox.setAttribute("flex", "1");
-    textBox.hidden = true;
-    textBox.addEventListener("blur", this);
-    textBox.addEventListener("keypress", this);
-    rli.appendChild(textBox);
+    let input = document.createElement("input");
+    input.setAttribute("type", "text");
+    input.setAttribute("hidden", "hidden");
+    input.addEventListener("blur", this);
+    input.addEventListener("keypress", this);
+    rli.appendChild(input);
 
     let warningIcon = document.createXULElement("image");
     warningIcon.setAttribute("class", "configuredWarning typeIcon");
@@ -662,43 +652,43 @@ var gCloudFile = {
       case "click": {
         let label = aEvent.target;
         let item = label.parentNode;
-        let textBox = item.querySelector("textbox");
+        let input = item.querySelector("input");
         if (!item.selected) {
           return;
         }
         label.hidden = true;
-        textBox.value = label.value;
-        textBox.hidden = false;
-        textBox.select();
+        input.value = label.value;
+        input.removeAttribute("hidden");
+        input.focus();
         break;
       }
       case "blur": {
-        let textBox = aEvent.target;
-        let item = textBox.parentNode;
+        let input = aEvent.target;
+        let item = input.parentNode;
         let label = item.querySelector("label");
-        cloudFileAccounts.setDisplayName(item.value, textBox.value);
-        label.value = textBox.value;
+        cloudFileAccounts.setDisplayName(item.value, input.value);
+        label.value = input.value;
         label.hidden = false;
-        textBox.hidden = true;
+        input.setAttribute("hidden", "hidden");
         break;
       }
       case "keypress": {
-        let textBox = aEvent.target;
-        let item = textBox.parentNode;
+        let input = aEvent.target;
+        let item = input.parentNode;
         let label = item.querySelector("label");
 
         if (aEvent.key == "Enter") {
-          cloudFileAccounts.setDisplayName(item.value, textBox.value);
-          label.value = textBox.value;
+          cloudFileAccounts.setDisplayName(item.value, input.value);
+          label.value = input.value;
           label.hidden = false;
-          textBox.hidden = true;
+          input.setAttribute("hidden", "hidden");
           gCloudFile._list.focus();
 
           aEvent.preventDefault();
         } else if (aEvent.key == "Escape") {
-          textBox.value = label.value;
+          input.value = label.value;
           label.hidden = false;
-          textBox.hidden = true;
+          input.setAttribute("hidden", "hidden");
           gCloudFile._list.focus();
 
           aEvent.preventDefault();

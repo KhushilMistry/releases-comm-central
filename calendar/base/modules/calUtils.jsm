@@ -18,6 +18,11 @@ var gCalendarConsole = new ConsoleAPI({
   maxLogLevel: Services.prefs.getBoolPref("calendar.debug.log", false) ? "all" : "warn",
 });
 
+// Cache services to avoid calling getService over and over again. The cache is
+// a separate object to avoid polluting `cal`, and is defined here since a call
+// to `_service` will require it to already exist.
+var gServiceCache = {};
+
 this.EXPORTED_SYMBOLS = ["cal"];
 var cal = {
   // These functions exist to reduce boilerplate code for creating instances
@@ -50,20 +55,17 @@ var cal = {
     "item"
   ),
 
-  getCalendarManager: _service("@mozilla.org/calendar/manager;1", Ci.calICalendarManager),
-  getIcsService: _service("@mozilla.org/calendar/ics-service;1", Ci.calIICSService),
-  getTimezoneService: _service("@mozilla.org/calendar/timezone-service;1", Ci.calITimezoneService),
+  getCalendarManager: _service("@mozilla.org/calendar/manager;1", "calICalendarManager"),
+  getIcsService: _service("@mozilla.org/calendar/ics-service;1", "calIICSService"),
+  getTimezoneService: _service("@mozilla.org/calendar/timezone-service;1", "calITimezoneService"),
   getCalendarSearchService: _service(
     "@mozilla.org/calendar/calendarsearch-service;1",
-    Ci.calICalendarSearchProvider
+    "calICalendarSearchProvider"
   ),
-  getFreeBusyService: _service("@mozilla.org/calendar/freebusy-service;1", Ci.calIFreeBusyService),
-  getWeekInfoService: _service("@mozilla.org/calendar/weekinfo-service;1", Ci.calIWeekInfoService),
-  getDateFormatter: _service(
-    "@mozilla.org/calendar/datetime-formatter;1",
-    Ci.calIDateTimeFormatter
-  ),
-  getDragService: _service("@mozilla.org/widget/dragservice;1", Ci.nsIDragService),
+  getFreeBusyService: _service("@mozilla.org/calendar/freebusy-service;1", "calIFreeBusyService"),
+  getWeekInfoService: _service("@mozilla.org/calendar/weekinfo-service;1", "calIWeekInfoService"),
+  getDateFormatter: _service("@mozilla.org/calendar/datetime-formatter;1", "calIDateTimeFormatter"),
+  getDragService: _service("@mozilla.org/widget/dragservice;1", "nsIDragService"),
 
   /**
    * The calendar console instance
@@ -94,7 +96,7 @@ var cal = {
    * @param aMsg The message to be shown
    * @param aWindow The window to show the message in, or null for any window.
    */
-  showError: function(aMsg, aWindow = null) {
+  showError(aMsg, aWindow = null) {
     Services.prompt.alert(aWindow, cal.l10n.getCalString("genericErrorTitle"), aMsg);
   },
 
@@ -105,7 +107,7 @@ var cal = {
    * @param aDepth (optional) The number of frames to include. Defaults to 5.
    * @param aSkip  (optional) Number of frames to skip
    */
-  STACK: function(aDepth = 10, aSkip = 0) {
+  STACK(aDepth = 10, aSkip = 0) {
     let stack = "";
     let frame = Components.stack.caller;
     for (let i = 1; i <= aDepth + aSkip && frame; i++) {
@@ -126,7 +128,7 @@ var cal = {
    *                    if false, code flow will continue
    *                    may be a result code
    */
-  ASSERT: function(aCondition, aMessage, aCritical = false) {
+  ASSERT(aCondition, aMessage, aCritical = false) {
     if (aCondition) {
       return;
     }
@@ -157,7 +159,7 @@ var cal = {
    * @param {nsIIDRef[]} aInterfaces  The interfaces that this object implements
    * @return {nsQIResult}             The object queried for aIID
    */
-  generateClassQI: function(aGlobal, aIID, aInterfaces) {
+  generateClassQI(aGlobal, aIID, aInterfaces) {
     const generatedQI =
       aInterfaces.length > 1 ? cal.generateQI(aInterfaces) : ChromeUtils.generateQI(aInterfaces);
     Object.defineProperty(aGlobal, "QueryInterface", { value: generatedQI });
@@ -173,27 +175,26 @@ var cal = {
    * @param {Array<String|nsIIDRef>} aInterfaces      The interfaces to generate QI for.
    * @return {Function}                               The QueryInterface function
    */
-  generateQI: function(aInterfaces) {
+  generateQI(aInterfaces) {
     if (aInterfaces.length == 1) {
       cal.WARN(
         "When generating QI for one interface, please use ChromeUtils.generateQI",
         cal.STACK(10)
       );
       return ChromeUtils.generateQI(aInterfaces);
-    } else {
-      /* Note that Ci[Ci.x] == Ci.x for all x */
-      let names = [];
-      if (aInterfaces) {
-        for (let i = 0; i < aInterfaces.length; i++) {
-          let iface = aInterfaces[i];
-          let name = (iface && iface.name) || String(iface);
-          if (name in Ci) {
-            names.push(name);
-          }
+    }
+    /* Note that Ci[Ci.x] == Ci.x for all x */
+    let names = [];
+    if (aInterfaces) {
+      for (let i = 0; i < aInterfaces.length; i++) {
+        let iface = aInterfaces[i];
+        let name = (iface && iface.name) || String(iface);
+        if (name in Ci) {
+          names.push(name);
         }
       }
-      return makeQI(names);
     }
+    return makeQI(names);
   },
 
   /**
@@ -204,7 +205,7 @@ var cal = {
    * "flags". The values of the properties will be returned as the values of the
    * various properties of the nsIClassInfo implementation.
    */
-  generateCI: function(classInfo) {
+  generateCI(classInfo) {
     if ("QueryInterface" in classInfo) {
       throw Error("In generateCI, don't use a component for generating classInfo");
     }
@@ -220,7 +221,7 @@ var cal = {
       get interfaces() {
         return [Ci.nsIClassInfo, Ci.nsISupports].concat(_interfaces);
       },
-      getScriptableHelper: function() {
+      getScriptableHelper() {
         return null;
       },
       contractID: classInfo.contractID,
@@ -234,7 +235,7 @@ var cal = {
   /**
    * Schedules execution of the passed function to the current thread's queue.
    */
-  postPone: function(func) {
+  postPone(func) {
     if (this.threadingEnabled) {
       Services.tm.currentThread.dispatch({ run: func }, Ci.nsIEventTarget.DISPATCH_NORMAL);
     } else {
@@ -258,7 +259,7 @@ var cal = {
    *  - calIOperationListener
    *  - calICompositeObserver
    */
-  createAdapter: function(iface, template) {
+  createAdapter(iface, template) {
     let methods;
     let adapter = template || {};
     switch (iface.name || iface) {
@@ -304,7 +305,7 @@ var cal = {
    *
    * @return {String}         The generated UUID
    */
-  getUUID: function() {
+  getUUID() {
     let uuidGen = Cc["@mozilla.org/uuid-generator;1"].getService(Ci.nsIUUIDGenerator);
     // generate uuids without braces to avoid problems with
     // CalDAV servers that don't support filenames with {}
@@ -321,10 +322,10 @@ var cal = {
    * @param topic topic to listen for
    * @param oneTime whether to listen only once
    */
-  addObserver: function(func, topic, oneTime) {
+  addObserver(func, topic, oneTime) {
     let observer = {
       // nsIObserver:
-      observe: function(subject, topic_, data) {
+      observe(subject, topic_, data) {
         if (topic == topic_) {
           if (oneTime) {
             Services.obs.removeObserver(this, topic);
@@ -356,7 +357,7 @@ var cal = {
    * }
    *
    */
-  wrapInstance: function(aObj, aInterface) {
+  wrapInstance(aObj, aInterface) {
     if (!aObj) {
       return null;
     }
@@ -375,7 +376,7 @@ var cal = {
    * @param aObj  The object under consideration
    * @return      The possibly unwrapped object.
    */
-  unwrapInstance: function(aObj) {
+  unwrapInstance(aObj) {
     return aObj && aObj.wrappedJSObject ? aObj.wrappedJSObject : aObj;
   },
 
@@ -384,7 +385,7 @@ var cal = {
    *
    * @param func function to execute
    */
-  addShutdownObserver: function(func) {
+  addShutdownObserver(func) {
     cal.addObserver(func, "xpcom-shutdown", true /* one time */);
   },
 
@@ -439,109 +440,109 @@ XPCOMUtils.defineLazyPreferenceGetter(
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "acl",
-  "resource://calendar/modules/utils/calACLUtils.jsm",
+  "resource:///modules/calendar/utils/calACLUtils.jsm",
   "calacl"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "alarms",
-  "resource://calendar/modules/utils/calAlarmUtils.jsm",
+  "resource:///modules/calendar/utils/calAlarmUtils.jsm",
   "calalarms"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "async",
-  "resource://calendar/modules/utils/calAsyncUtils.jsm",
+  "resource:///modules/calendar/utils/calAsyncUtils.jsm",
   "calasync"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "auth",
-  "resource://calendar/modules/utils/calAuthUtils.jsm",
+  "resource:///modules/calendar/utils/calAuthUtils.jsm",
   "calauth"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "category",
-  "resource://calendar/modules/utils/calCategoryUtils.jsm",
+  "resource:///modules/calendar/utils/calCategoryUtils.jsm",
   "calcategory"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "data",
-  "resource://calendar/modules/utils/calDataUtils.jsm",
+  "resource:///modules/calendar/utils/calDataUtils.jsm",
   "caldata"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "dtz",
-  "resource://calendar/modules/utils/calDateTimeUtils.jsm",
+  "resource:///modules/calendar/utils/calDateTimeUtils.jsm",
   "caldtz"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "email",
-  "resource://calendar/modules/utils/calEmailUtils.jsm",
+  "resource:///modules/calendar/utils/calEmailUtils.jsm",
   "calemail"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "item",
-  "resource://calendar/modules/utils/calItemUtils.jsm",
+  "resource:///modules/calendar/utils/calItemUtils.jsm",
   "calitem"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "iterate",
-  "resource://calendar/modules/utils/calIteratorUtils.jsm",
+  "resource:///modules/calendar/utils/calIteratorUtils.jsm",
   "caliterate"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "itip",
-  "resource://calendar/modules/utils/calItipUtils.jsm",
+  "resource:///modules/calendar/utils/calItipUtils.jsm",
   "calitip"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "l10n",
-  "resource://calendar/modules/utils/calL10NUtils.jsm",
+  "resource:///modules/calendar/utils/calL10NUtils.jsm",
   "call10n"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "print",
-  "resource://calendar/modules/utils/calPrintUtils.jsm",
+  "resource:///modules/calendar/utils/calPrintUtils.jsm",
   "calprint"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "provider",
-  "resource://calendar/modules/utils/calProviderUtils.jsm",
+  "resource:///modules/calendar/utils/calProviderUtils.jsm",
   "calprovider"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "unifinder",
-  "resource://calendar/modules/utils/calUnifinderUtils.jsm",
+  "resource:///modules/calendar/utils/calUnifinderUtils.jsm",
   "calunifinder"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "view",
-  "resource://calendar/modules/utils/calViewUtils.jsm",
+  "resource:///modules/calendar/utils/calViewUtils.jsm",
   "calview"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "window",
-  "resource://calendar/modules/utils/calWindowUtils.jsm",
+  "resource:///modules/calendar/utils/calWindowUtils.jsm",
   "calwindow"
 );
 XPCOMUtils.defineLazyModuleGetter(
   cal,
   "xml",
-  "resource://calendar/modules/utils/calXMLUtils.jsm",
+  "resource:///modules/calendar/utils/calXMLUtils.jsm",
   "calxml"
 );
 
@@ -553,8 +554,10 @@ XPCOMUtils.defineLazyModuleGetter(
  * @return {function}   A function that returns the given service
  */
 function _service(cid, iid) {
+  let name = `_${iid}`;
+  XPCOMUtils.defineLazyServiceGetter(gServiceCache, name, cid, iid);
   return function() {
-    return Cc[cid].getService(iid);
+    return gServiceCache[name];
   };
 }
 

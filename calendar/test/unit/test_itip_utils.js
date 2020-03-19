@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 // tests for calItipUtils.jsm
 
@@ -203,7 +203,7 @@ function test_getSequence() {
   ];
   for (let i = 1; i <= data.length; i++) {
     let test = data[i - 1];
-    testItems = getSeqStampTestItems(test);
+    let testItems = getSeqStampTestItems(test);
     equal(cal.itip.getSequence(testItems[0], testItems[1]), test.expected, "(test #" + i + ")");
   }
 }
@@ -299,7 +299,7 @@ function test_compareSequence() {
   ];
   for (let i = 1; i <= data.length; i++) {
     let test = data[i - 1];
-    testItems = getSeqStampTestItems(test);
+    let testItems = getSeqStampTestItems(test);
     equal(cal.itip.compareSequence(testItems[0], testItems[1]), test.expected, "(test #" + i + ")");
   }
 }
@@ -374,7 +374,7 @@ function test_compareStamp() {
   ];
   for (let i = 1; i <= data.length; i++) {
     let test = data[i - 1];
-    testItems = getSeqStampTestItems(test);
+    let testItems = getSeqStampTestItems(test);
     equal(cal.itip.compareStamp(testItems[0], testItems[1]), test.expected, "(test #" + i + ")");
   }
 }
@@ -458,7 +458,7 @@ function test_compare() {
   ];
   for (let i = 1; i <= data.length; i++) {
     let test = data[i - 1];
-    testItems = getSeqStampTestItems(test);
+    let testItems = getSeqStampTestItems(test);
     equal(cal.itip.compare(testItems[0], testItems[1]), test.expected, "(test #" + i + ")");
   }
 }
@@ -546,8 +546,14 @@ function test_getAttendeesBySender() {
     cal.itip.getAttendeesBySender(attendees, test.input.sender).forEach(att => {
       detected.push(att.id);
     });
-    ok(detected.every(aId => test.expected.includes(aId)), "(test #" + i + " ok1)");
-    ok(test.expected.every(aId => detected.includes(aId)), "(test #" + i + " ok2)");
+    ok(
+      detected.every(aId => test.expected.includes(aId)),
+      "(test #" + i + " ok1)"
+    );
+    ok(
+      test.expected.every(aId => detected.includes(aId)),
+      "(test #" + i + " ok2)"
+    );
   }
 }
 

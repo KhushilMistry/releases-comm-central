@@ -107,8 +107,8 @@ interface nsIAbManager : nsISupports
    */
   void notifyItemPropertyChanged(in nsISupports aItem,
                                  in string aProperty,
-                                 in wstring aOldValue,
-                                 in wstring aNewValue);
+                                 in AString aOldValue,
+                                 in AString aNewValue);
 
   /**
    * Call to notify the registered listeners when a directory item is added.
@@ -141,12 +141,6 @@ interface nsIAbManager : nsISupports
                               in nsISupports aDirectory);
 
   /**
-   * Returns the user profile directory. NOTE: this should not be used
-   * as it may go away soon.
-   */
-  readonly attribute nsIFile userProfileDirectory;
-
-  /**
    * Finds out if the mailing list name exists in any address book.
    *
    * @param  aName      The name of the list to try and find.
@@ -154,15 +148,6 @@ interface nsIAbManager : nsISupports
    * @return            True if the name exists.
    */
   boolean mailListNameExists(in wstring name);
-
-  /**
-   * Translates an escaped vcard string into a nsIAbCard.
-   *
-   * @param  escapedVCardStr  The string containing the vcard.
-   *
-   * @return            A card containing the translated vcard data.
-   */
-  nsIAbCard escapedVCardToAbCard(in string escapedVCardStr);
 
   /**
    * Generates a UUID from a (directory ID, local ID) tuple.
@@ -175,14 +160,4 @@ interface nsIAbManager : nsISupports
    * @return            A string to use for the UUID.
    */
   AUTF8String generateUUID(in AUTF8String directoryId, in AUTF8String localId);
-
-
-  /**
-   * A utility function that converts an nsIAbDirectory query string to an
-   * nsIAbBooleanExpression.
-   *
-   * @param aQueryString The nsIAbDirectory query string
-   * @return an nsIAbBooleanExpression for the query string
-   */
-  nsIAbBooleanExpression convertQueryStringToExpression(in AUTF8String aQueryString);
 };

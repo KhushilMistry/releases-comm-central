@@ -4,14 +4,17 @@
 
 "use strict";
 
+var { toXPCOMArray } = ChromeUtils.import(
+  "resource:///modules/iteratorUtils.jsm"
+);
 var { ExtensionTestUtils } = ChromeUtils.import(
   "resource://testing-common/ExtensionXPCShellUtils.jsm"
 );
 ExtensionTestUtils.init(this);
 
-var { Gloda } = ChromeUtils.import("resource:///modules/gloda/public.js");
+var { Gloda } = ChromeUtils.import("resource:///modules/gloda/GlodaPublic.jsm");
 var { GlodaIndexer } = ChromeUtils.import(
-  "resource:///modules/gloda/indexer.js"
+  "resource:///modules/gloda/GlodaIndexer.jsm"
 );
 
 // Create some folders and populate them.
@@ -35,6 +38,19 @@ add_task(async function setup() {
   messages[0].markRead(true);
   messages[1].markFlagged(true);
   messages[6].markFlagged(true);
+
+  subFolders.test1.addKeywordsToMessages(
+    toXPCOMArray(messages.slice(0, 1), Ci.nsIMutableArray),
+    "notATag"
+  );
+  subFolders.test1.addKeywordsToMessages(
+    toXPCOMArray(messages.slice(2, 4), Ci.nsIMutableArray),
+    "$label2"
+  );
+  subFolders.test1.addKeywordsToMessages(
+    toXPCOMArray(messages.slice(3, 6), Ci.nsIMutableArray),
+    "$label3"
+  );
 
   addIdentity(account, messages[5].author.replace(/.*<(.*)>/, "$1"));
   addIdentity(account, messages[2].recipients.replace(/.*<(.*)>/, "$1"));
@@ -90,9 +106,7 @@ add_task(async function() {
           .replace(/(.*) <.*>/, "$1")
           .padEnd(16, " ");
         browser.test.log(
-          `[${m.id}] ${date} From: ${author} To: ${recipients} Subject: ${
-            m.subject
-          }`
+          `[${m.id}] ${date} From: ${author} To: ${recipients} Subject: ${m.subject}`
         );
       }
 
@@ -166,6 +180,30 @@ add_task(async function() {
       // From Me and To Me. These use the identities added to account.
       await subtest({ fromMe: true }, 6);
       await subtest({ toMe: true }, 3);
+
+      // Tags query.
+      await subtest({ tags: { mode: "any", tags: { notATag: true } } });
+      await subtest({ tags: { mode: "any", tags: { $label2: true } } }, 3, 4);
+      await subtest(
+        { tags: { mode: "any", tags: { $label3: true } } },
+        4,
+        5,
+        6
+      );
+      await subtest(
+        { tags: { mode: "any", tags: { $label2: true, $label3: true } } },
+        3,
+        4,
+        5,
+        6
+      );
+      await subtest({
+        tags: { mode: "all", tags: { $label1: true, $label2: true } },
+      });
+      await subtest(
+        { tags: { mode: "all", tags: { $label2: true, $label3: true } } },
+        4
+      );
 
       browser.test.notifyPass("finished");
     },

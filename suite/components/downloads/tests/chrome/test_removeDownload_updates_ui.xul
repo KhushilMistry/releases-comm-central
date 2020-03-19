@@ -54,14 +54,10 @@
   <script type="application/javascript">
   <![CDATA[
 
-var ios = Cc["@mozilla.org/network/io-service;1"]
-            .getService(Ci.nsIIOService);
-var dmFile = Cc["@mozilla.org/file/directory_service;1"]
-               .getService(Ci.nsIProperties)
-               .get("TmpD", Ci.nsIFile);
+var dmFile = Services.dirsvc.get("TmpD", Ci.nsIFile);
 dmFile.append("dm-ui-test.file");
 dmFile.createUnique(Ci.nsIFile.NORMAL_FILE_TYPE, 0666);
-var gTestPath = ios.newFileURI(dmFile).spec;
+var gTestPath = Services.io.newFileURI(dmFile).spec;
 
 const DownloadData = [
   { name: "381603.patch",
@@ -99,8 +95,6 @@ function test()
   if (win)
     win.close();
 
-  var os = Cc["@mozilla.org/observer-service;1"]
-             .getService(Ci.nsIObserverService);
   const DLMGR_UI_DONE = "download-manager-ui-done";
 
   var testObs = {
@@ -131,13 +125,13 @@ function test()
 
       win.close();
       dmFile.remove(false);
-      os.removeObserver(testObs, DLMGR_UI_DONE);
+      Services.obs.removeObserver(testObs, DLMGR_UI_DONE);
       SimpleTest.finish();
     }
   }
 
   // Register with the observer service
-  os.addObserver(testObs, DLMGR_UI_DONE);
+  Services.obs.addObserver(testObs, DLMGR_UI_DONE);
 
   // Show the Download Manager UI
   Cc["@mozilla.org/download-manager-ui;1"]

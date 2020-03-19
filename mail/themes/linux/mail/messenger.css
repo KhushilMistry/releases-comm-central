@@ -100,7 +100,9 @@ toolbar[brighttext] {
 #event-toolbox > toolbar[brighttext],
 #compose-toolbox > toolbar[brighttext],
 #headers-box > toolbar[brighttext],
-#FormatToolbox > toolbar[brighttext] {
+#FormatToolbox > toolbar[brighttext],
+:root[lwt-tree-brighttext] .otr-container,
+:root[lwt-tree-brighttext] #searchTerms {
   --toolbarbutton-hover-background: var(--lwt-toolbarbutton-hover-background, rgba(255, 255, 255, .25));
   --toolbarbutton-hover-bordercolor: var(--lwt-toolbarbutton-hover-background, rgba(255, 255, 255, .5));
   --toolbarbutton-header-bordercolor: var(--lwt-toolbarbutton-hover-background, rgba(255, 255, 255, .25));
@@ -502,7 +504,7 @@ toolbar[mode="full"] .toolbarbutton-1 {
   min-width: 55px;
 }
 
-sidebarheader .toolbarbutton-text:not([value]) {
+.sidebar-header .toolbarbutton-text:not([value]) {
   display: none;
 }
 
@@ -548,11 +550,6 @@ treecol.treecol-image:hover:active {
   background: var(--sidebar-highlight-background-color, rgba(249,249,250,.1));
 }
 
-/* Stock icons for the menu bar items
-menuitem:not([type]) {
-  -moz-binding: url("chrome://global/content/bindings/menu.xml#menuitem-iconic");
-}
- */
 #menu_New {
   list-style-image: url("moz-icon://stock/gtk-new?size=menu");
 }
@@ -748,11 +745,6 @@ treechildren::-moz-tree-cell-text {
   padding-inline-start: 5px;
 }
 
-/* Fix to show the menulist-dropmarker under newer GTK3 versions */
-menulist[is="menulist-editable"][editable="true"] > .menulist-dropmarker {
-  min-width: 2em;
-}
-
 /* Status bar */
 
 .statusbar {
@@ -772,11 +764,11 @@ menulist[is="menulist-editable"][editable="true"] > .menulist-dropmarker {
   -moz-appearance: none;
 }
 
-/* Status panel */
-
 .statusbarpanel-iconic {
   padding: 0 1px;
 }
+
+/* Status panel */
 
 .statuspanel-label {
   margin: 0;
@@ -840,10 +832,18 @@ findbar {
   color: var(--toolbar-color);
 }
 
-/* ::::: groupbox ::::: */
-
-groupbox {
-  -moz-appearance: groupbox;
+fieldset {
   margin: 5px;
   padding: 5px;
+  border: none;
+}
+
+legend {
+  font-weight: bold;
+}
+
+fieldset > hbox,
+fieldset > vbox,
+fieldset > radiogroup {
+  width: -moz-available;
 }

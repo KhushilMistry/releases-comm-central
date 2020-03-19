@@ -4,9 +4,9 @@
 
 "use strict";
 
-var DIR_TYPE = kPABData.dirType;
-var FILE_NAME = DIR_TYPE == 101 ? "abook-1.sqlite" : "abook-1.mab";
-var SCHEME = DIR_TYPE == 101 ? "jsaddrbook" : "moz-abmdbdirectory";
+var DIR_TYPE = 101;
+var FILE_NAME = "abook-1.sqlite";
+var SCHEME = "jsaddrbook";
 
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
@@ -29,13 +29,27 @@ var observer = {
     Services.obs.removeObserver(observer, "addrbook-list-updated");
     Services.obs.removeObserver(observer, "addrbook-list-member-added");
   },
+  promiseEvent() {
+    return new Promise(resolve => {
+      this.eventPromise = resolve;
+    });
+  },
+  resolveEventPromise() {
+    if (this.eventPromise) {
+      let resolve = this.eventPromise;
+      delete this.eventPromise;
+      resolve();
+    }
+  },
 
   events: [],
   onItemAdded(parent, item) {
     this.events.push(["onItemAdded", parent, item]);
+    this.resolveEventPromise();
   },
   onItemRemoved(parent, item) {
     this.events.push(["onItemRemoved", parent, item]);
+    this.resolveEventPromise();
   },
   onItemPropertyChanged(item, property, oldValue, newValue) {
     this.events.push([
@@ -45,6 +59,7 @@ var observer = {
       oldValue,
       newValue,
     ]);
+    this.resolveEventPromise();
   },
   observe(subject, topic, data) {
     this.events.push([topic, subject, data]);
@@ -78,6 +93,8 @@ var observer = {
         } catch (ex) {
           if (expectedEvent[i] instanceof Ci.nsIAbDirectory) {
             equal(actualEvent[i].UID, expectedEvent[i].UID);
+          } else if (expectedEvent[i] === null) {
+            ok(!actualEvent[i]);
           } else if (expectedEvent[i] !== undefined) {
             equal(actualEvent[i], expectedEvent[i]);
           }
@@ -112,15 +129,11 @@ add_task(async function createAddressBook() {
   book = MailServices.ab.getDirectoryFromId(dirPrefId);
   observer.checkEvents(["onItemAdded", undefined, book]);
 
-  // Check nsIAbItem properties.
+  // Check nsIAbDirectory properties.
   equal(book.uuid, "ldap_2.servers.newbook&new book");
-
-  // Check nsIAbCollection properties;
   ok(!book.readOnly);
   ok(!book.isRemote);
   ok(!book.isSecure);
-
-  // Check nsIAbDirectory properties.
   equal(book.dirName, "new book");
   equal(book.dirType, DIR_TYPE);
   equal(book.fileName, FILE_NAME);
@@ -192,24 +205,8 @@ add_task(async function createContact() {
   equal(childCards.length, 1);
   ok(childCards[0].equals(contact));
 
-  // Check nsIAbItem properties.
-  equal(contact.uuid, "ldap_2.servers.newbook&updated book#1");
-
-  // Check nsIAbItem methods.
-  equal(
-    contact.generateName(Ci.nsIAbItem.GENERATE_DISPLAY_NAME),
-    "a new contact"
-  );
-  equal(
-    contact.generateName(Ci.nsIAbItem.GENERATE_LAST_FIRST_ORDER),
-    "contact, new"
-  );
-  equal(
-    contact.generateName(Ci.nsIAbItem.GENERATE_FIRST_LAST_ORDER),
-    "new contact"
-  );
-
   // Check nsIAbCard properties.
+  equal(contact.uuid, "ldap_2.servers.newbook&updated book#1");
   equal(contact.directoryId, book.uuid);
   equal(contact.localId, 1);
   equal(contact.UID.length, 36);
@@ -218,6 +215,20 @@ add_task(async function createContact() {
   equal(contact.displayName, "a new contact");
   equal(contact.primaryEmail, "test@invalid");
   equal(contact.isMailList, false);
+
+  // Check nsIAbCard methods.
+  equal(
+    contact.generateName(Ci.nsIAbCard.GENERATE_DISPLAY_NAME),
+    "a new contact"
+  );
+  equal(
+    contact.generateName(Ci.nsIAbCard.GENERATE_LAST_FIRST_ORDER),
+    "contact, new"
+  );
+  equal(
+    contact.generateName(Ci.nsIAbCard.GENERATE_FIRST_LAST_ORDER),
+    "new contact"
+  );
 });
 
 add_task(async function editContact() {
@@ -225,8 +236,7 @@ add_task(async function editContact() {
   contact.lastName = "contact";
   book.modifyCard(contact);
   observer.checkEvents(
-    // TODO MDB has three null args but we can do better than that.
-    ["onItemPropertyChanged", contact],
+    ["onItemPropertyChanged", contact, "FirstName", "new", "updated"],
     ["addrbook-contact-updated", contact, book.UID]
   );
   equal(contact.firstName, "updated");
@@ -271,10 +281,8 @@ add_task(async function createMailingList() {
     ["onItemAdded", book, list]
   );
 
-  // Check nsIAbItem properties.
-  equal(list.uuid, "&new list");
-
   // Check nsIAbDirectory properties.
+  equal(list.uuid, "&new list");
   equal(list.dirName, "new list");
   equal(list.UID.length, 36);
   equal(list.URI, `${SCHEME}://${FILE_NAME}/MailList1`);
@@ -286,6 +294,12 @@ add_task(async function createMailingList() {
   equal(Array.from(list.addressLists.enumerate()).length, 0);
   equal(Array.from(list.childNodes).length, 0);
   equal(Array.from(list.childCards).length, 0);
+
+  // Check nsIAbCard properties.
+  equal(listCard.firstName, "");
+  equal(listCard.lastName, "new list");
+  equal(listCard.primaryEmail, "");
+  equal(listCard.displayName, "new list");
 });
 
 add_task(async function editMailingList() {
@@ -338,7 +352,7 @@ add_task(async function removeMailingListMember() {
 });
 
 add_task(async function deleteMailingList() {
-  MailServices.ab.deleteAddressBook(list.URI);
+  book.deleteDirectory(list);
   observer.checkEvents(
     ["onItemRemoved", book, listCard],
     ["onItemRemoved", list, listCard],
@@ -358,8 +372,34 @@ add_task(async function deleteContact() {
   equal(Array.from(book.childCards).length, 0);
 });
 
+// Tests that the UID on a new contact can be set.
+add_task(async function createContactWithUID() {
+  let contactWithUID = Cc[
+    "@mozilla.org/addressbook/cardproperty;1"
+  ].createInstance(Ci.nsIAbCard);
+  contactWithUID.UID = "I'm a UID!";
+  contactWithUID = book.addCard(contactWithUID);
+  equal("I'm a UID!", contactWithUID.UID, "New contact has the UID we set");
+
+  Assert.throws(() => {
+    // Set the UID after it already exists.
+    contactWithUID.UID = "This should not be possible";
+  }, /NS_ERROR_FAILURE/);
+
+  // Setting the UID to it's existing value should not fail.
+  contactWithUID.UID = contactWithUID.UID; // eslint-disable-line no-self-assign
+
+  let cardArray = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
+  cardArray.appendElement(contactWithUID);
+  book.deleteCards(cardArray);
+  observer.events.length = 0;
+});
+
 add_task(async function deleteAddressBook() {
+  let deletePromise = observer.promiseEvent();
   MailServices.ab.deleteAddressBook(book.URI);
+  await deletePromise;
+
   observer.checkEvents(["onItemRemoved", undefined, book]);
   ok(!Services.prefs.prefHasUserValue("ldap_2.servers.newbook.dirType"));
   ok(!Services.prefs.prefHasUserValue("ldap_2.servers.newbook.description"));
@@ -369,12 +409,7 @@ add_task(async function deleteAddressBook() {
   dbFile.append(FILE_NAME);
   ok(!dbFile.exists());
   equal([...MailServices.ab.directories].length, 2);
-  if (DIR_TYPE == 101) {
-    throws(
-      () => MailServices.ab.getDirectory(`${SCHEME}://${FILE_NAME}`),
-      /.*/
-    );
-  }
+  ok(!MailServices.ab.getDirectory(`${SCHEME}://${FILE_NAME}`));
 });
 
 add_task(async function cleanUp() {

@@ -11,7 +11,6 @@
 /* import-globals-from fetchConfig.js */
 /* import-globals-from fetchhttp.js */
 /* import-globals-from guessConfig.js */
-/* import-globals-from MyBadCertHandler.js */
 /* import-globals-from readFromXML.js */
 /* import-globals-from sanitizeDatatypes.js */
 /* import-globals-from util.js */
@@ -25,7 +24,7 @@ var { OAuth2Providers } = ChromeUtils.import(
   "resource:///modules/OAuth2Providers.jsm"
 );
 
-var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
+var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
 var {
   cleanUpHostName,
   isLegalHostNameOrIP,
@@ -150,9 +149,34 @@ function removeChildNodes(el) {
   }
 }
 
+/**
+ * Resize the window based on the content height and width.
+ * Since the sizeToContent() method doesn't account for the height of
+ * wrapped text, we're checking if the width and height of the "mastervbox"
+ * or "warningbox" is taller than the window width and height. This is necessary
+ * to account for l10n strings or the user manually resizing the window.
+ */
+function resizeDialog() {
+  // We have two main elements here: mastervbox and warningbox. Resize the
+  // window according to which one is visible.
+  let mastervbox = document.getElementById("mastervbox");
+  let box = mastervbox.hidden
+    ? document.getElementById("warningbox")
+    : mastervbox;
+
+  if (box.clientHeight > window.innerHeight) {
+    window.innerHeight = box.clientHeight;
+  }
+
+  if (box.clientWidth > window.innerWidth) {
+    window.innerWidth = box.clientWidth;
+  }
+}
+
 function EmailConfigWizard() {
   this._init();
 }
+
 EmailConfigWizard.prototype = {
   _init() {
     gEmailWizardLogger.info("Initializing setup wizard");
@@ -245,9 +269,7 @@ EmailConfigWizard.prototype = {
 
     // Populate SMTP server dropdown with already configured SMTP servers from
     // other accounts.
-    let smtpServers = MailServices.smtp.servers;
-    while (smtpServers.hasMoreElements()) {
-      let server = smtpServers.getNext().QueryInterface(Ci.nsISmtpServer);
+    for (let server of MailServices.smtp.servers) {
       let label = server.displayname;
       let key = server.key;
       if (
@@ -279,6 +301,18 @@ EmailConfigWizard.prototype = {
     this.switchToMode("start");
     e("realname").select();
     window.sizeToContent();
+
+    // In a new profile, the first request to live.thunderbird.net
+    // is much slower because of one-time overheads like DNS and OCSP.
+    // Let's create some dummy requests to prime the connections.
+    let autoconfigURL = Services.prefs.getCharPref("mailnews.auto_config_url");
+    fetch(autoconfigURL, { method: "OPTIONS" });
+    let addonsURL = Services.prefs.getCharPref(
+      "mailnews.auto_config.addons_url"
+    );
+    if (new URL(autoconfigURL).origin != new URL(addonsURL).origin) {
+      fetch(addonsURL, { method: "OPTIONS" });
+    }
   },
 
   /**
@@ -303,7 +337,6 @@ EmailConfigWizard.prototype = {
    */
   switchToMode(modename) {
     if (modename == this._currentModename) {
-      window.sizeToContent();
       return;
     }
     this._currentModename = modename;
@@ -318,10 +351,11 @@ EmailConfigWizard.prototype = {
 
       _show("next_button");
       _disable("next_button"); // will be enabled by code
+      _show("manual-edit_button");
+      _disable("manual-edit_button");
       _hide("half-manual-test_button");
       _hide("create_button");
       _hide("stop_button");
-      _hide("manual-edit_button");
     } else if (modename == "find-config") {
       _show("status-area");
       _hide("result_area");
@@ -406,17 +440,7 @@ EmailConfigWizard.prototype = {
         _hide("manual-edit_button");
       }
     }
-    window.sizeToContent();
-
-    // In a new profile, the first request to live.thunderbird.net
-    // is much slower because of one-time overheads.
-    // Let's create some dummy requests to prime the connections.
-    fetch(Services.prefs.getCharPref("mailnews.auto_config_url"), {
-      method: "OPTIONS",
-    });
-    fetch(Services.prefs.getCharPref("mailnews.auto_config.addons_url"), {
-      method: "OPTIONS",
-    });
+    resizeDialog();
   },
 
   /**
@@ -428,6 +452,7 @@ EmailConfigWizard.prototype = {
       this.onStop();
     }
     this.switchToMode("start");
+    this.checkStartDone();
   },
 
   getConcreteConfig() {
@@ -475,7 +500,6 @@ EmailConfigWizard.prototype = {
   onInputEmail() {
     this._email = e("email").value;
     this.onStartOver();
-    this.checkStartDone();
   },
 
   onInputRealname() {
@@ -485,12 +509,12 @@ EmailConfigWizard.prototype = {
 
   onInputUsername() {
     this._exchangeUsername = e("usernameEx").value;
-    this.checkStartDone();
+    this.onStartOver();
   },
 
   onInputPassword() {
     this._password = e("password").value;
-    this.checkStartDone();
+    this.onStartOver();
   },
 
   /**
@@ -558,8 +582,12 @@ EmailConfigWizard.prototype = {
     if (this.validateEmailMinimally(this._email) && this._realname) {
       this._domain = this._email.split("@")[1].toLowerCase();
       _enable("next_button");
+      _enable("manual-edit_button");
+      _hide("provisioner_button");
     } else {
       _disable("next_button");
+      _disable("manual-edit_button");
+      _show("provisioner_button");
     }
   },
 
@@ -599,11 +627,11 @@ EmailConfigWizard.prototype = {
         self.stopSpinner(call.foundMsg);
         self.foundConfig(config);
       },
-      function(e) {
+      function(e, allErrors) {
         // all failed
         self._abortable = null;
         self.removeStatusLines();
-        if (e instanceof CancelledException) {
+        if (allErrors.some(e => e instanceof CancelledException)) {
           return;
         }
 
@@ -669,15 +697,23 @@ EmailConfigWizard.prototype = {
         call.successCallback(),
         (e, allErrors) => {
           // Must call error callback in any case to stop the discover mode.
-          call.errorCallback()(e); // ()(e) is correct
-          if (
-            e.code == 401 ||
-            (allErrors && allErrors.find(e => e.code == 401))
-          ) {
-            // Auth failed
+          let errorCallback = call.errorCallback();
+          if (allErrors.some(e => e.code == 401)) {
+            // Auth failed.
             // Ask user for username.
+            this.onStartOver();
+            this.stopSpinner(); // clears status message
             _show("usernameRow");
-            this.switchToMode("start");
+            _show("status-area");
+            if (!this._exchangeUsername) {
+              this.showErrorStatus("credentials_incomplete");
+            } else {
+              this.showErrorStatus("credentials_wrong");
+            }
+            _enable("manual-edit_button");
+            errorCallback(new CancelledException());
+          } else {
+            errorCallback(e);
           }
         }
       );
@@ -720,7 +756,7 @@ EmailConfigWizard.prototype = {
             ? "guessed_settings_offline"
             : "found_settings_guess"
         );
-        window.sizeToContent();
+        resizeDialog();
       },
       function(e, config) {
         // guessconfig failed
@@ -759,12 +795,96 @@ EmailConfigWizard.prototype = {
     let successCallback = () => {
       this._abortable = null;
       e("status-area").setAttribute("status", "result");
-      this.displayConfigResult(config);
+      // For Office365, do a pre-verification of whether IMAP works. If it fails
+      // due to wrong password, make the user aware. If it fails due to other
+      // reasons (mainly MFA enforced), make Exchange the default.
+      // We do this since the account may have MFA enabled and that can't yet be
+      // used with IMAP/POP.
+      if (
+        config.incoming.hostname == "outlook.office365.com" &&
+        (config.incoming.type == "imap" || config.incoming.type == "pop3") &&
+        config.incomingAlternatives.some(i => i.type == "exchange")
+      ) {
+        this.startSpinner("looking_up_settings_exchange");
+        this._currentConfig = config;
+        let configFilledIn = this.getConcreteConfig();
+        this.checkOffice365Creds(
+          configFilledIn,
+          () => {
+            // Password valid: check whether IMAP works.
+            verifyConfig(
+              configFilledIn,
+              false,
+              this._parentMsgWindow,
+              testedConfig => {
+                // IMAP worked
+                this.stopSpinner("found_settings_exchange");
+                this.displayConfigResult(testedConfig);
+              },
+              ex => {
+                // IMAP failed: make Exchange the default.
+                config.incomingAlternatives.unshift(config.incoming);
+                config.incoming = config.incomingAlternatives.find(
+                  alt => alt.type == "exchange"
+                );
+                config.incomingAlternatives = config.incomingAlternatives.filter(
+                  alt => alt != config.incoming
+                );
+                this.stopSpinner("found_settings_exchange");
+                this.displayConfigResult(config);
+              }
+            );
+          },
+          () => {
+            // Invalid password: show the error and let user correct it.
+            this.onStartOver();
+            _show("status-area");
+            this.showErrorStatus("user_pass_invalid");
+          }
+        );
+      } else {
+        this.displayConfigResult(config);
+      }
     };
     this._abortable = getAddonsList(config, successCallback, e => {
       successCallback();
       this.showErrorMsg(e);
     });
+  },
+
+  /**
+   * Office365 AutoDiscover gives us specific error codes for
+   * invalid password and MFA enforced, so we can differentiate that.
+   * @param {Function} successCallback - function to be called in case the
+   *   credentials were not explicitedly invalid.
+   * @param {Function} invalidPassword - function to be called in case the
+   *   credentials were explicitely invalid.
+   */
+  checkOffice365Creds(configFilledIn, successCallback, invalidPassword) {
+    let fetch = new FetchHTTP(
+      "https://autodiscover-s.outlook.com/Autodiscover/Autodiscover.xml",
+      {
+        username: configFilledIn.incoming.username,
+        password: configFilledIn.incoming.password,
+        allowAuthPrompt: false,
+        allowCache: false,
+        headers: {
+          Cookie: "",
+        },
+        timeout: 10000,
+      },
+      successCallback,
+      ex => {
+        let err = fetch._request.getResponseHeader("X-AutoDiscovery-Error");
+        gEmailWizardLogger.info("O365 X-AutoDiscovery-Error: " + err);
+        if (err && err.includes(":InvalidCreds:")) {
+          invalidPassword();
+        } else {
+          successCallback();
+        }
+      }
+    );
+    fetch.start();
   },
 
   /**
@@ -817,7 +937,7 @@ EmailConfigWizard.prototype = {
       this._showStatusTitle("");
       _hide("stop_button");
       gEmailWizardLogger.warn("all spinner stop");
-      window.sizeToContent();
+      resizeDialog();
       return;
     }
 
@@ -826,7 +946,7 @@ EmailConfigWizard.prototype = {
     this._showStatusTitle(actionStrName);
     _hide("stop_button");
     gEmailWizardLogger.warn("all spinner stop " + actionStrName);
-    window.sizeToContent();
+    resizeDialog();
   },
 
   showErrorStatus(actionStrName) {
@@ -961,7 +1081,6 @@ EmailConfigWizard.prototype = {
           _hide("result_addon_install");
           _enable("create_button");
         } else {
-          _hide("status-area");
           _show("result_addon_intro");
           var msg = gStringsBundle.getString("addon-intro");
           if (
@@ -1022,7 +1141,7 @@ EmailConfigWizard.prototype = {
           _disable("create_button");
         }
 
-        window.sizeToContent();
+        resizeDialog();
       })();
       return;
     }
@@ -1030,7 +1149,7 @@ EmailConfigWizard.prototype = {
     _show("result_hostnames");
     _hide("result_exchange");
     _enable("create_button");
-    window.sizeToContent();
+    resizeDialog();
 
     var unknownString = gStringsBundle.getString("resultUnknown");
 
@@ -1298,8 +1417,8 @@ EmailConfigWizard.prototype = {
     if (!this._currentConfig) {
       this._currentConfig = new AccountConfig();
       this._currentConfig.incoming.type = "imap";
-      this._currentConfig.incoming.username = "%EMAILLOCALPART%";
-      this._currentConfig.outgoing.username = "%EMAILLOCALPART%";
+      this._currentConfig.incoming.username = "%EMAILADDRESS%";
+      this._currentConfig.outgoing.username = "%EMAILADDRESS%";
       this._currentConfig.incoming.hostname = ".%EMAILDOMAIN%";
       this._currentConfig.outgoing.hostname = ".%EMAILDOMAIN%";
     }
@@ -1347,8 +1466,9 @@ EmailConfigWizard.prototype = {
     }
     this.fillPortDropdown(config.incoming.type);
 
-    // If the hostname supports OAuth2 and imap is enabled, enable OAuth2.
+    // If the incoming server hostname supports OAuth2, enable OAuth2 for it.
     let iDetails = OAuth2Providers.getHostnameDetails(config.incoming.hostname);
+    e("in-authMethod-oauth2").hidden = !iDetails;
     if (iDetails) {
       gEmailWizardLogger.info(
         "OAuth2 details for incoming server " +
@@ -1356,11 +1476,6 @@ EmailConfigWizard.prototype = {
           " is " +
           iDetails
       );
-    }
-    e("in-authMethod-oauth2").hidden = !(
-      iDetails && e("incoming_protocol").value == 1
-    );
-    if (!e("in-authMethod-oauth2").hidden) {
       config.oauthSettings = {};
       [config.oauthSettings.issuer, config.oauthSettings.scope] = iDetails;
       // oauthsettings are not stored nor changeable in the user interface, so just
@@ -1390,8 +1505,9 @@ EmailConfigWizard.prototype = {
       this.adjustOutgoingPortToSSLAndProtocol(config);
     }
 
-    // If the hostname supports OAuth2 and imap is enabled, enable OAuth2.
+    // If the smtp hostname supports OAuth2, enable OAuth2 for it.
     let oDetails = OAuth2Providers.getHostnameDetails(config.outgoing.hostname);
+    e("out-authMethod-oauth2").hidden = !oDetails;
     if (oDetails) {
       gEmailWizardLogger.info(
         "OAuth2 details for outgoing server " +
@@ -1399,9 +1515,6 @@ EmailConfigWizard.prototype = {
           " is " +
           oDetails
       );
-    }
-    e("out-authMethod-oauth2").hidden = !oDetails;
-    if (!e("out-authMethod-oauth2").hidden) {
       config.oauthSettings = {};
       [config.oauthSettings.issuer, config.oauthSettings.scope] = oDetails;
       // oauthsettings are not stored nor changeable in the user interface, so just
@@ -1414,7 +1527,7 @@ EmailConfigWizard.prototype = {
       let menulist = e("outgoing_hostname");
       // We can't use menulist.value = config.outgoing.existingServerKey
       // because would overwrite the text field, so have to do it manually:
-      let menuitems = menulist.menupopup.childNodes;
+      let menuitems = menulist.menupopup.children;
       for (let menuitem of menuitems) {
         if (menuitem.serverKey == config.outgoing.existingServerKey) {
           menulist.selectedItem = menuitem;
@@ -1749,20 +1862,7 @@ EmailConfigWizard.prototype = {
     gEmailWizardLogger.info("creating account in backend");
     let newAccount = createAccountInBackend(configFilledIn);
 
-    let existingAccountManager = Services.wm.getMostRecentWindow(
-      "mailnews:accountmanager"
-    );
-    if (existingAccountManager) {
-      existingAccountManager.focus();
-    } else {
-      window.openDialog(
-        "chrome://messenger/content/AccountManager.xul",
-        "AccountManager",
-        "chrome,centerscreen,modal,titlebar",
-        { server: newAccount.incomingServer, selectPage: "am-server.xul" }
-      );
-    }
-    window.close();
+    MsgAccountManager("am-server.xhtml", newAccount.incomingServer);
   },
 
   /**
@@ -1986,12 +2086,12 @@ EmailConfigWizard.prototype = {
         // If we got no message, then something other than VerifyLogon failed.
         self.showErrorMsg(e.message || e.toString());
 
-        window.sizeToContent();
         // TODO use switchToMode(), see above
         // give user something to proceed after fixing
         _enable("create_button");
         // hidden in non-manual mode, so it's fine to enable
         _enable("half-manual-test_button");
+        resizeDialog();
       }
     );
   },
@@ -2226,7 +2326,7 @@ SecurityWarningDialog.prototype = {
       "warning dialog shown for unknown reason"
     );
 
-    window.sizeToContent();
+    resizeDialog();
   },
 
   toggleDetails(id) {
@@ -2240,7 +2340,7 @@ SecurityWarningDialog.prototype = {
       tech.removeAttribute("expanded");
     }
 
-    window.sizeToContent();
+    resizeDialog();
   },
 
   /**
@@ -2261,7 +2361,7 @@ SecurityWarningDialog.prototype = {
   onCancel() {
     _hide("warningbox");
     _show("mastervbox");
-    window.sizeToContent();
+    resizeDialog();
 
     this._cancelCallback();
   },
@@ -2288,7 +2388,7 @@ SecurityWarningDialog.prototype = {
 
     _show("mastervbox");
     _hide("warningbox");
-    window.sizeToContent();
+    resizeDialog();
 
     this._okCallback();
   },
@@ -2319,7 +2419,7 @@ SecurityWarningDialog.prototype = {
         location: config.incoming.targetSite,
       };
       window.openDialog(
-        "chrome://pippki/content/exceptionDialog.xul",
+        "chrome://pippki/content/exceptionDialog.xhtml",
         "",
         "chrome,centerscreen,modal",
         params
@@ -2342,7 +2442,7 @@ SecurityWarningDialog.prototype = {
           location: config.outgoing.targetSite,
         };
         window.openDialog(
-          "chrome://pippki/content/exceptionDialog.xul",
+          "chrome://pippki/content/exceptionDialog.xhtml",
           "",
           "chrome,centerscreen,modal",
           params

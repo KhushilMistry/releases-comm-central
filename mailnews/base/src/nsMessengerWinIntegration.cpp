@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -60,7 +60,7 @@
 #define MAIL_COMMANDLINE_ARG u" -mail"
 #define IDI_MAILBIFF 32576
 #define UNREAD_UPDATE_INTERVAL (20 * 1000)  // 20 seconds
-#define ALERT_CHROME_URL "chrome://messenger/content/newmailalert.xul"
+#define ALERT_CHROME_URL "chrome://messenger/content/newmailalert.xhtml"
 #define NEW_MAIL_ALERT_ICON "chrome://messenger/skin/icons/new-mail-alert.png"
 #define SHOW_ALERT_PREF "mail.biff.show_alert"
 #define SHOW_TRAY_ICON_PREF "mail.biff.show_tray_icon"
@@ -115,7 +115,7 @@ static void activateWindow(mozIDOMWindowProxy *win) {
   } else {
     // Use internal method.
     nsCOMPtr<nsPIDOMWindowOuter> privateWindow = nsPIDOMWindowOuter::From(win);
-    privateWindow->Focus();
+    privateWindow->Focus(mozilla::dom::CallerType::System);
   }
 }
 // end shameless copying from nsNativeAppWinSupport.cpp
@@ -348,15 +348,16 @@ nsresult nsMessengerWinIntegration::Init() {
 NS_IMETHODIMP
 nsMessengerWinIntegration::OnItemPropertyChanged(nsIMsgFolder *,
                                                  const nsACString &,
-                                                 char const *, char const *) {
+                                                 const nsACString &,
+                                                 const nsACString &) {
   return NS_OK;
 }
 
 NS_IMETHODIMP
 nsMessengerWinIntegration::OnItemUnicharPropertyChanged(nsIMsgFolder *,
                                                         const nsACString &,
-                                                        const char16_t *,
-                                                        const char16_t *) {
+                                                        const nsAString &,
+                                                        const nsAString &) {
   return NS_OK;
 }
 
@@ -594,18 +595,17 @@ static void EscapeAmpersands(nsString &aToolTip) {
   if (pos == kNotFound) return;
 
   // Next, see if we only have bare ampersands.
-  pos = MsgFind(aToolTip, "&&", false, pos);
+  pos = aToolTip.Find("&&", false, pos);
 
   // Windows tooltip code removes one ampersand from each run,
   // then collapses pairs of amperands. This means that in the easy case,
   // we need to replace each ampersand with three.
-  MsgReplaceSubstring(aToolTip, NS_LITERAL_STRING("&"),
-                      NS_LITERAL_STRING("&&&"));
+  aToolTip.ReplaceSubstring(NS_LITERAL_STRING("&"), NS_LITERAL_STRING("&&&"));
   if (pos == kNotFound) return;
 
   // We inserted too many ampersands. Remove some.
   for (;;) {
-    pos = MsgFind(aToolTip, "&&&&&&", false, pos);
+    pos = aToolTip.Find("&&&&&&", false, pos);
     if (pos == kNotFound) return;
 
     aToolTip.Cut(pos, 1);

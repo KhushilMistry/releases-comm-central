@@ -15,6 +15,7 @@
 #include "nsILDAPErrors.h"
 #include "nsIClassInfoImpl.h"
 #include "nsLDAPUtils.h"
+#include "mozilla/Utf8.h"
 
 NS_IMPL_CLASSINFO(nsLDAPMessage, NULL, nsIClassInfo::THREADSAFE,
                   NS_LDAPMESSAGE_CID)
@@ -67,15 +68,14 @@ nsLDAPMessage::~nsLDAPMessage(void) {
       case LDAP_SUCCESS:
         // timed out (dunno why LDAP_SUCCESS is used to indicate this)
         MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Warning,
-                ("nsLDAPMessage::~nsLDAPMessage: ldap_msgfree() "
-                 "timed out\n"));
+                ("nsLDAPMessage::~nsLDAPMessage: ldap_msgfree() timed out"));
         break;
 
       default:
         // other failure
         MOZ_LOG(gLDAPLogModule, mozilla::LogLevel::Warning,
                 ("nsLDAPMessage::~nsLDAPMessage: ldap_msgfree() "
-                 "failed: %s\n",
+                 "failed: %s",
                  ldap_err2string(rc)));
         break;
     }

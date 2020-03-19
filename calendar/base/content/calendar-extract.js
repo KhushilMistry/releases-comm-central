@@ -5,22 +5,21 @@
 /* import-globals-from ../../../mail/base/content/msgMail3PaneWindow.js */
 /* import-globals-from calendar-item-editing.js */
 
-var { Extractor } = ChromeUtils.import("resource://calendar/modules/calExtract.jsm");
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { Extractor } = ChromeUtils.import("resource:///modules/calendar/calExtract.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 
 var calendarExtract = {
-  onShowLocaleMenu: function(target) {
+  onShowLocaleMenu(target) {
     let localeList = document.getElementById(target.id);
     let langs = [];
     let chrome = Cc["@mozilla.org/chrome/chrome-registry;1"]
       .getService(Ci.nsIXULChromeRegistry)
       .QueryInterface(Ci.nsIToolkitChromeRegistry);
-    let locales = chrome.getLocalesForPackage("calendar");
     let langRegex = /^(([^-]+)-*(.*))$/;
 
-    while (locales.hasMore()) {
-      let localeParts = langRegex.exec(locales.getNext());
+    for (let locale of chrome.getLocalesForPackage("calendar")) {
+      let localeParts = langRegex.exec(locale);
       let langName = localeParts[2];
 
       try {
@@ -51,9 +50,8 @@ var calendarExtract = {
         return idx_a - idx_b;
       } else if (idx_a == -1) {
         return 1;
-      } else {
-        return -1;
       }
+      return -1;
     });
     removeChildren(localeList);
 
@@ -62,13 +60,13 @@ var calendarExtract = {
     }
   },
 
-  extractWithLocale: function(event, isEvent) {
+  extractWithLocale(event, isEvent) {
     event.stopPropagation();
     let locale = event.target.value;
     this.extractFromEmail(isEvent, true, locale);
   },
 
-  extractFromEmail: function(isEvent, fixedLang, fixedLocale) {
+  extractFromEmail(isEvent, fixedLang, fixedLocale) {
     // TODO would be nice to handle multiple selected messages,
     // though old conversion functionality didn't
     let message = gFolderDisplay.selectedMessage;
@@ -218,8 +216,8 @@ var calendarExtract = {
     );
   },
 
-  addListeners: function() {
-    if (window.top.document.location == "chrome://messenger/content/messenger.xul") {
+  addListeners() {
+    if (window.top.document.location == "chrome://messenger/content/messenger.xhtml") {
       // covers initial load and folder change
       let folderTree = document.getElementById("folderTree");
       folderTree.addEventListener("select", this.setState);
@@ -235,7 +233,7 @@ var calendarExtract = {
     }
   },
 
-  setState: function() {
+  setState() {
     let eventButton = document.getElementById("extractEventButton");
     let taskButton = document.getElementById("extractTaskButton");
     let contextMenu = document.getElementById("mailContext-calendar-convert-menu");

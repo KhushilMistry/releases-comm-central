@@ -65,29 +65,24 @@
           <hbox class="displayUserAccount" flex="1">
             <stack class="statusImageStack">
               <box class="userIconHolder">
-                <image class="userIcon" mousethrough="always"></image>
+                <image class="userIcon"></image>
               </box>
               <image class="statusTypeIcon"></image>
             </stack>
             <stack class="displayNameAndstatusMessageStack"
-                   mousethrough="always"
                    flex="1">
               <hbox align="center" flex="1">
                 <description class="displayName" flex="1" crop="end">
                 </description>
                 <image class="prplIcon"></image>
               </hbox>
-              <description class="statusMessage"
-                           mousethrough="never"
-                           crop="end"
-                           flex="100000"/>
+              <description class="statusMessage" crop="end" flex="100000"/>
               <html:input class="statusMessageInput input-inline"
                           hidden="hidden"/>
             </stack>
           </hbox>
           <hbox class="otr-container"
-                align="left"
-                valign="middle"
+                align="middle"
                 hidden="true">
             <label class="otr-label"
                    crop="end"
@@ -95,7 +90,7 @@
                    flex="1"/>
             <toolbarbutton id="otrButton"
                            mode="dialog"
-                           class="otr-button toolbarbutton-1"
+                           class="otr-button"
                            type="menu"
                            label="Insecure"
                            data-l10n-id="start-tooltip">

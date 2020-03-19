@@ -1,4 +1,4 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -528,12 +528,12 @@ int MimeHeaders_write_all_headers(MimeHeaders *hdrs, MimeDisplayOptions *opt,
     }
 
     // MW Fixme: more?
-    bool convert_charset_only = MsgLowerCaseEqualsLiteral(name, "to") ||
-                                MsgLowerCaseEqualsLiteral(name, "from") ||
-                                MsgLowerCaseEqualsLiteral(name, "cc") ||
-                                MsgLowerCaseEqualsLiteral(name, "bcc") ||
-                                MsgLowerCaseEqualsLiteral(name, "reply-to") ||
-                                MsgLowerCaseEqualsLiteral(name, "sender");
+    bool convert_charset_only = name.LowerCaseEqualsLiteral("to") ||
+                                name.LowerCaseEqualsLiteral("from") ||
+                                name.LowerCaseEqualsLiteral("cc") ||
+                                name.LowerCaseEqualsLiteral("bcc") ||
+                                name.LowerCaseEqualsLiteral("reply-to") ||
+                                name.LowerCaseEqualsLiteral("sender");
     MimeHeaders_convert_header_value(opt, hdr_value, convert_charset_only);
     // if we're saving as html, we need to convert headers from utf8 to message
     // charset, if any

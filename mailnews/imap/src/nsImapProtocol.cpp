@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -566,7 +566,6 @@ nsImapProtocol::nsImapProtocol()
 
   // m_dataOutputBuf is used by Send Data
   m_dataOutputBuf = (char *)PR_CALLOC(sizeof(char) * OUTPUT_BUFFER_SIZE);
-  m_allocatedSize = OUTPUT_BUFFER_SIZE;
 
   // used to buffer incoming data by ReadNextLine
   m_inputStreamBuffer = new nsMsgLineStreamBuffer(
@@ -641,7 +640,7 @@ nsImapProtocol::Initialize(nsIImapHostSessionList *aHostSessionList,
 
   // Now initialize the thread for the connection
   if (m_thread == nullptr) {
-    nsresult rv = NS_NewThread(getter_AddRefs(m_iThread), this);
+    nsresult rv = NS_NewNamedThread("IMAP", getter_AddRefs(m_iThread), this);
     if (NS_FAILED(rv)) {
       NS_ASSERTION(m_iThread, "Unable to create imap thread.");
       return rv;
@@ -730,7 +729,7 @@ static void SetSecurityCallbacksFromChannel(nsISocketTransport *aTrans,
   aChannel->GetLoadGroup(getter_AddRefs(loadGroup));
 
   nsCOMPtr<nsIInterfaceRequestor> securityCallbacks;
-  MsgNewNotificationCallbacksAggregation(callbacks, loadGroup,
+  NS_NewNotificationCallbacksAggregation(callbacks, loadGroup,
                                          getter_AddRefs(securityCallbacks));
   if (securityCallbacks) aTrans->SetSecurityCallbacks(securityCallbacks);
 }
@@ -821,13 +820,16 @@ nsresult nsImapProtocol::SetupWithUrl(nsIURI *aURL, nsISupports *aConsumer) {
       GetMsgWindow(getter_AddRefs(msgWindow));
       if (!msgWindow) GetTopmostMsgWindow(getter_AddRefs(msgWindow));
       if (msgWindow) {
+        // Set up the MockChannel to attempt nsIProgressEventSink callbacks on
+        // the messageWindow, with fallback to the docShell (and the
+        // loadgroup).
         nsCOMPtr<nsIDocShell> docShell;
         msgWindow->GetMessageWindowDocShell(getter_AddRefs(docShell));
         nsCOMPtr<nsIInterfaceRequestor> ir(do_QueryInterface(docShell));
         nsCOMPtr<nsIInterfaceRequestor> interfaceRequestor;
         msgWindow->GetNotificationCallbacks(getter_AddRefs(interfaceRequestor));
         nsCOMPtr<nsIInterfaceRequestor> aggregateIR;
-        MsgNewInterfaceRequestorAggregation(interfaceRequestor, ir,
+        NS_NewInterfaceRequestorAggregation(interfaceRequestor, ir,
                                             getter_AddRefs(aggregateIR));
         m_mockChannel->SetNotificationCallbacks(aggregateIR);
       }
@@ -872,6 +874,14 @@ nsresult nsImapProtocol::SetupWithUrl(nsIURI *aURL, nsISupports *aConsumer) {
         m_hostSessionList->ClearShellCacheForHost(GetImapServerKey());
         m_preferPlainText = preferPlainText;
       }
+    }
+    // If enabled, retrieve the clientid so that we can use it later.
+    bool clientidEnabled = false;
+    if (NS_SUCCEEDED(server->GetClientidEnabled(&clientidEnabled)) &&
+        clientidEnabled)
+      server->GetClientid(m_clientId);
+    else {
+      m_clientId.Truncate();
     }
 
     bool proxyCallback = false;
@@ -1218,7 +1228,7 @@ NS_IMETHODIMP nsImapProtocol::OnInputStreamReady(nsIAsyncInputStream *inStr) {
 // The imap thread cleanup code will check m_safeToCloseConnection.
 NS_IMETHODIMP
 nsImapProtocol::TellThreadToDie(bool aIsSafeToClose) {
-  NS_WARNING_ASSERTION(
+  MOZ_DIAGNOSTIC_ASSERT(
       NS_IsMainThread(),
       "TellThreadToDie(aIsSafeToClose) should only be called from UI thread");
   MutexAutoLock mon(mLock);
@@ -1245,8 +1255,9 @@ nsImapProtocol::TellThreadToDie(bool aIsSafeToClose) {
 
 void nsImapProtocol::TellThreadToDie() {
   nsresult rv = NS_OK;
-  NS_WARNING_ASSERTION(!NS_IsMainThread(),
-                       "TellThreadToDie() should not be called from UI thread");
+  MOZ_DIAGNOSTIC_ASSERT(
+      !NS_IsMainThread(),
+      "TellThreadToDie() should not be called from UI thread");
 
   // prevent re-entering this method because it may lock the UI.
   if (m_inThreadShouldDie) return;
@@ -1514,25 +1525,44 @@ void nsImapProtocol::EstablishServerConnection() {
       }
     }
   } else if (!PL_strncasecmp(serverResponse, ESC_PREAUTH, ESC_PREAUTH_LEN)) {
-    // we've been pre-authenticated.
-    // we can skip the whole password step, right into the
-    // kAuthenticated state
-    GetServerStateParser().PreauthSetAuthenticatedState();
+    // PREAUTH greeting received. We've been pre-authenticated by the server.
+    // We can skip sending a password and transition right into the
+    // kAuthenticated state; but we won't if the user has configured STARTTLS.
+    // (STARTTLS can only occur with the server in non-authenticated state.)
+    if (!(m_socketType == nsMsgSocketType::alwaysSTARTTLS ||
+          m_socketType == nsMsgSocketType::trySTARTTLS)) {
+      GetServerStateParser().PreauthSetAuthenticatedState();
 
-    if (GetServerStateParser().GetCapabilityFlag() == kCapabilityUndefined)
-      Capability();
+      if (GetServerStateParser().GetCapabilityFlag() == kCapabilityUndefined)
+        Capability();
 
-    if (!(GetServerStateParser().GetCapabilityFlag() &
-          (kIMAP4Capability | kIMAP4rev1Capability | kIMAP4other))) {
-      // AlertUserEvent_UsingId(MK_MSG_IMAP_SERVER_NOT_IMAP4);
-      SetConnectionStatus(NS_ERROR_FAILURE);  // stop netlib
+      if (!(GetServerStateParser().GetCapabilityFlag() &
+            (kIMAP4Capability | kIMAP4rev1Capability | kIMAP4other))) {
+        // AlertUserEventUsingId(MK_MSG_IMAP_SERVER_NOT_IMAP4);
+        SetConnectionStatus(NS_ERROR_FAILURE);  // stop netlib
+      } else {
+        // let's record the user as authenticated.
+        m_imapServerSink->SetUserAuthenticated(true);
+
+        ProcessAfterAuthenticated();
+        // the connection was a success
+        SetConnectionStatus(NS_OK);
+      }
     } else {
-      // let's record the user as authenticated.
-      m_imapServerSink->SetUserAuthenticated(true);
-
-      ProcessAfterAuthenticated();
-      // the connection was a success
-      SetConnectionStatus(NS_OK);
+      // STARTTLS is configured so don't transition to authenticated state. Just
+      // alert the user, log the error and drop the connection. This may
+      // indicate a man-in-the middle attack if the user is not expecting
+      // PREAUTH. The user must change the connection security setting to other
+      // than STARTTLS to allow PREAUTH to be accepted on subsequent IMAP
+      // connections.
+      AlertUserEventUsingName("imapServerDisconnected");
+      const nsCString &hostName = GetImapHostName();
+      MOZ_LOG(
+          IMAP, LogLevel::Error,
+          ("PREAUTH received from IMAP server %s because STARTTLS selected. "
+           "Connection dropped",
+           hostName.get()));
+      SetConnectionStatus(NS_ERROR_FAILURE);  // stop netlib
     }
   }
 
@@ -1889,6 +1919,18 @@ bool nsImapProtocol::RetryUrl() {
     m_imapServerSink->RemoveServerConnection(this);
     m_imapServerSink->RetryUrl(kungFuGripImapUrl, saveMockChannel);
   }
+
+  // Hack for Bug 1586494.
+  // (this is a workaround to try and prevent a specific crash, and
+  // does nothing clarify the threading mess!)
+  // RetryUrl() is only ever called from the imap thread.
+  // Mockchannel dtor insists upon being run on the main thread.
+  // So make sure we don't accidentally cause the mockchannel to die right now.
+  if (saveMockChannel) {
+    NS_ReleaseOnMainThreadSystemGroup("nsImapProtocol::RetryUrl",
+                                      saveMockChannel.forget());
+  }
+
   return (m_imapServerSink != nullptr);  // we're running a url (the same url)
 }
 
@@ -2765,7 +2807,7 @@ void nsImapProtocol::ProcessSelectedStateURL() {
         case nsIImapUrl::nsImapExpungeFolder:
           Expunge();
           // note fall through to next cases.
-          MOZ_FALLTHROUGH;
+          [[fallthrough]];
         case nsIImapUrl::nsImapSelectFolder:
         case nsIImapUrl::nsImapSelectNoopFolder:
           if (!moreHeadersToDownload) ProcessMailboxUpdate(true);
@@ -4440,7 +4482,7 @@ void nsImapProtocol::Log(const char *logSubName, const char *extraInfo,
     // break up buffers > 400 bytes on line boundaries.
     if (logDataLen > kLogDataChunkSize) {
       logDataLines.Assign(logData);
-      lastLineEnd = MsgRFindChar(logDataLines, '\n', kLogDataChunkSize);
+      lastLineEnd = logDataLines.RFindChar('\n', kLogDataChunkSize);
       // null terminate the last line
       if (lastLineEnd == kNotFound) lastLineEnd = kLogDataChunkSize - 1;
 
@@ -4489,7 +4531,7 @@ void nsImapProtocol::Log(const char *logSubName, const char *extraInfo,
           lastLineEnd + 2);  // + 2 to account for the LF and the '\0' we added
       logDataLen = logDataLines.Length();
       lastLineEnd = (logDataLen > kLogDataChunkSize)
-                        ? MsgRFindChar(logDataLines, '\n', kLogDataChunkSize)
+                        ? logDataLines.RFindChar('\n', kLogDataChunkSize)
                         : kNotFound;
       // null terminate the last line
       if (lastLineEnd == kNotFound) lastLineEnd = kLogDataChunkSize - 1;
@@ -5430,13 +5472,15 @@ void nsImapProtocol::InitPrefAuthMethods(int32_t authMethodPrefValue,
       m_prefAuthMethods = kHasCRAMCapability | kHasAuthGssApiCapability |
                           kHasAuthNTLMCapability | kHasAuthMSNCapability;
       break;
+    case nsMsgAuthMethod::OAuth2:
+      m_prefAuthMethods = kHasXOAuth2Capability;
+      break;
     default:
       NS_ASSERTION(false, "IMAP: authMethod pref invalid");
-      // TODO log to error console
       MOZ_LOG(IMAP, LogLevel::Error,
               ("IMAP: bad pref authMethod = %d", authMethodPrefValue));
       // fall to any
-      MOZ_FALLTHROUGH;
+      [[fallthrough]];
     case nsMsgAuthMethod::anything:
       m_prefAuthMethods = kHasAuthOldLoginCapability | kHasAuthLoginCapability |
                           kHasAuthPlainCapability | kHasCRAMCapability |
@@ -5444,21 +5488,18 @@ void nsImapProtocol::InitPrefAuthMethods(int32_t authMethodPrefValue,
                           kHasAuthMSNCapability | kHasAuthExternalCapability |
                           kHasXOAuth2Capability;
       break;
-    case nsMsgAuthMethod::OAuth2:
-      m_prefAuthMethods = kHasXOAuth2Capability;
-      break;
   }
 
-  if (m_prefAuthMethods & kHasXOAuth2Capability)
+  if (m_prefAuthMethods & kHasXOAuth2Capability) {
     mOAuth2Support = new mozilla::mailnews::OAuth2ThreadHelper(aServer);
-
-  // Disable OAuth2 support if we don't have the prefs installed.
-  if (m_prefAuthMethods & kHasXOAuth2Capability &&
-      (!mOAuth2Support || !mOAuth2Support->SupportsOAuth2()))
-    m_prefAuthMethods &= ~kHasXOAuth2Capability;
-
-  NS_ASSERTION(m_prefAuthMethods != kCapabilityUndefined,
-               "IMAP: InitPrefAuthMethods() didn't work");
+    if (!mOAuth2Support || !mOAuth2Support->SupportsOAuth2()) {
+      // Disable OAuth2 support if we don't have the prefs installed.
+      m_prefAuthMethods &= ~kHasXOAuth2Capability;
+      mOAuth2Support = nullptr;
+      MOZ_LOG(IMAP, LogLevel::Warning,
+              ("IMAP: no OAuth2 support for this server."));
+    }
+  }
 }
 
 /**
@@ -5506,19 +5547,19 @@ nsresult nsImapProtocol::ChooseAuthMethod() {
   else if (kHasAuthOldLoginCapability & availCaps)
     m_currentAuthMethod = kHasAuthOldLoginCapability;
   else {
-    MOZ_LOG(IMAP, LogLevel::Debug, ("no remaining auth method"));
+    MOZ_LOG(IMAP, LogLevel::Debug, ("No remaining auth method"));
     m_currentAuthMethod = kCapabilityUndefined;
     return NS_ERROR_FAILURE;
   }
   MOZ_LOG(IMAP, LogLevel::Debug,
-          ("trying auth method 0x%" PRIx64, m_currentAuthMethod));
+          ("Trying auth method 0x%" PRIx64, m_currentAuthMethod));
   return NS_OK;
 }
 
 void nsImapProtocol::MarkAuthMethodAsFailed(
     eIMAPCapabilityFlags failedAuthMethod) {
   MOZ_LOG(IMAP, LogLevel::Debug,
-          ("marking auth method 0x%" PRIx64 " failed", failedAuthMethod));
+          ("Marking auth method 0x%" PRIx64 " failed", failedAuthMethod));
   m_failedAuthMethods |= failedAuthMethod;
 }
 
@@ -5555,6 +5596,20 @@ nsresult nsImapProtocol::SendDataParseIMAPandCheckForNewMail(
   }
 
   return rv;
+}
+
+nsresult nsImapProtocol::ClientID() {
+  IncrementCommandTagNumber();
+  nsCString command(GetServerCommandTag());
+  command += " CLIENTID UUID ";
+  command += m_clientId;
+  command += CRLF;
+  nsresult rv = SendDataParseIMAPandCheckForNewMail(command.get(), nullptr);
+  NS_ENSURE_SUCCESS(rv, rv);
+  if (!GetServerStateParser().LastCommandSuccessful()) {
+    return NS_ERROR_FAILURE;
+  }
+  return NS_OK;
 }
 
 nsresult nsImapProtocol::AuthLogin(const char *userName,
@@ -7966,6 +8021,7 @@ void nsImapProtocol::Check() {
 
 nsresult nsImapProtocol::GetMsgWindow(nsIMsgWindow **aMsgWindow) {
   nsresult rv;
+  *aMsgWindow = nullptr;
   nsCOMPtr<nsIMsgMailNewsUrl> mailnewsUrl =
       do_QueryInterface(m_runningUrl, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
@@ -8066,7 +8122,7 @@ nsImapProtocol::OnPromptCanceled() {
 }
 
 bool nsImapProtocol::TryToLogon() {
-  MOZ_LOG(IMAP, LogLevel::Debug, ("try to log in"));
+  MOZ_LOG(IMAP, LogLevel::Debug, ("Try to log in"));
   NS_ENSURE_TRUE(m_imapServerSink, false);
   bool loginSucceeded = false;
   bool skipLoop = false;
@@ -8116,6 +8172,45 @@ bool nsImapProtocol::TryToLogon() {
                  "ChooseAuthMethod still fails."));
         return false;
       }
+    }
+  }
+
+  // Check the uri host for localhost indicators to see if we
+  // should bypass the SSL check for clientid.
+  // Unfortunately we cannot call IsOriginPotentiallyTrustworthy
+  // here because it can only be called from the main thread.
+  bool isLocalhostConnection = false;
+  if (m_mockChannel) {
+    nsCOMPtr<nsIURI> uri;
+    m_mockChannel->GetURI(getter_AddRefs(uri));
+    if (uri) {
+      nsCString uriHost;
+      uri->GetHost(uriHost);
+      if (uriHost.Equals("127.0.0.1") || uriHost.Equals("::1") ||
+          uriHost.Equals("localhost")) {
+        isLocalhostConnection = true;
+      }
+    }
+  }
+
+  // Whether our connection can be considered 'secure' and whether
+  // we should allow the CLIENTID to be sent over this channel.
+  bool isSecureConnection =
+      (m_connectionType.EqualsLiteral("starttls") ||
+       m_connectionType.EqualsLiteral("ssl") || isLocalhostConnection);
+
+  // Before running the ClientID command we check for clientid
+  // support by checking the server capability flags for the
+  // flag kHasClientIDCapability.
+  // We check that the m_clientId string is not empty, and
+  // we ensure the connection can be considered secure.
+  if ((GetServerStateParser().GetCapabilityFlag() & kHasClientIDCapability) &&
+      !m_clientId.IsEmpty() && isSecureConnection) {
+    rv = ClientID();
+    if (NS_FAILED(rv)) {
+      MOZ_LOG(IMAP, LogLevel::Error,
+              ("TryToLogon: Could not issue CLIENTID command"));
+      skipLoop = true;
     }
   }
 
@@ -8463,8 +8558,8 @@ nsImapMockChannel::~nsImapMockChannel() {
   // if we're offline, we may not get to close the channel correctly.
   // we need to do this to send the url state change notification in
   // the case of mem and disk cache reads.
-  NS_WARNING_ASSERTION(NS_IsMainThread(),
-                       "should only access mock channel on ui thread");
+  MOZ_DIAGNOSTIC_ASSERT(NS_IsMainThread(),
+                        "should only access mock channel on ui thread");
   if (!mChannelClosed) Close();
 }
 
@@ -8559,6 +8654,14 @@ NS_IMETHODIMP nsImapMockChannel::SetLoadGroup(nsILoadGroup *aLoadGroup) {
 NS_IMETHODIMP nsImapMockChannel::GetLoadGroup(nsILoadGroup **aLoadGroup) {
   NS_IF_ADDREF(*aLoadGroup = m_loadGroup);
   return NS_OK;
+}
+
+NS_IMETHODIMP nsImapMockChannel::GetTRRMode(nsIRequest::TRRMode *aTRRMode) {
+  return GetTRRModeImpl(aTRRMode);
+}
+
+NS_IMETHODIMP nsImapMockChannel::SetTRRMode(nsIRequest::TRRMode aTRRMode) {
+  return SetTRRModeImpl(aTRRMode);
 }
 
 NS_IMETHODIMP nsImapMockChannel::GetLoadInfo(nsILoadInfo **aLoadInfo) {
@@ -9448,7 +9551,7 @@ NS_IMETHODIMP nsImapMockChannel::SetImapProtocol(nsIImapProtocol *aProtocol) {
 }
 
 NS_IMETHODIMP nsImapMockChannel::Cancel(nsresult status) {
-  NS_WARNING_ASSERTION(
+  MOZ_DIAGNOSTIC_ASSERT(
       NS_IsMainThread(),
       "nsImapMockChannel::Cancel should only be called from UI thread");
   m_cancelStatus = status;
@@ -9465,6 +9568,13 @@ NS_IMETHODIMP nsImapMockChannel::Cancel(nsresult status) {
   // Required for killing ImapProtocol thread
   if (imapProtocol) imapProtocol->TellThreadToDie(false);
 
+  return NS_OK;
+}
+
+NS_IMETHODIMP nsImapMockChannel::GetCanceled(bool *aCanceled) {
+  nsresult status = NS_ERROR_FAILURE;
+  GetStatus(&status);
+  *aCanceled = NS_FAILED(status);
   return NS_OK;
 }
 

@@ -27,7 +27,10 @@ async function withModalDialog(trigger, callback, whichButton) {
             await callback(win);
           }
 
-          let button = win.document.documentElement.getButton(whichButton);
+          let dialog = win.document.querySelector("dialog");
+          let button = dialog
+            ? dialog.getButton(whichButton)
+            : win.document.querySelector("wizard").getButton(whichButton);
           EventUtils.synthesizeMouseAtCenter(button, {}, win);
           resolve();
         },
@@ -105,7 +108,7 @@ add_task(async () => {
   await openCalendarTab();
 
   // Check the default calendar.
-  let calendars = manager.getCalendars({});
+  let calendars = manager.getCalendars();
   is(calendars.length, 1);
   is(calendarList.itemCount, 1);
   checkProperties(0, {
@@ -131,7 +134,7 @@ add_task(async () => {
     manager.registerCalendar(calendars[i]);
   }
 
-  is(manager.getCalendars({}).length, 4);
+  is(manager.getCalendars().length, 4);
   is(calendarList.itemCount, 4);
 
   for (let i = 1; i <= 3; i++) {
@@ -267,10 +270,7 @@ add_task(async () => {
   // Test reordering calendars.
 
   let dragSession = Cc["@mozilla.org/widget/dragservice;1"].getService(Ci.nsIDragService);
-  dragSession.startDragSession();
-
-  EventUtils.synthesizeDragStart(calendarList.itemChildren[3], null, null, 2, 2);
-  await new Promise(resolve => setTimeout(resolve));
+  dragSession.startDragSessionForTests(Ci.nsIDragService.DRAGDROP_ACTION_MOVE);
 
   let [result, dataTransfer] = EventUtils.synthesizeDragOver(
     calendarList.itemChildren[3],
@@ -298,7 +298,7 @@ add_task(async () => {
 
   // Delete a calendar by unregistering it.
   manager.unregisterCalendar(calendars[3]);
-  is(manager.getCalendars({}).length, 3);
+  is(manager.getCalendars().length, 3);
   is(calendarList.itemCount, 3);
   checkSortOrder(0, 1, 2);
 
@@ -307,7 +307,7 @@ add_task(async () => {
   await withMockPromptService(1, () => {
     EventUtils.synthesizeKey("VK_DELETE");
   });
-  is(manager.getCalendars({}).length, 3);
+  is(manager.getCalendars().length, 3);
   is(calendarList.itemCount, 3);
   checkSortOrder(0, 1, 2);
 
@@ -315,7 +315,7 @@ add_task(async () => {
   await withMockPromptService(0, () => {
     EventUtils.synthesizeKey("VK_DELETE");
   });
-  is(manager.getCalendars({}).length, 2);
+  is(manager.getCalendars().length, 2);
   is(calendarList.itemCount, 2);
   checkSortOrder(0, 2);
 
@@ -324,9 +324,11 @@ add_task(async () => {
     EventUtils.synthesizeMouseAtCenter(calendarList.itemChildren[1], {});
     await calendarListContextMenu(calendarList.itemChildren[1], "list-calendars-context-delete");
   });
-  is(manager.getCalendars({}).length, 1);
+  is(manager.getCalendars().length, 1);
   is(calendarList.itemCount, 1);
   checkSortOrder(0);
 
+  is(composite.defaultCalendar.id, calendars[0].id);
+  is(calendarList.selectedItem, calendarList.itemChildren[0]);
   await closeCalendarTab();
 });

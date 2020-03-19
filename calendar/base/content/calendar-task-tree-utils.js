@@ -8,12 +8,12 @@
  *          tasksToMail, tasksToEvents, toggleCompleted,
  */
 
-/* import-globals-from calendar-common-sets.js */
+/* import-globals-from calendar-command-controller.js */
 /* import-globals-from calendar-dnd-listener.js */
 
 /* globals gTabmail editToDoStatus editConfigState postponeTask */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 /**
  * Add registered calendars to the given menupopup. Removes all previous
@@ -39,7 +39,7 @@ function addCalendarNames(aEvent) {
       "contextChangeTaskCalendar(event);"
     );
     if (tasks.every(task => task.calendar == tasks[0].calendar) && selIndex > -1) {
-      calendarMenuPopup.childNodes[selIndex].setAttribute("checked", "true");
+      calendarMenuPopup.children[selIndex].setAttribute("checked", "true");
     }
   }
 }
@@ -287,7 +287,7 @@ function modifyTaskFromContext(aEvent, initialDate) {
  */
 function deleteToDoCommand(aEvent, aDoNotConfirm) {
   let tasks = getSelectedTasks(aEvent);
-  calendarViewController.deleteOccurrences(tasks.length, tasks, false, aDoNotConfirm);
+  calendarViewController.deleteOccurrences(tasks, false, aDoNotConfirm);
 }
 
 /**

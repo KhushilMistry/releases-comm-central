@@ -9,6 +9,14 @@ var { ExtensionTestUtils } = ChromeUtils.import(
 );
 ExtensionTestUtils.init(this);
 
+var imapd = ChromeUtils.import("resource://testing-common/mailnews/Imapd.jsm");
+var { nsMailServer } = ChromeUtils.import(
+  "resource://testing-common/mailnews/Maild.jsm"
+);
+var { PromiseTestUtils } = ChromeUtils.import(
+  "resource://testing-common/mailnews/PromiseTestUtils.jsm"
+);
+
 add_task(async function test_accounts() {
   let extension = ExtensionTestUtils.loadExtension({
     async background() {
@@ -89,7 +97,7 @@ add_task(async function test_accounts() {
       assertDeepEqual(
         {
           id: account2Id,
-          name: "Mail for username@hostname",
+          name: "Mail for xpcshell@localhost",
           type: "imap",
           folders: [
             {
@@ -117,19 +125,21 @@ add_task(async function test_accounts() {
             accountId: account1Id,
             name: "Trash",
             path: "/Trash",
+            subFolders: [
+              {
+                accountId: account1Id,
+                name: "foo 'bar'(!)",
+                path: "/Trash/foo 'bar'(!)",
+              },
+              {
+                accountId: account1Id,
+                name: "Ϟ",
+                // This character is not supported on Windows, so it gets hashed,
+                // by NS_MsgHashIfNecessary.
+                path: platformInfo.os == "win" ? "/Trash/b52bc214" : "/Trash/Ϟ",
+              },
+            ],
             type: "trash",
-          },
-          {
-            accountId: account1Id,
-            name: "foo bar",
-            path: "/Trash/foo bar",
-          },
-          {
-            accountId: account1Id,
-            name: "Ϟ",
-            // This character is not supported on Windows, so it gets hashed,
-            // by NS_MsgHashIfNecessary.
-            path: platformInfo.os == "win" ? "/Trash/b52bc214" : "/Trash/Ϟ",
           },
           {
             accountId: account1Id,
@@ -141,12 +151,61 @@ add_task(async function test_accounts() {
         result5.folders
       );
 
+      // Check we can access the folders through folderPathToURI.
+      for (let folder of result5.folders) {
+        await browser.messages.list(folder);
+      }
+
+      let result6 = await browser.accounts.get(account2Id);
+      assertDeepEqual(
+        [
+          {
+            accountId: account2Id,
+            name: "Inbox",
+            path: "/INBOX",
+            subFolders: [
+              {
+                accountId: account2Id,
+                name: "foo 'bar'(!)",
+                path: "/INBOX/foo 'bar'(!)",
+              },
+              {
+                accountId: account2Id,
+                name: "Ϟ",
+                path: "/INBOX/&A94-",
+              },
+            ],
+            type: "inbox",
+          },
+          {
+            // The trash folder magically appears at this point.
+            // It wasn't here before.
+            accountId: "account2",
+            name: "Trash",
+            path: "/Trash",
+            type: "trash",
+          },
+        ],
+        result6.folders
+      );
+
+      // Check we can access the folders through folderPathToURI.
+      for (let folder of result6.folders) {
+        await browser.messages.list(folder);
+      }
+
       browser.test.notifyPass("finished");
     },
     manifest: {
-      permissions: ["accountsRead"],
+      permissions: ["accountsRead", "messagesRead"],
     },
   });
+
+  let daemon = new imapd.imapDaemon();
+  let server = new nsMailServer(function createHandler(d) {
+    return new imapd.IMAP_RFC3501_handler(d);
+  }, daemon);
+  server.start();
 
   let account1 = createAccount();
 
@@ -155,17 +214,33 @@ add_task(async function test_accounts() {
 
   await extension.awaitMessage("create account 2");
   let account2 = MailServices.accounts.createAccount();
-  account2.incomingServer = MailServices.accounts.createIncomingServer(
-    "username",
-    "hostname",
+  addIdentity(account2);
+  let iServer = MailServices.accounts.createIncomingServer(
+    "user",
+    "localhost",
     "imap"
   );
+  iServer.port = server.port;
+  iServer.username = "user";
+  iServer.password = "password";
+  account2.incomingServer = iServer;
+
   extension.sendMessage(account2.key);
 
   await extension.awaitMessage("create folders");
   let inbox1 = [...account1.incomingServer.rootFolder.subFolders][0];
-  inbox1.createSubfolder("foo bar", null); // Test our code can handle spaces.
+  // Test our code can handle characters that might be escaped.
+  inbox1.createSubfolder("foo 'bar'(!)", null);
   inbox1.createSubfolder("Ϟ", null); // Test our code can handle unicode.
+
+  let inbox2 = [...account2.incomingServer.rootFolder.subFolders][0];
+  inbox2.QueryInterface(Ci.nsIMsgImapMailFolder).hierarchyDelimiter = "/";
+  // Test our code can handle characters that might be escaped.
+  inbox2.createSubfolder("foo 'bar'(!)", null);
+  await PromiseTestUtils.promiseFolderAdded("foo 'bar'(!)");
+  inbox2.createSubfolder("Ϟ", null); // Test our code can handle unicode.
+  await PromiseTestUtils.promiseFolderAdded("Ϟ");
+
   extension.sendMessage();
 
   await extension.awaitFinish("finished");

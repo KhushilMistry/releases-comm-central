@@ -9,7 +9,7 @@
 
 /* global MozElements */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { XPCOMUtils } = ChromeUtils.import("resource://gre/modules/XPCOMUtils.jsm");
 
@@ -75,8 +75,10 @@ function initCustomizePage() {
   checkRequired();
 
   let suppressAlarmsRow = document.getElementById("customize-suppressAlarms-row");
-  suppressAlarmsRow.hidden =
-    gCalendar && gCalendar.getProperty("capabilities.alarms.popup.supported") === false;
+  suppressAlarmsRow.toggleAttribute(
+    "hidden",
+    gCalendar && gCalendar.getProperty("capabilities.alarms.popup.supported") === false
+  );
   document.getElementById("calendar-color").value = "#A8C2E1";
 }
 
@@ -122,9 +124,12 @@ function onSelectProvider(type) {
     // keep tempCal undefined if the calendar can not be created
   }
 
-  document.getElementById("calendar-username-row").hidden = !(
-    tempCal && tempCal.getProperty("capabilities.username.supported") === true
-  );
+  document
+    .getElementById("calendar-username-row")
+    .toggleAttribute(
+      "hidden",
+      !(tempCal && tempCal.getProperty("capabilities.username.supported") === true)
+    );
 
   if (tempCal && tempCal.getProperty("cache.always")) {
     cache.oldValue = cache.checked;
@@ -145,7 +150,7 @@ function onSelectProvider(type) {
  */
 function checkRequired() {
   let canAdvance = true;
-  let curPage = document.getElementById("calendar-wizard").currentPage;
+  let curPage = document.querySelector("wizard").currentPage;
   if (curPage) {
     let eList = curPage.getElementsByAttribute("required", "required");
     for (let i = 0; i < eList.length && canAdvance; ++i) {
@@ -164,7 +169,7 @@ function checkRequired() {
     } else {
       gNotification.notificationbox.removeAllNotifications();
     }
-    document.getElementById("calendar-wizard").canAdvance = canAdvance;
+    document.querySelector("wizard").canAdvance = canAdvance;
   }
 }
 
@@ -279,7 +284,7 @@ function parseUri(aUri) {
   }
 
   let calManager = cal.getCalendarManager();
-  let cals = calManager.getCalendars({});
+  let cals = calManager.getCalendars();
   let type = document.getElementById("calendar-type").selectedItem.value;
   if (type != "local" && cals.some(calendar => calendar.uri.spec == uri.spec)) {
     // If the calendar is not local, we check if there is already a calendar
@@ -296,5 +301,5 @@ function parseUri(aUri) {
  * undo.
  */
 function setCanRewindFalse() {
-  document.getElementById("calendar-wizard").canRewind = false;
+  document.querySelector("wizard").canRewind = false;
 }

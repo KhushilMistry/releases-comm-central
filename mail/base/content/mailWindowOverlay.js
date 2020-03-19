@@ -19,7 +19,7 @@
 
 var { FeedUtils } = ChromeUtils.import("resource:///modules/FeedUtils.jsm");
 var { GlodaSyntheticView } = ChromeUtils.import(
-  "resource:///modules/gloda/dbview.js"
+  "resource:///modules/gloda/GlodaSyntheticView.jsm"
 );
 var { MailConsts } = ChromeUtils.import("resource:///modules/MailConsts.jsm");
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
@@ -41,11 +41,8 @@ var { MessageArchiver } = ChromeUtils.import(
   "resource:///modules/MessageArchiver.jsm"
 );
 
-var { BrowserToolboxProcess } = ChromeUtils.import(
-  "resource://devtools/client/framework/ToolboxProcess.jsm"
-);
-var { ScratchpadManager } = ChromeUtils.import(
-  "resource://devtools/client/scratchpad/scratchpad-manager.jsm"
+var { BrowserToolboxLauncher } = ChromeUtils.import(
+  "resource://devtools/client/framework/browser-toolbox/Launcher.jsm"
 );
 var { ExtensionParent } = ChromeUtils.import(
   "resource://gre/modules/ExtensionParent.jsm"
@@ -153,8 +150,8 @@ function menu_new_init() {
 }
 
 function goUpdateMailMenuItems(commandset) {
-  for (var i = 0; i < commandset.childNodes.length; i++) {
-    var commandID = commandset.childNodes[i].getAttribute("id");
+  for (var i = 0; i < commandset.children.length; i++) {
+    var commandID = commandset.children[i].getAttribute("id");
     if (commandID) {
       goUpdateCommand(commandID);
     }
@@ -401,7 +398,7 @@ function InitViewLayoutStyleMenu(event, appmenu) {
     ? event.target.querySelector(".panel-subview-body")
     : event.target;
 
-  let layoutStyleMenuitem = parent.childNodes[paneConfig];
+  let layoutStyleMenuitem = parent.children[paneConfig];
   if (layoutStyleMenuitem) {
     layoutStyleMenuitem.setAttribute("checked", "true");
   }
@@ -739,7 +736,7 @@ function InitMessageMenu() {
   let index = FeedMessageHandler.onOpenPref;
   document
     .getElementById("menu_openFeedMessage")
-    .childNodes[index].setAttribute("checked", true);
+    .children[index].setAttribute("checked", true);
 
   let openRssMenu = document.getElementById("openFeedMessage");
   openRssMenu.hidden = !isFeed;
@@ -816,9 +813,9 @@ function InitAppMessageMenu() {
     .getElementById("appMenu-messageOpenFeedView")
     .querySelector(".panel-subview-body");
 
-  openFeedView.childNodes.forEach(node => node.removeAttribute("checked"));
+  openFeedView.children.forEach(node => node.removeAttribute("checked"));
   let index = FeedMessageHandler.onOpenPref;
-  openFeedView.childNodes[index].setAttribute("checked", true);
+  openFeedView.children[index].setAttribute("checked", true);
 
   let openRssMenu = document.getElementById("appmenu_openFeedMessage");
   openRssMenu.hidden = !isFeed;
@@ -1158,7 +1155,7 @@ function RemoveAllMessageTags() {
   }
 
   var messages = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
-  let tagArray = MailServices.tags.getAllTags({});
+  let tagArray = MailServices.tags.getAllTags();
 
   var allKeys = "";
   for (var j = 0; j < tagArray.length; ++j) {
@@ -1206,7 +1203,7 @@ function ToggleMessageTagKey(keyNumber) {
     return;
   }
 
-  let tagArray = MailServices.tags.getAllTags({});
+  let tagArray = MailServices.tags.getAllTags();
   if (keyNumber > tagArray.length) {
     return;
   }
@@ -1267,7 +1264,7 @@ function ToggleMessageTag(key, addKey) {
 function AddTag() {
   var args = { result: "", okCallback: AddTagCallback };
   window.openDialog(
-    "chrome://messenger/content/newTagDialog.xul",
+    "chrome://messenger/content/newTagDialog.xhtml",
     "",
     "chrome,titlebar,modal",
     args
@@ -1315,13 +1312,15 @@ function SetMessageTagLabel(menuitem, index, name) {
  * @param {string} [classes]        Classes to set on the menu items.
  */
 function InitMessageTags(parent, elementName = "menuitem", classes) {
-  const tagArray = MailServices.tags.getAllTags({});
+  const tagArray = MailServices.tags.getAllTags();
   const elementNameUpperCase = elementName.toUpperCase();
 
   // Remove any existing non-static items (clear tags list before rebuilding it).
   // There is a separator element above the dynamically added tag elements, so
   // remove dynamically added elements below the separator.
-  while (parent.lastChild.tagName.toUpperCase() == elementNameUpperCase) {
+  while (
+    parent.lastElementChild.tagName.toUpperCase() == elementNameUpperCase
+  ) {
     parent.lastChild.remove();
   }
 
@@ -1329,7 +1328,11 @@ function InitMessageTags(parent, elementName = "menuitem", classes) {
   const tagRemoveLabel = document
     .getElementById("bundle_messenger")
     .getString("mailnews.tags.remove");
-  SetMessageTagLabel(parent.lastChild.previousSibling, 0, tagRemoveLabel);
+  SetMessageTagLabel(
+    parent.lastElementChild.previousElementSibling,
+    0,
+    tagRemoveLabel
+  );
 
   // Rebuild the list.
   const msgHdr = gFolderDisplay.selectedMessage;
@@ -1459,15 +1462,15 @@ function populateHistoryMenu(menuPopup, isBackMenu) {
   while (menuPopup.hasChildNodes()) {
     menuPopup.lastChild.remove();
   }
-  var curPos = {};
-  var numEntries = {};
-  var historyEntries = {};
-  messenger.getNavigateHistory(curPos, numEntries, historyEntries);
-  curPos.value = curPos.value * 2;
+  let historyArray = messenger.getNavigateHistory();
+  let curPos = messenger.navigatePos * 2;
   navDebug(
-    "curPos = " + curPos.value + " numEntries = " + numEntries.value + "\n"
+    "curPos = " +
+      curPos.value +
+      " historyArray.length = " +
+      historyArray.length +
+      "\n"
   );
-  var historyArray = historyEntries.value;
   var folder;
   var newMenuItem;
   if (gFolderDisplay.selectedMessage) {
@@ -1488,11 +1491,24 @@ function populateHistoryMenu(menuPopup, isBackMenu) {
   ) {
     navDebug("history[" + i + "] = " + historyArray[i] + "\n");
     navDebug("history[" + i + "] = " + historyArray[i + 1] + "\n");
-    folder = MailUtils.getOrCreateFolder(historyArray[i + 1]);
+    folder = MailServices.folderLookup.getFolderForURL(historyArray[i + 1]);
+    if (!folder) {
+      // Where did the folder go?
+      continue;
+    }
     navDebug(
-      "folder URI = " + folder.URI + "pretty name " + folder.prettyName + "\n"
+      "folder URI = " + folder.URI + " pretty name " + folder.prettyName + "\n"
     );
+
     var menuText = "";
+    var msgHdr = messenger.msgHdrFromURI(historyArray[i]);
+    var msgSubject = msgHdr.mime2DecodedSubject;
+    var msgAuthor = msgHdr.mime2DecodedAuthor;
+
+    if (!msgAuthor && !msgSubject) {
+      // Avoid empty entries in the menu. The message was most likely (re)moved.
+      continue;
+    }
 
     // If the message was not being displayed via the current folder, prepend
     //  the folder name.  We do not need to check underlying folders for
@@ -1502,20 +1518,18 @@ function populateHistoryMenu(menuPopup, isBackMenu) {
       menuText = folder.prettyName + " - ";
     }
 
-    var msgHdr = messenger.msgHdrFromURI(historyArray[i]);
-
     var subject = "";
     if (msgHdr.flags & Ci.nsMsgMessageFlags.HasRe) {
       subject = "Re: ";
     }
-    if (msgHdr.mime2DecodedSubject) {
-      subject += msgHdr.mime2DecodedSubject;
+    if (msgSubject) {
+      subject += msgSubject;
     }
     if (subject) {
       menuText += subject + " - ";
     }
 
-    menuText += msgHdr.mime2DecodedAuthor;
+    menuText += msgAuthor;
     newMenuItem = document.createXULElement("menuitem");
     newMenuItem.setAttribute("label", menuText);
     relPos += isBackMenu ? -1 : 1;
@@ -1889,7 +1903,6 @@ function MsgGetMessagesForAllServers(defaultServer) {
       // to download from.
       pop3Server.downloadMailFromServers(
         pop3DownloadServersArray[i],
-        pop3DownloadServersArray[i].length,
         msgWindow,
         localFoldersToDownloadTo[i],
         null
@@ -2127,72 +2140,6 @@ function MsgCreateFilter() {
   }
 }
 
-function MsgNewFolder(callBackFunctionName) {
-  var preselectedFolder = GetFirstSelectedMsgFolder();
-  var dualUseFolders = true;
-  var server = null;
-  var destinationFolder = null;
-
-  if (preselectedFolder) {
-    try {
-      server = preselectedFolder.server;
-      if (server) {
-        destinationFolder = getDestinationFolder(preselectedFolder, server);
-
-        var imapServer = server.QueryInterface(Ci.nsIImapIncomingServer);
-        if (imapServer) {
-          dualUseFolders = imapServer.dualUseFolders;
-        }
-      }
-    } catch (e) {
-      dump("Exception: dualUseFolders = true\n");
-    }
-  }
-  window.openDialog(
-    "chrome://messenger/content/newFolderDialog.xul",
-    "",
-    "chrome,titlebar,modal",
-    {
-      folder: destinationFolder,
-      dualUseFolders,
-      okCallback: callBackFunctionName,
-    }
-  );
-}
-
-function getDestinationFolder(preselectedFolder, server) {
-  var destinationFolder = null;
-
-  if (!preselectedFolder.canCreateSubfolders) {
-    destinationFolder = server.rootMsgFolder;
-
-    var verifyCreateSubfolders = null;
-    if (destinationFolder) {
-      verifyCreateSubfolders = destinationFolder.canCreateSubfolders;
-    }
-
-    // In case the server cannot have subfolders, get default account and set
-    // its incoming server as parent folder.
-    if (!verifyCreateSubfolders) {
-      let defaultFolder = GetDefaultAccountRootFolder();
-      let checkCreateSubfolders = null;
-      if (defaultFolder) {
-        checkCreateSubfolders = defaultFolder.canCreateSubfolders;
-      }
-
-      if (checkCreateSubfolders) {
-        destinationFolder = defaultFolder;
-      }
-    }
-  } else {
-    // XXX TODO: why do we select the preselectedFolder
-    // even if it can't create subfolders?
-    destinationFolder = preselectedFolder;
-  }
-
-  return destinationFolder;
-}
-
 /** Open subscribe window. */
 function MsgSubscribe(folder) {
   var preselectedFolder = folder || GetFirstSelectedMsgFolder();
@@ -2264,7 +2211,7 @@ function MsgSaveAsTemplate() {
 function MsgOpenNewWindowForFolder(folderURI, msgKeyToSelect) {
   if (folderURI) {
     window.openDialog(
-      "chrome://messenger/content/",
+      "chrome://messenger/content/messenger.xhtml",
       "_blank",
       "chrome,all,dialog=no",
       folderURI,
@@ -2279,7 +2226,7 @@ function MsgOpenNewWindowForFolder(folderURI, msgKeyToSelect) {
   let selectedFolders = gFolderTreeView.getSelectedFolders();
   for (let i = 0; i < selectedFolders.length; i++) {
     window.openDialog(
-      "chrome://messenger/content/",
+      "chrome://messenger/content/messenger.xhtml",
       "_blank",
       "chrome,all,dialog=no",
       selectedFolders[i].URI,
@@ -2370,7 +2317,7 @@ function MsgOpenFromFile() {
       .finalize();
 
     window.openDialog(
-      "chrome://messenger/content/messageWindow.xul",
+      "chrome://messenger/content/messageWindow.xhtml",
       "_blank",
       "all,chrome,dialog=no,status,toolbar",
       uri
@@ -2390,7 +2337,7 @@ function MsgOpenNewWindowForMessage(aMsgHdr) {
     // we also need to tell the window about our current view so that it can
     //  clone it.  This enables advancing through the messages, etc.
     window.openDialog(
-      "chrome://messenger/content/messageWindow.xul",
+      "chrome://messenger/content/messageWindow.xhtml",
       "_blank",
       "all,chrome,dialog=no,status,toolbar",
       aMsgHdr,
@@ -2500,7 +2447,7 @@ function MsgMarkAsFlagged() {
 
 function MsgMarkReadByDate() {
   window.openDialog(
-    "chrome://messenger/content/markByDate.xul",
+    "chrome://messenger/content/markByDate.xhtml",
     "",
     "chrome,modal,titlebar,centerscreen",
     gFolderDisplay.displayedFolder
@@ -2586,7 +2533,7 @@ function MsgFilters(emailAddress, folder, fieldName) {
     }
 
     window.openDialog(
-      "chrome://messenger/content/FilterEditor.xul",
+      "chrome://messenger/content/FilterEditor.xhtml",
       "",
       "chrome, modal, resizable,centerscreen,dialog=yes",
       args
@@ -2749,7 +2696,7 @@ function PrintEnginePrintInternal(doPrintPreview, msgType) {
   }
 
   window.openDialog(
-    "chrome://messenger/content/msgPrintEngine.xul",
+    "chrome://messenger/content/msgPrintEngine.xhtml",
     "",
     "chrome,dialog=no,all,centerscreen",
     messageList.length,
@@ -2823,7 +2770,7 @@ function IsGetNextNMessagesEnabled() {
 
 function MsgSynchronizeOffline() {
   window.openDialog(
-    "chrome://messenger/content/msgSynchronize.xul",
+    "chrome://messenger/content/msgSynchronize.xhtml",
     "",
     "centerscreen,chrome,modal,titlebar,resizable=yes",
     { msgWindow }
@@ -3037,7 +2984,6 @@ function GetMessagesForAllAuthenticatedAccounts() {
       // any ol' pop3Server will do - the serversArray specifies which servers to download from
       pop3Server.downloadMailFromServers(
         pop3DownloadServersArray[i],
-        pop3DownloadServersArray[i].length,
         msgWindow,
         localFoldersToDownloadTo[i],
         null
@@ -3293,7 +3239,7 @@ var gMessageNotificationBar = {
         aCanOverride ? buttons : []
       );
 
-      let button = notification.spacer.nextSibling;
+      let button = notification.spacer.nextElementSibling;
       button.classList.add("button-menu-list");
     }
   },
@@ -3334,7 +3280,7 @@ var gMessageNotificationBar = {
         buttons
       );
 
-      let button = notification.spacer.nextSibling;
+      let button = notification.spacer.nextElementSibling;
       button.classList.add("button-menu-list");
     }
   },
@@ -3481,10 +3427,10 @@ function onRemoteContentOptionsShowing(aEvent) {
   let messengerBundle = document.getElementById("bundle_messenger");
 
   // Out with the old...
-  let childNodes = aEvent.target.childNodes;
-  for (let i = childNodes.length - 1; i >= 0; i--) {
-    if (childNodes[i].getAttribute("class") == "allow-remote-uri") {
-      childNodes[i].remove();
+  let children = aEvent.target.children;
+  for (let i = children.length - 1; i >= 0; i--) {
+    if (children[i].getAttribute("class") == "allow-remote-uri") {
+      children[i].remove();
     }
   }
 
@@ -3901,7 +3847,7 @@ function QuickSearchFocus() {
 function MsgSearchMessages(aFolder) {
   // We always open a new search dialog for each search command
   window.openDialog(
-    "chrome://messenger/content/SearchDialog.xul",
+    "chrome://messenger/content/SearchDialog.xhtml",
     "_blank",
     "chrome,resizable,status,centerscreen,dialog=no",
     { folder: aFolder || gFolderDisplay.displayedFolder }
@@ -3928,7 +3874,7 @@ function MsgJunkMailInfo(aCheckFirstUse) {
     desiredWindow.focus();
   } else {
     window.openDialog(
-      "chrome://messenger/content/junkMailInfo.xul",
+      "chrome://messenger/content/junkMailInfo.xhtml",
       "mailnews:junkmailinfo",
       "centerscreen,resizable=no,titlebar,chrome,modal",
       null
@@ -3941,7 +3887,7 @@ function MsgSearchAddresses() {
   OpenOrFocusWindow(
     args,
     "mailnews:absearch",
-    "chrome://messenger/content/ABSearchDialog.xul"
+    "chrome://messenger/content/ABSearchDialog.xhtml"
   );
 }
 
@@ -3949,7 +3895,7 @@ function MsgFilterList(args) {
   OpenOrFocusWindow(
     args,
     "mailnews:filterlist",
-    "chrome://messenger/content/FilterListDialog.xul"
+    "chrome://messenger/content/FilterListDialog.xhtml"
   );
 }
 
@@ -4027,25 +3973,6 @@ async function initAddonPrefsMenu(
         });
       }
     }
-    if (
-      ExtensionSupport.loadedLegacyExtensions.has(addon.id) ||
-      ExtensionSupport.loadedBootstrapExtensions.has(addon.id)
-    ) {
-      let webextension = ExtensionParent.GlobalManager.getExtension(addon.id);
-      let legacy = webextension.manifest.legacy;
-      if (
-        typeof legacy == "boolean" ||
-        !legacy.options ||
-        !legacy.options.page
-      ) {
-        continue;
-      }
-      addonsFound.push({
-        addon,
-        optionsURL: legacy.options.page,
-        optionsOpenInTab: legacy.options.open_in_tab,
-      });
-    }
   }
 
   // Populate the menu with addon names and icons.
@@ -4085,7 +4012,7 @@ async function initAddonPrefsMenu(
 
 function openNewCardDialog() {
   window.openDialog(
-    "chrome://messenger/content/addressbook/abNewCardDialog.xul",
+    "chrome://messenger/content/addressbook/abNewCardDialog.xhtml",
     "",
     "chrome,modal,resizable=no,centerscreen"
   );

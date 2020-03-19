@@ -5,7 +5,9 @@
 loader: taskgraph.loader.transform:loader
 
 kind-dependencies:
+    - fetch
     - toolchain
+    - thirdparty
 
 transforms:
     - taskgraph.transforms.build:transforms
@@ -37,6 +39,7 @@ job-defaults:
             - comm/other-licenses
             - comm/taskcluster
             - comm/testing
+            - comm/third_party
             - comm/.gecko_rev.yml
             - comm/.taskcluster.yml
             - comm/moz.build
@@ -62,5 +65,5 @@ job-defaults:
         accepted-mar-channel-ids:
             by-release-type:
                 release: thunderbird-comm-release
-                beta: thunderbird-comm-beta
+                beta: thunderbird-comm-beta,thunderbird-comm-release
                 default: thunderbird-comm-central

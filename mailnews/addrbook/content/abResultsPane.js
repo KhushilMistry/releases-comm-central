@@ -45,7 +45,9 @@ function SetAbView(aURI) {
   // If we don't have a URI, just clear the view and leave everything else
   // alone.
   if (!aURI) {
-    gAbView.clearView();
+    if (gAbView) {
+      gAbView.clearView();
+    }
     return;
   }
 
@@ -74,6 +76,17 @@ function SetAbView(aURI) {
   }
 
   var directory = GetDirectoryFromURI(aURI);
+  if (!directory && aURI.startsWith("moz-abdirectory://?")) {
+    // This is an obsolete reference to the root directory, which isn't a thing
+    // any more. Fortunately all we need is a way to get the URI to gAbView, so
+    // we can pretend we have a real directory.
+    directory = {
+      QueryInterface: ChromeUtils.generateQI([Ci.nsIAbDirectory]),
+      get URI() {
+        return aURI;
+      },
+    };
+  }
 
   if (!gAbView) {
     gAbView = Cc["@mozilla.org/addressbook/abview;1"].createInstance(
@@ -89,6 +102,7 @@ function SetAbView(aURI) {
   );
 
   gAbResultsTree.view = gAbView.QueryInterface(Ci.nsITreeView);
+  window.dispatchEvent(new CustomEvent("viewchange"));
 
   UpdateSortIndicators(actualSortColumn, sortDirection);
 
@@ -217,7 +231,7 @@ function GetSelectedAbCards() {
   // then use the ab view from sidebar (gCurFrame is from sidebarOverlay.js)
   if (document.getElementById("sidebar-box")) {
     const abPanelUrl =
-      "chrome://messenger/content/addressbook/addressbook-panel.xul";
+      "chrome://messenger/content/addressbook/addressbook-panel.xhtml";
     if (
       gCurFrame &&
       gCurFrame.getAttribute("src") == abPanelUrl &&
@@ -368,12 +382,12 @@ function UpdateSortIndicators(colID, sortDirection) {
 
   // remove the sort indicator from all the columns
   // except the one we are sorted by
-  var currCol = gAbResultsTree.firstChild.firstChild;
+  var currCol = gAbResultsTree.firstElementChild.firstElementChild;
   while (currCol) {
     if (currCol != sortedColumn && currCol.localName == "treecol") {
       currCol.removeAttribute("sortDirection");
     }
-    currCol = currCol.nextSibling;
+    currCol = currCol.nextElementSibling;
   }
 }
 

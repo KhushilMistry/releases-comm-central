@@ -66,13 +66,9 @@ function test()
   db.executeSimpleSQL("DELETE FROM moz_downloads");
 
   // Make a file name for the downloads
-  var file = Cc["@mozilla.org/file/directory_service;1"]
-               .getService(Ci.nsIProperties)
-               .get("TmpD", Ci.nsIFile);
+  var file = Services.dirsvc.get("TmpD", Ci.nsIFile);
   file.append("selectAll");
-  var filePath = Cc["@mozilla.org/network/io-service;1"]
-                   .getService(Ci.nsIIOService)
-                   .newFileURI(file).spec;
+  var filePath = Services.io.newFileURI(file).spec;
 
   var stmt = db.createStatement(
     "INSERT INTO moz_downloads (target, source, state) " +
@@ -117,7 +113,7 @@ function test()
       is(downloadView.rowCount, sites.length, "All downloads displayed");
 
       // Select all downloads
-      var isMac = navigator.platform.search("Mac") == 0;
+      var isMac = AppConstants.platform == "macosx";
       synthesizeKey("a", { metaKey: isMac, ctrlKey: !isMac }, win);
       is(downloadView.selection.count, sites.length, "All downloads selected");
 

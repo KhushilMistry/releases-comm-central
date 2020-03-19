@@ -32,7 +32,7 @@ var gViewsPane = {
    * Initialize the views pref pane. Sets up dialog controls to match the
    * values set in prefs.
    */
-  init: function() {
+  init() {
     this.updateViewEndMenu(Preferences.get("calendar.view.daystarthour").value);
     this.updateViewStartMenu(Preferences.get("calendar.view.dayendhour").value);
     this.updateViewWorkDayCheckboxes(Preferences.get("calendar.week.start").value);
@@ -43,8 +43,8 @@ var gViewsPane = {
    * Initialize the strings for the  "day starts at" and "day ends at"
    * menulists. This is needed to respect locales that use AM/PM.
    */
-  initializeViewStartEndMenus: function() {
-    const { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+  initializeViewStartEndMenus() {
+    const { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
     let calTime = cal.createDateTime();
     calTime.minute = 0;
@@ -72,8 +72,8 @@ var gViewsPane = {
    *
    * @param aStartValue       The value selected for view start.
    */
-  updateViewEndMenu: function(aStartValue) {
-    let endMenuKids = document.getElementById("dayendhourpopup").childNodes;
+  updateViewEndMenu(aStartValue) {
+    let endMenuKids = document.getElementById("dayendhourpopup").children;
     for (let i = 0; i < endMenuKids.length; i++) {
       if (Number(endMenuKids[i].value) <= Number(aStartValue)) {
         endMenuKids[i].setAttribute("hidden", true);
@@ -89,8 +89,8 @@ var gViewsPane = {
    *
    * @param aEndValue         The value selected for view end.
    */
-  updateViewStartMenu: function(aEndValue) {
-    let startMenuKids = document.getElementById("daystarthourpopup").childNodes;
+  updateViewStartMenu(aEndValue) {
+    let startMenuKids = document.getElementById("daystarthourpopup").children;
     for (let i = 0; i < startMenuKids.length; i++) {
       if (Number(startMenuKids[i].value) >= Number(aEndValue)) {
         startMenuKids[i].setAttribute("hidden", true);
@@ -106,7 +106,7 @@ var gViewsPane = {
    * @Param weekStart         The (0-based) index of the weekday the week
    *                            should start at.
    */
-  updateViewWorkDayCheckboxes: function(weekStart) {
+  updateViewWorkDayCheckboxes(weekStart) {
     weekStart = Number(weekStart);
     for (let i = weekStart; i < weekStart + 7; i++) {
       let checkbox = document.getElementById("dayoff" + (i % 7));

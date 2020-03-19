@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var { cal } = ChromeUtils.import("resource://calendar/modules/calUtils.jsm");
+var { cal } = ChromeUtils.import("resource:///modules/calendar/calUtils.jsm");
 
 function run_test() {
   // Test attendee duplicate handling for bug 1204255
@@ -122,7 +122,7 @@ function test_fromICS() {
     { id: "mailto:user7@example.net", partstat: "DECLINED", cname: "PREFIXED" },
   ];
   let event = createEventFromIcalString(ics);
-  let attendees = event.getAttendees({});
+  let attendees = event.getAttendees();
 
   // check whether all attendees get returned as expected
   equal(attendees.length, expected.length);

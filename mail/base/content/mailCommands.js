@@ -120,20 +120,18 @@ function ComposeMessage(type, format, folder, messageArray) {
   // Check if the draft is already open in another window. If it is, just focus the window.
   if (type == msgComposeType.Draft && messageArray.length == 1) {
     // We'll search this uri in the opened windows.
-    let wenum = Services.wm.getEnumerator("");
-    while (wenum.hasMoreElements()) {
-      let w = wenum.getNext();
+    for (let win of Services.wm.getEnumerator("")) {
       // Check if it is a compose window.
       if (
-        w.document.defaultView.gMsgCompose &&
-        w.document.defaultView.gMsgCompose.compFields.draftId
+        win.document.defaultView.gMsgCompose &&
+        win.document.defaultView.gMsgCompose.compFields.draftId
       ) {
         let wKey = GetMsgKeyFromURI(
-          w.document.defaultView.gMsgCompose.compFields.draftId
+          win.document.defaultView.gMsgCompose.compFields.draftId
         );
         if (wKey == msgKey) {
           // Found ! just focus it...
-          w.focus();
+          win.focus();
           // ...and nothing to do anymore.
           return;
         }
@@ -266,6 +264,7 @@ function ComposeMessage(type, format, folder, messageArray) {
           if (ignoreQuote) {
             type += msgComposeType.ReplyIgnoreQuote;
           }
+
           MailServices.compose.OpenComposeWindow(
             null,
             hdr,
@@ -312,7 +311,7 @@ function NewMessageToSelectedAddresses(type, format, identity) {
 
 function Subscribe(preselectedMsgFolder) {
   window.openDialog(
-    "chrome://messenger/content/subscribe.xul",
+    "chrome://messenger/content/subscribe.xhtml",
     "subscribe",
     "chrome,modal,titlebar,resizable=yes",
     {
@@ -381,7 +380,7 @@ function SaveAsFile(uris) {
       }
       filenames.push(name);
     }
-    messenger.saveMessages(uris.length, filenames, uris);
+    messenger.saveMessages(filenames, uris);
   }
 }
 
@@ -491,7 +490,7 @@ function ViewPageSource(messages) {
       // display the message source, not the processed HTML.
       url = url.replace(/type=application\/x-message-display&/, "");
       window.openDialog(
-        "chrome://messenger/content/viewSource.xul",
+        "chrome://messenger/content/viewSource.xhtml",
         "_blank",
         "all,dialog=no",
         { URL: url, browser, outerWindowID: browser.outerWindowID }

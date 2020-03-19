@@ -6,7 +6,6 @@
 #include "msgCore.h"  // precompiled header...
 #include "nsCOMPtr.h"
 #include "nsIMsgFolder.h"
-#include "nsAutoPtr.h"
 #include "nsIFile.h"
 #include "nsNetUtil.h"
 #include "nsIMsgHdr.h"
@@ -420,9 +419,9 @@ nsresult nsFolderCompactState::StartCompacting() {
     nsCOMPtr<nsIURI> notUsed;
     ShowCompactingStatusMsg();
     NS_ADDREF_THIS();
-    rv = m_messageService->CopyMessages(m_size, m_keyArray->m_keys.Elements(),
-                                        m_folder, this, false, nullptr,
-                                        m_window, getter_AddRefs(notUsed));
+    rv = m_messageService->CopyMessages(m_keyArray->m_keys, m_folder, this,
+                                        false, nullptr, m_window,
+                                        getter_AddRefs(notUsed));
   } else {  // no messages to copy with
     FinishCompact();
   }

@@ -8,11 +8,11 @@
 
 /* :::::::: Constants and Helpers ::::::::::::::: */
 
-this.EXPORTED_SYMBOLS = ["MailInstrumentation"];
+const EXPORTED_SYMBOLS = ["MailInstrumentation"];
 
 var nsIMFNService = Ci.nsIMsgFolderNotificationService;
 
-const { logException } = ChromeUtils.import("resource:///modules/errUtils.js");
+const { logException } = ChromeUtils.import("resource:///modules/ErrUtils.jsm");
 const { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 const { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"

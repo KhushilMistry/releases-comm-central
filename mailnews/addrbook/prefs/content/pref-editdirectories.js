@@ -15,19 +15,28 @@ var { MailServices } = ChromeUtils.import(
 // correct places an would be an infrequent operation.
 var gAddressBookAbListener = {
   onItemAdded(parentDir, item) {
-    if (item instanceof Ci.nsIAbDirectory) {
-      fillDirectoryList(item);
+    try {
+      item.QueryInterface(Ci.nsIAbDirectory);
+    } catch (ex) {
+      return;
     }
+    fillDirectoryList(item);
   },
   onItemRemoved(parentDir, item) {
-    if (item instanceof Ci.nsIAbDirectory) {
-      fillDirectoryList();
+    try {
+      item.QueryInterface(Ci.nsIAbDirectory);
+    } catch (ex) {
+      return;
     }
+    fillDirectoryList();
   },
   onItemPropertyChanged(item, property, oldValue, newValue) {
-    if (item instanceof Ci.nsIAbDirectory) {
-      fillDirectoryList(item);
+    try {
+      item.QueryInterface(Ci.nsIAbDirectory);
+    } catch (ex) {
+      return;
     }
+    fillDirectoryList(item);
   },
 };
 
@@ -66,10 +75,8 @@ function fillDirectoryList(aItem = null) {
   }
 
   // Init the address book list
-  let directories = MailServices.ab.directories;
   let holdingArray = [];
-  while (directories && directories.hasMoreElements()) {
-    let ab = directories.getNext();
+  for (let ab of MailServices.ab.directories) {
     if (ab instanceof Ci.nsIAbDirectory && ab.isRemote) {
       holdingArray.push(ab);
     }
@@ -141,7 +148,7 @@ function editDirectory() {
     let abURI = abList.value;
     let ab = MailServices.ab.getDirectory(abURI);
 
-    window.openDialog(
+    window.docShell.rootTreeItem.domWindow.openDialog(
       ab.propertiesChromeURI,
       "editDirectory",
       "chrome,modal=yes,resizable=no",

@@ -36,6 +36,7 @@
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
 #include "mozilla/Preferences.h"
+#include "mozilla/UniquePtr.h"
 #include "prprf.h"
 #include <cstdlib>  // for std::abs(int/long)
 #include <cmath>    // for std::abs(float/double)
@@ -517,9 +518,7 @@ NS_IMETHODIMP nsMsgBrkMBoxStore::CopyFolder(
       // The files have already been moved, so delete storage false
       msgParent->PropagateDelete(aSrcFolder, false, aMsgWindow);
       oldPath->Remove(false);  // berkeley mailbox
-      // We need to force closed the source db
-      nsCOMPtr<nsIMsgDatabase> srcDB;
-      aSrcFolder->Delete();
+      aSrcFolder->DeleteStorage();
 
       nsCOMPtr<nsIFile> parentPath;
       rv = msgParent->GetFilePath(getter_AddRefs(parentPath));
@@ -545,8 +544,7 @@ NS_IMETHODIMP nsMsgBrkMBoxStore::CopyFolder(
       newMsgFolder->SetParent(nullptr);
       if (msgParent) {
         msgParent->PropagateDelete(newMsgFolder, false, aMsgWindow);
-        newMsgFolder->Delete();
-        newMsgFolder->ForceDBClosed();
+        newMsgFolder->DeleteStorage();
         AddDirectorySeparator(newPath);
         newPath->Remove(true);  // berkeley mailbox
       }
@@ -869,8 +867,7 @@ NS_IMETHODIMP nsMsgBrkMBoxStore::ChangeKeywords(nsIArray *aHdrArray,
   nsCOMPtr<nsIInputStream> inputStream = do_QueryInterface(outputStream, &rv);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsAutoPtr<nsLineBuffer<char> > lineBuffer(new nsLineBuffer<char>);
-  NS_ENSURE_TRUE(lineBuffer, NS_ERROR_OUT_OF_MEMORY);
+  mozilla::UniquePtr<nsLineBuffer<char>> lineBuffer(new nsLineBuffer<char>);
 
   // For each message, we seek to the beginning of the x-mozilla-status header,
   // and start reading lines, looking for x-mozilla-keys: headers; If we're
@@ -899,10 +896,10 @@ NS_IMETHODIMP nsMsgBrkMBoxStore::ChangeKeywords(nsIArray *aHdrArray,
     (void)msgHdr->GetStatusOffset(&statusOffset);
     uint64_t desiredOffset = messageOffset + statusOffset;
 
-    ChangeKeywordsHelper(msgHdr, desiredOffset, lineBuffer, keywordArray, aAdd,
+    ChangeKeywordsHelper(msgHdr, desiredOffset, *lineBuffer, keywordArray, aAdd,
                          outputStream, seekableStream, inputStream);
   }
-  lineBuffer = nullptr;
+  lineBuffer.reset();
   if (restoreStreamPos != -1)
     seekableStream->Seek(nsISeekableStream::NS_SEEK_SET, restoreStreamPos);
   else if (outputStream)
@@ -950,8 +947,10 @@ nsresult nsMsgBrkMBoxStore::AddSubFolders(nsIMsgFolder *parent,
   while (NS_SUCCEEDED(directoryEnumerator->HasMoreElements(&hasMore)) &&
          hasMore) {
     nsCOMPtr<nsIFile> currentFile;
-    directoryEnumerator->GetNextFile(getter_AddRefs(currentFile));
-    if (currentFile) currentDirEntries.AppendObject(currentFile);
+    rv = directoryEnumerator->GetNextFile(getter_AddRefs(currentFile));
+    if (NS_SUCCEEDED(rv) && currentFile) {
+      currentDirEntries.AppendObject(currentFile);
+    }
   }
 
   // add the folders
@@ -963,10 +962,13 @@ nsresult nsMsgBrkMBoxStore::AddSubFolders(nsIMsgFolder *parent,
     currentFile->GetLeafName(leafName);
     // here we should handle the case where the current file is a .sbd directory
     // w/o a matching folder file, or a directory w/o the name .sbd
-    if (nsShouldIgnoreFile(leafName)) continue;
+    if (nsShouldIgnoreFile(leafName, currentFile)) continue;
 
     nsCOMPtr<nsIMsgFolder> child;
     rv = parent->AddSubfolder(leafName, getter_AddRefs(child));
+    if (NS_FAILED(rv) && rv != NS_MSG_FOLDER_EXISTS) {
+      return rv;
+    }
     if (child) {
       nsString folderName;
       child->GetName(folderName);  // try to get it from cache/db
@@ -974,7 +976,9 @@ nsresult nsMsgBrkMBoxStore::AddSubFolders(nsIMsgFolder *parent,
       if (deep) {
         nsCOMPtr<nsIFile> path;
         rv = child->GetFilePath(getter_AddRefs(path));
-        AddSubFolders(child, path, true);
+        NS_ENSURE_SUCCESS(rv, rv);
+        rv = AddSubFolders(child, path, true);
+        NS_ENSURE_SUCCESS(rv, rv);
       }
     }
   }

@@ -22,7 +22,7 @@
 #include "nsIDocShell.h"
 #include "nsPIDOMWindow.h"
 #include "mozilla/dom/Document.h"
-#include "nsIXULWindow.h"
+#include "nsIAppWindow.h"
 #include "nsIWindowMediator.h"
 #include "nsIDocShellTreeItem.h"
 #include "nsIDocShellTreeOwner.h"
@@ -49,6 +49,9 @@
 #include "nsIArray.h"
 #include "nsArrayUtils.h"
 #include "nsIURIMutator.h"
+#include "mozilla/dom/Element.h"
+#include "mozilla/dom/XULFrameElement.h"
+#include "nsFrameLoader.h"
 
 #ifdef MSGCOMP_TRACE_PERFORMANCE
 #  include "mozilla/Logging.h"
@@ -69,7 +72,7 @@
 #endif
 
 #define DEFAULT_CHROME \
-  "chrome://messenger/content/messengercompose/messengercompose.xul"
+  "chrome://messenger/content/messengercompose/messengercompose.xhtml"
 
 #define PREF_MAILNEWS_REPLY_QUOTING_SELECTION "mailnews.reply_quoting_selection"
 #define PREF_MAILNEWS_REPLY_QUOTING_SELECTION_MULTI_WORD \
@@ -243,20 +246,22 @@ nsMsgComposeService::GetOrigWindowSelection(MSG_ComposeType type,
 
   // Now delve down in to the message to get the HTML representation of the
   // selection
-  nsCOMPtr<nsIDocShell> rootDocShell;
-  rv = aMsgWindow->GetRootDocShell(getter_AddRefs(rootDocShell));
+  nsCOMPtr<nsIDocShell> rootShell;
+  rv = aMsgWindow->GetRootDocShell(getter_AddRefs(rootShell));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsIDocShellTreeItem> childAsItem;
-  rv = rootDocShell->FindChildWithName(NS_LITERAL_STRING("messagepane"), true,
-                                       false, nullptr, nullptr,
-                                       getter_AddRefs(childAsItem));
-  NS_ENSURE_SUCCESS(rv, rv);
+  nsCOMPtr<nsIDocShell> messagePaneDocShell;
+  RefPtr<mozilla::dom::Element> el = rootShell->GetDocument()->GetElementById(
+      NS_LITERAL_STRING("messagepane"));
+  RefPtr<mozilla::dom::XULFrameElement> frame =
+      mozilla::dom::XULFrameElement::FromNodeOrNull(el);
+  NS_ENSURE_TRUE(frame, NS_ERROR_FAILURE);
+  RefPtr<mozilla::dom::Document> doc = frame->GetContentDocument();
+  NS_ENSURE_TRUE(doc, NS_ERROR_FAILURE);
+  messagePaneDocShell = doc->GetDocShell();
+  NS_ENSURE_TRUE(messagePaneDocShell, NS_ERROR_FAILURE);
 
-  nsCOMPtr<nsIDocShell> docShell(do_QueryInterface(childAsItem, &rv));
-  NS_ENSURE_SUCCESS(rv, rv);
-
-  nsCOMPtr<mozIDOMWindowProxy> domWindow(do_GetInterface(childAsItem));
+  nsCOMPtr<mozIDOMWindowProxy> domWindow(do_GetInterface(messagePaneDocShell));
   NS_ENSURE_TRUE(domWindow, NS_ERROR_FAILURE);
   nsCOMPtr<nsPIDOMWindowOuter> privateWindow =
       nsPIDOMWindowOuter::From(domWindow);
@@ -306,7 +311,7 @@ nsMsgComposeService::GetOrigWindowSelection(MSG_ComposeType type,
   }
 
   nsCOMPtr<nsIContentViewer> contentViewer;
-  rv = docShell->GetContentViewer(getter_AddRefs(contentViewer));
+  rv = messagePaneDocShell->GetContentViewer(getter_AddRefs(contentViewer));
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<mozilla::dom::Document> domDocument(contentViewer->GetDocument());

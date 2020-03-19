@@ -39,15 +39,9 @@ var kCABData = {
   position: 2,
 };
 
-// Windows (Outlook Express) Address Book deactivation. (Bug 448859)
-Services.prefs.deleteBranch("ldap_2.servers.oe.");
-
-// OSX Address Book deactivation (Bug 955842)
-Services.prefs.deleteBranch("ldap_2.servers.osx.");
-
 // This currently applies to all address books of local type.
 var kNormalPropertiesURI =
-  "chrome://messenger/content/addressbook/abAddressBookNameDialog.xul";
+  "chrome://messenger/content/addressbook/abAddressBookNameDialog.xhtml";
 
 /**
  * Installs a pre-prepared address book file into the profile directory.

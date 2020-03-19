@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<?xml-stylesheet href="chrome://messenger/skin/dialogs.css" type="text/css"?>
+<?xml-stylesheet type="text/css" href="chrome://messenger/skin/input-fields.css"?>
+
+<!DOCTYPE window SYSTEM "chrome://messenger/locale/newTagDialog.dtd">
+
+<window xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+        xmlns:html="http://www.w3.org/1999/xhtml"
+        title="&newTagDialog1.title;"
+        onload="onLoad();">
+<dialog>
+
+  <stringbundle id="bundle_messenger" src="chrome://messenger/locale/messenger.properties"/>
+
+  <script src="chrome://global/content/globalOverlay.js"/>
+  <script src="chrome://global/content/editMenuOverlay.js"/>
+  <script src="chrome://messenger/content/newTagDialog.js"/>
+  <label id="nameLabel"
+         value="&name.label;"
+         accesskey="&name.accesskey;"
+         control="name"/>
+  <hbox class="input-container">
+    <html:input id="name"
+                type="text"
+                oninput="doEnabling();"
+                class="input-inline"
+                aria-labelledby="nameLabel"/>
+    <html:input type="color" id="tagColorPicker"/>
+  </hbox>
+  <separator/>
+</dialog>
+</window>

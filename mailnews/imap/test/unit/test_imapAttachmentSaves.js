@@ -8,14 +8,14 @@
 
 /* import-globals-from ../../../test/resources/logHelper.js */
 /* import-globals-from ../../../test/resources/asyncTestUtils.js */
-/* import-globals-from ../../../test/resources/messageGenerator.js */
+/* import-globals-from ../../../test/resources/MessageGenerator.jsm */
 load("../../../resources/logHelper.js");
 load("../../../resources/asyncTestUtils.js");
-load("../../../resources/messageGenerator.js");
+load("../../../resources/MessageGenerator.jsm");
 
 // javascript mime emitter functions
 var mimeMsg = {};
-ChromeUtils.import("resource:///modules/gloda/mimemsg.js", mimeMsg);
+ChromeUtils.import("resource:///modules/gloda/MimeMessage.jsm", mimeMsg);
 var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
@@ -81,7 +81,6 @@ function* startDetach() {
 
   messenger.detachAttachmentsWOPrompts(
     do_get_profile(),
-    1,
     [attachment.contentType],
     [attachment.url],
     [attachment.name],

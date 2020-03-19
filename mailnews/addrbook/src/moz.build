@@ -12,25 +12,17 @@ EXPORTS += [
 SOURCES += [
     'nsAbAddressCollector.cpp',
     'nsAbBooleanExpression.cpp',
-    'nsAbBSDirectory.cpp',
     'nsAbCardProperty.cpp',
     'nsAbContentHandler.cpp',
     'nsAbDirectoryQuery.cpp',
     'nsAbDirectoryQueryProxy.cpp',
-    'nsAbDirFactoryService.cpp',
     'nsAbDirProperty.cpp',
     'nsAbLDIFService.cpp',
-    'nsAbManager.cpp',
-    'nsAbMDBCard.cpp',
-    'nsAbMDBDirectory.cpp',
-    'nsAbMDBDirFactory.cpp',
-    'nsAbMDBDirProperty.cpp',
     'nsAbQueryStringToExpression.cpp',
     'nsAbView.cpp',
     'nsAddbookProtocolHandler.cpp',
     'nsAddbookUrl.cpp',
     'nsAddrDatabase.cpp',
-    'nsDirPrefs.cpp',
     'nsMsgVCardService.cpp',
     'nsVCard.cpp',
     'nsVCardObj.cpp',
@@ -39,17 +31,13 @@ SOURCES += [
 if CONFIG['OS_ARCH'] == 'WINNT' and CONFIG['MOZ_MAPI_SUPPORT']:
     SOURCES += [
         'nsAbOutlookDirectory.cpp',
-        'nsAbOutlookDirFactory.cpp',
+        'nsAbOutlookInterface.cpp',
         'nsAbWinHelper.cpp',
         'nsMapiAddressBook.cpp',
         'nsWabAddressBook.cpp',
     ]
 
 if CONFIG['OS_ARCH'] == 'Darwin':
-    SOURCES += [
-        'nsAbOSXDirFactory.cpp',
-    ]
-
     SOURCES += [
         'nsAbOSXCard.mm',
         'nsAbOSXDirectory.mm',
@@ -63,7 +51,6 @@ if CONFIG['MOZ_LDAP_XPCOM']:
         'nsAbLDAPDirectory.cpp',
         'nsAbLDAPDirectoryModify.cpp',
         'nsAbLDAPDirectoryQuery.cpp',
-        'nsAbLDAPDirFactory.cpp',
         'nsAbLDAPListenerBase.cpp',
         'nsAbLDAPReplicationData.cpp',
         'nsAbLDAPReplicationQuery.cpp',
@@ -74,20 +61,20 @@ if CONFIG['MOZ_LDAP_XPCOM']:
     # nsAbLDAPChangeLogQuery.cpp
     # nsAbLDAPChangeLogData.cpp
 
-    EXTRA_COMPONENTS += [
-        'nsAbLDAPAutoCompleteSearch.js',
+    EXTRA_JS_MODULES += [
+        'AbLDAPAutoCompleteSearch.jsm',
     ]
 
     DEFINES['MOZ_LDAP_XPCOM'] = True
 
-EXTRA_COMPONENTS += [
-    'nsAbAutoCompleteMyDomain.js',
-    'nsAbAutoCompleteSearch.js',
-    'nsAbLDAPAttributeMap.js',
-]
-
-EXTRA_PP_COMPONENTS += [
-    'nsAddrbook.manifest',
+EXTRA_JS_MODULES += [
+    'AbAutoCompleteMyDomain.jsm',
+    'AbAutoCompleteSearch.jsm',
+    'AbLDAPAttributeMap.jsm',
 ]
 
 FINAL_LIBRARY = 'mail'
+
+XPCOM_MANIFESTS += [
+    'components.conf',
+]

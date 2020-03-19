@@ -152,7 +152,6 @@ pref("extensions.getAddons.siteRegExp", "^https://.*addons\\.thunderbird\\.net")
 pref("extensions.getAddons.langpacks.url", "https://services.addons.thunderbird.net/api/v3/addons/language-tools/?app=thunderbird&type=language&appversion=%VERSION%");
 
 // Blocklist preferences
-pref("extensions.blocklist.url", "https://blocklists.settings.services.mozilla.com/v1/blocklist/3/%APP_ID%/%APP_VERSION%/%PRODUCT%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/%PING_COUNT%/%TOTAL_PING_COUNT%/%DAYS_SINCE_LAST_PING%/");
 pref("extensions.blocklist.detailsURL", "https://blocked.cdn.mozilla.net/");
 pref("extensions.blocklist.itemURL", "https://blocked.cdn.mozilla.net/%blockID%.html");
 
@@ -303,7 +302,7 @@ pref("mail.default_html_action", 3);
 // Overrides for generic app behavior from the core all.js
 /////////////////////////////////////////////////////////////////
 
-pref("browser.hiddenWindowChromeURL", "chrome://messenger/content/hiddenWindow.xul");
+pref("browser.hiddenWindowChromeURL", "chrome://messenger/content/hiddenWindow.xhtml");
 
 pref("offline.startup_state",            2);
 // 0 Ask before sending unsent messages when going online
@@ -351,11 +350,9 @@ pref("network.protocol-handler.warn-external.ftp", false);
 pref("network.hosts.smtp_server",           "mail");
 pref("network.hosts.pop_server",            "mail");
 
-#if defined(DEBUG)
-  // For testing purposes only: Flipping this pref to true allows
-  // to skip the assertion that every about page ships with a CSP.
-  pref("csp.skip_about_page_has_csp_assert", true);
-#endif
+// For testing purposes only: Flipping this pref to true allows
+// to skip the assertion that every about page ships with a CSP.
+pref("dom.security.skip_about_page_has_csp_assert", true);
 
 pref("security.warn_entering_secure", false);
 pref("security.warn_entering_weak", false);
@@ -363,13 +360,21 @@ pref("security.warn_leaving_secure", false);
 pref("security.warn_viewing_mixed", false);
 pref("security.aboutcertificate.enabled", false);
 
+// Prompt for the master password prior to opening application windows,
+// to avoid the race that triggers multiple prompts (see bug 177175).
+#ifdef XP_MACOSX
+// disabled because of platform specific bug 1612456
+pref("security.prompt_for_master_password_on_startup", false);
+#else
+pref("security.prompt_for_master_password_on_startup", true);
+#endif
+
 pref("general.config.obscure_value", 0); // for MCD .cfg files
 
 pref("browser.display.auto_quality_min_font_size", 0);
 
 pref("view_source.syntax_highlight", false);
 
-pref("toolkit.telemetry.infoURL", "https://www.mozilla.org/thunderbird/legal/privacy/#telemetry");
 
 /////////////////////////////////////////////////////////////////
 // End core all.js pref overrides
@@ -397,6 +402,9 @@ pref("browser.download.manager.addToRecentDocs", true);
 #ifndef XP_MACOSX
 pref("browser.helperApps.deleteTempFileOnExit", true);
 #endif
+
+// Whether to start the private browsing mode at application startup. Not used in Thunderbird.
+pref("browser.privatebrowsing.autostart", false);
 
 pref("spellchecker.dictionary", "");
 // Dictionary download preference
@@ -689,13 +697,6 @@ pref("mail.taskbar.lists.enabled", true);
 pref("mail.taskbar.lists.tasks.enabled", true);
 #endif
 
-// Disable hardware accelerated layers
-pref("layers.acceleration.disabled", true);
-#ifdef XP_WIN
-// and direct2d support on Windows.
-pref("gfx.direct2d.disabled", true);
-#endif
-
 // Account provisioner.
 pref("mail.provider.providerList", "https://broker.thunderbird.net/provider/list");
 pref("mail.provider.suggestFromName", "https://broker.thunderbird.net/provider/suggest");
@@ -716,7 +717,7 @@ pref("mail.chat.play_sound.type", 0);
 // if sound is user specified, this needs to be a file url
 pref("mail.chat.play_sound.url", "");
 // Enable/Disable support for OTR chat encryption.
-pref("chat.otr.enable", false);
+pref("chat.otr.enable", true);
 // Default values for chat account prefs.
 pref("chat.otr.default.requireEncryption", false);
 pref("chat.otr.default.verifyNudge", true);
@@ -766,12 +767,6 @@ pref("mail.save_msg_filename_underscores_for_space", false);
 pref("security.sandbox.content.level", 0);
 #endif
 
-#if defined(NIGHTLY_BUILD) && defined(XP_MACOSX) && defined(MOZ_SANDBOX)
-// Start the Mac sandbox immediately during child process startup instead
-// of when messaged by the parent after the message loop is running.
-pref("security.sandbox.content.mac.earlyinit", false);
-#endif
-
 #ifdef NIGHTLY_BUILD
 // See bug 1572568 for details. Disallow eval() with system principal.
 pref("security.allow_eval_with_system_principal", false);
@@ -783,14 +778,23 @@ pref("security.webauth.u2f", true);
 // Use OS date and time settings by default.
 pref("intl.regional_prefs.use_os_locales", true);
 
-// Multi-lingual preferences
-pref("intl.multilingual.enabled", false);
+// Multi-lingual preferences.
+// Let the user select a different language for the UI.
+pref("intl.multilingual.enabled", true);
 
-// We don't support yet language pack download from ATN
+// ATN only serves language packs for release.
+// There is no release-only define, so we also enable it for beta.
+#if defined(RELEASE_OR_BETA)
+pref("intl.multilingual.downloadEnabled", true);
+#else
 pref("intl.multilingual.downloadEnabled", false);
+#endif
 
 // Dark in-content pages
 pref("browser.in-content.dark-mode", true);
+
+// if true, use full page zoom instead of text zoom
+pref("browser.zoom.full", true);
 
 // Developer Tools related preferences
 pref("devtools.debugger.log", false);
@@ -799,10 +803,6 @@ pref("devtools.debugger.remote-enabled", true);
 pref("devtools.selfxss.count", 5);
 // Disable extensionStorage storage actor by default
 pref("devtools.storage.extensionStorage.enabled", false);
-
-// Disable WebIDE and ConnectPage by default (Bug 1539451)
-pref("devtools.webide.enabled", false);
-pref("devtools.connectpage.enabled", false);
 
 // Toolbox preferences
 pref("devtools.toolbox.footer.height", 250);
@@ -816,23 +816,39 @@ pref("devtools.toolbox.splitconsoleEnabled", false);
 pref("devtools.toolbox.splitconsoleHeight", 100);
 pref("devtools.toolbox.tabsOrder", "");
 
-// The fission pref is enabling the "Omniscient Browser Toolbox", which will
+// The fission pref for enabling the "Omniscient Browser Toolbox", which will
 // make it possible to debug anything in Firefox (See Bug 1570639 for more
 // information).
 // ⚠ This is a work in progress. Expect weirdness when the pref is enabled. ⚠
 pref("devtools.browsertoolbox.fission", false);
+
+// The fission pref for enabling Fission frame debugging directly from the
+// regular web/content toolbox.
+// ⚠ This is a work in progress. Expect weirdness when the pref is enabled. ⚠
+pref("devtools.contenttoolbox.fission", false);
+
+// This pref is also related to fission, but not only. It allows the toolbox
+// to stay open even if the debugged tab switches to another process.
+// It can happen between two documents, one running in the parent process like
+// about:sessionrestore and another one running in the content process like
+// any web page. Or between two distinct domain when running with fission turned
+// on. See bug 1565263.
+// ⚠ This is a work in progress. Expect weirdness when the pref is flipped on ⚠
+pref("devtools.target-switching.enabled", false);
 
 // Toolbox Button preferences
 pref("devtools.command-button-pick.enabled", true);
 pref("devtools.command-button-frames.enabled", true);
 pref("devtools.command-button-splitconsole.enabled", true);
 pref("devtools.command-button-paintflashing.enabled", false);
-pref("devtools.command-button-scratchpad.enabled", false);
 pref("devtools.command-button-responsive.enabled", true);
 pref("devtools.command-button-screenshot.enabled", false);
 pref("devtools.command-button-rulers.enabled", false);
 pref("devtools.command-button-measure.enabled", false);
 pref("devtools.command-button-noautohide.enabled", false);
+#ifndef MOZILLA_OFFICIAL
+  pref("devtools.command-button-fission-prefs.enabled", true);
+#endif
 
 // Inspector preferences
 // Enable the Inspector
@@ -851,12 +867,16 @@ pref("devtools.inspector.show_pseudo_elements", false);
 pref("devtools.inspector.imagePreviewTooltipSize", 300);
 // Enable user agent style inspection in rule-view
 pref("devtools.inspector.showUserAgentStyles", false);
-// Show all native anonymous content
+// Show native anonymous content and user agent shadow roots
 pref("devtools.inspector.showAllAnonymousContent", false);
-// Show user agent shadow roots
-pref("devtools.inspector.showUserAgentShadowRoots", false);
 // Enable the new Rules View
 pref("devtools.inspector.new-rulesview.enabled", false);
+// Enable the compatibility tool in the inspector.
+pref("devtools.inspector.compatibility.enabled", false);
+// Enable the new Box Model Highlighter with renderer in parent process
+pref("devtools.inspector.use-new-box-model-highlighter", false);
+// Enable color scheme simulation in the inspector.
+pref("devtools.inspector.color-scheme-simulation.enabled", false);
 
 // Grid highlighter preferences
 pref("devtools.gridinspector.gridOutlineMaxColumns", 50);
@@ -871,6 +891,10 @@ pref("devtools.gridinspector.maxHighlighters", 3);
 pref("devtools.layout.boxmodel.opened", true);
 // Whether or not the flexbox panel is opened in the layout view
 pref("devtools.layout.flexbox.opened", true);
+// Whether or not the flexbox container panel is opened in the layout view
+pref("devtools.layout.flex-container.opened", true);
+// Whether or not the flexbox item panel is opened in the layout view
+pref("devtools.layout.flex-item.opened", true);
 // Whether or not the grid inspector panel is opened in the layout view
 pref("devtools.layout.grid.opened", true);
 
@@ -893,7 +917,7 @@ pref("devtools.markup.collapseAttributeLength", 120);
 pref("devtools.markup.beautifyOnCopy", false);
 // Whether or not the DOM mutation breakpoints context menu are enabled in the
 // markup view.
-pref("devtools.markup.mutationBreakpoints.enabled", false);
+pref("devtools.markup.mutationBreakpoints.enabled", true);
 
 // DevTools default color unit
 pref("devtools.defaultColorUnit", "authored");
@@ -943,17 +967,6 @@ pref("devtools.performance.ui.enable-memory-flame", false);
   pref("devtools.performance.ui.experimental", false);
 #endif
 
-// Preferences for the new performance panel. This pref configures the base URL
-// for the profiler.firefox.com instance to use. This is useful so that a
-// developer can change it while working on profiler.firefox.com, or in tests.
-// This isn't exposed directly to the user.
-pref("devtools.performance.recording.ui-base-url", "https://profiler.firefox.com");
-
-// A JSON array of strings, where each string is a file path to an objdir on
-// the host machine. This is used in order to look up symbol information from
-// build artifacts of local builds.
-pref("devtools.performance.recording.objdirs", "[]");
-
 // The default cache UI setting
 pref("devtools.cache.disabled", false);
 
@@ -963,10 +976,18 @@ pref("devtools.serviceWorkers.testing.enabled", false);
 // Enable the Network Monitor
 pref("devtools.netmonitor.enabled", true);
 
-// Enable Network Search
-pref("devtools.netmonitor.features.search", false);
+// Enable Network Search in Nightly builds.
+#if defined(NIGHTLY_BUILD) || defined(MOZ_DEV_EDITION)
+  pref("devtools.netmonitor.features.search", true);
+#else
+  pref("devtools.netmonitor.features.search", false);
+#endif
 
-pref("devtools.netmonitor.features.requestBlocking", false);
+#if defined(NIGHTLY_BUILD) || defined(MOZ_DEV_EDITION)
+  pref("devtools.netmonitor.features.requestBlocking", true);
+#else
+  pref("devtools.netmonitor.features.requestBlocking", false);
+#endif
 
 // Enable the Application panel
 pref("devtools.application.enabled", false);
@@ -1004,29 +1025,12 @@ pref("devtools.netmonitor.har.forceExport", false);
 pref("devtools.netmonitor.har.pageLoadedTimeout", 1500);
 pref("devtools.netmonitor.har.enableAutoExportToFile", false);
 
-// Enable WebSocket monitoring in Nightly builds.
-#if defined(NIGHTLY_BUILD)
+// Enable WebSocket monitoring in Nightly and DevEdition/Beta builds.
+#if defined(NIGHTLY_BUILD) || defined(MOZ_DEV_EDITION)
   pref("devtools.netmonitor.features.webSockets", true);
 #else
   pref("devtools.netmonitor.features.webSockets", false);
 #endif
-
-// Scratchpad settings
-// - recentFileMax: The maximum number of recently-opened files
-//                  stored. Setting this preference to 0 will not
-//                  clear any recent files, but rather hide the
-//                  'Open Recent'-menu.
-// - lineNumbers: Whether to show line numbers or not.
-// - wrapText: Whether to wrap text or not.
-// - showTrailingSpace: Whether to highlight trailing space or not.
-// - editorFontSize: Editor font size configuration.
-// - enableAutocompletion: Whether to enable JavaScript autocompletion.
-pref("devtools.scratchpad.recentFilesMax", 10);
-pref("devtools.scratchpad.lineNumbers", true);
-pref("devtools.scratchpad.wrapText", false);
-pref("devtools.scratchpad.showTrailingSpace", false);
-pref("devtools.scratchpad.editorFontSize", 12);
-pref("devtools.scratchpad.enableAutocompletion", true);
 
 // Enable the Storage Inspector
 pref("devtools.storage.enabled", true);
@@ -1042,9 +1046,6 @@ pref("devtools.styleeditor.transitions", true);
 // Screenshot Option Settings.
 pref("devtools.screenshot.clipboard.enabled", false);
 pref("devtools.screenshot.audio.enabled", true);
-
-// Enable Scratchpad
-pref("devtools.scratchpad.enabled", false);
 
 // Make sure the DOM panel is hidden by default
 pref("devtools.dom.enabled", false);
@@ -1064,6 +1065,11 @@ pref("devtools.webconsole.filter.netxhr", false);
 
 // Webconsole autocomplete preference
 pref("devtools.webconsole.input.autocomplete",true);
+pref("devtools.webconsole.input.context", false);
+
+// Set to true to eagerly show the results of webconsole terminal evaluations
+// when they don't have side effects.
+pref("devtools.webconsole.input.eagerEvaluation", true);
 
 // Browser console filters
 pref("devtools.browserconsole.filter.error", true);
@@ -1096,19 +1102,16 @@ pref("devtools.webconsole.timestampMessages", false);
   pref("devtools.webconsole.sidebarToggle", false);
 #endif
 
-// Enable editor mode in the console in Nightly builds.
-#if defined(NIGHTLY_BUILD)
-  pref("devtools.webconsole.features.editor", true);
-#else
-  pref("devtools.webconsole.features.editor", false);
-#endif
-
 // Saved editor mode state in the console.
 pref("devtools.webconsole.input.editor", false);
+pref("devtools.browserconsole.input.editor", false);
 
-// Editor width for webconsole and browserconsole
+// Editor width for webconsole and browserconsole.
 pref("devtools.webconsole.input.editorWidth", 0);
 pref("devtools.browserconsole.input.editorWidth", 0);
+
+// Display an onboarding UI for the Editor mode.
+pref("devtools.webconsole.input.editorOnboarding", true);
 
 // Disable the new performance recording panel by default
 pref("devtools.performance.new-panel-enabled", false);
@@ -1163,14 +1166,9 @@ pref("devtools.responsive.touchSimulation.enabled", false);
 pref("devtools.responsive.metaViewport.enabled", false);
 // The user agent of the viewport.
 pref("devtools.responsive.userAgent", "");
+// Whether or not the RDM UI is embedded in the browser.
+pref("devtools.responsive.browserUI.enabled", false);
 
-// Whether to show the settings onboarding tooltip only in release or beta
-// builds.
-#if defined(RELEASE_OR_BETA)
-  pref("devtools.responsive.show-setting-tooltip", true);
-#else
-  pref("devtools.responsive.show-setting-tooltip", false);
-#endif
 // Show the custom user agent input in Nightly builds.
 #if defined(NIGHTLY_BUILD)
   pref("devtools.responsive.showUserAgentInput", true);
@@ -1208,24 +1206,58 @@ pref("devtools.aboutdebugging.collapsibilities.temporaryExtension", false);
 // Map top-level await expressions in the console
 pref("devtools.debugger.features.map-await-expression", true);
 
+#if defined(NIGHTLY_BUILD)
+pref("devtools.debugger.features.async-captured-stacks", true);
+pref("devtools.debugger.features.async-live-stacks", false);
+#else
+pref("devtools.debugger.features.async-live-stacks", true);
+pref("devtools.debugger.features.async-captured-stacks", false);
+#endif
+
 // Disable autohide for DevTools popups and tooltips.
 // This is currently not exposed by any UI to avoid making
 // about:devtools-toolbox tabs unusable by mistake.
 pref("devtools.popup.disable_autohide", false);
 
-// Load the DevTools toolbox in a frame with type=content instead of type=chrome
-// See Bug 1539979 for more details.
-// We keep the option of running devtools in a chrome frame while we fix racy
-// tests that started failing when using type=content, but this ultimately
-// should be removed.
-pref("devtools.toolbox.content-frame", true);
+// Visibility switch preference for the WhatsNew panel.
+pref("devtools.whatsnew.enabled", true);
 
-pref("devtools.webide.templatesURL", "https://code.cdn.mozilla.net/templates/list.json");
-pref("devtools.webide.autoinstallADBExtension", true);
-pref("devtools.webide.autoConnectRuntime", true);
-pref("devtools.webide.restoreLastProject", true);
-pref("devtools.webide.enableLocalRuntime", false);
-pref("devtools.webide.lastConnectedRuntime", "");
-pref("devtools.webide.lastSelectedProject", "");
-pref("devtools.webide.zoom", "1");
-pref("devtools.webide.busyTimeout", 10000);
+// Temporary preference to fully disable the WhatsNew panel on any target.
+// Should be removed in https://bugzilla.mozilla.org/show_bug.cgi?id=1596037
+pref("devtools.whatsnew.feature-enabled", true);
+
+// Telemetry settings.
+
+// Server to submit telemetry pings to.
+// For now we'll just default to local testing:
+pref("toolkit.telemetry.server", "http://localhost:8080");
+pref("toolkit.telemetry.server_owner", "Thunderbird");
+
+// Determines if Telemetry pings can be archived locally.
+pref("toolkit.telemetry.archive.enabled", true);
+// Enables sending the shutdown ping when Thunderbird shuts down.
+pref("toolkit.telemetry.shutdownPingSender.enabled", true);
+// Enables sending the shutdown ping using the pingsender from the first session.
+pref("toolkit.telemetry.shutdownPingSender.enabledFirstSession", false);
+// Enables sending a duplicate of the first shutdown ping from the first session.
+pref("toolkit.telemetry.firstShutdownPing.enabled", true);
+// Enables sending the 'new-profile' ping on new profiles.
+pref("toolkit.telemetry.newProfilePing.enabled", true);
+// Enables sending 'update' pings on Thunderbird updates.
+pref("toolkit.telemetry.updatePing.enabled", true);
+// Enables sending 'bhr' pings when the app hangs.
+pref("toolkit.telemetry.bhrPing.enabled", true);
+// Whether to enable Ecosystem Telemetry, requires a restart.
+#ifdef NIGHTLY_BUILD
+  pref("toolkit.telemetry.ecosystemtelemetry.enabled", true);
+#else
+  pref("toolkit.telemetry.ecosystemtelemetry.enabled", false);
+#endif
+
+// Required to enable telemetry pings (defaults to true if
+// MOZ_SERVICES_HEALTHREPORT is defined, but we're not yet sure we want
+// that...)
+pref("datareporting.healthreport.uploadEnabled", true);
+
+pref("toolkit.telemetry.infoURL", "https://www.mozilla.org/thunderbird/legal/privacy/#telemetry");
+

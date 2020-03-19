@@ -71,23 +71,16 @@ var missingFileElid;
 var realFileElid;
 const kFiller = "notApplicable";
 const kFillerURL = "https://bugzilla.mozilla.org/show_bug.cgi?id=462172"
-var realFile = Cc["@mozilla.org/file/directory_service;1"]
-                 .getService(Ci.nsIProperties)
-                 .get("CurWorkD", Ci.nsIFile);
-var missingFile = Cc["@mozilla.org/file/directory_service;1"]
-                    .getService(Ci.nsIProperties)
-                    .get("CurWorkD", Ci.nsIFile);
-
-var ios = Cc["@mozilla.org/network/io-service;1"]
-            .getService(Ci.nsIIOService);
+var realFile = Services.dirsvc.get("CurWorkD", Ci.nsIFile);
+var missingFile = Services.dirsvc.get("CurWorkD", Ci.nsIFile);
 
 realFile.append(kFiller);
 realFile.createUnique(Ci.nsIFile.NORMAL_FILE_TYPE, 0666);
-var realFilePath = ios.newFileURI(realFile).spec;
+var realFilePath = Services.io.newFileURI(realFile).spec;
 
 missingFile.append(kFiller);
 missingFile.createUnique(Ci.nsIFile.NORMAL_FILE_TYPE, 0666);
-var missingFilePath = ios.newFileURI(missingFile).spec;
+var missingFilePath = Services.io.newFileURI(missingFile).spec;
 missingFile.remove(false);
 
 // Dummy data for our files.
@@ -146,8 +139,6 @@ function test()
   if (win)
     win.close();
 
-  var os = Cc["@mozilla.org/observer-service;1"]
-             .getService(Ci.nsIObserverService);
   const DLMGR_UI_DONE = "download-manager-ui-done";
 
   // load files into db
@@ -184,13 +175,13 @@ function test()
       // Done.
       win.close();
       realFile.remove(false);
-      os.removeObserver(testObs, DLMGR_UI_DONE);
+      Services.obs.removeObserver(testObs, DLMGR_UI_DONE);
       SimpleTest.finish();
     }
   };
 
   // Register with the observer service
-  os.addObserver(testObs, DLMGR_UI_DONE);
+  Services.obs.addObserver(testObs, DLMGR_UI_DONE);
 
   // Show the Download Manager UI
   Cc["@mozilla.org/download-manager-ui;1"]

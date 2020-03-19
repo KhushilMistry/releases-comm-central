@@ -175,12 +175,9 @@ function onPreInit(account, accountValues) {
 }
 
 function onClickSelect() {
-  top.window.openDialog(
-    "chrome://messenger/content/msgSelectOfflineFolders.xul",
-    "",
-    "centerscreen,chrome,modal,titlebar,resizable=yes"
+  parent.gSubDialog.open(
+    "chrome://messenger/content/msgSelectOfflineFolders.xhtml"
   );
-  return true;
 }
 
 /**

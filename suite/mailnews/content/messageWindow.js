@@ -148,7 +148,6 @@ nsMsgDBViewCommandUpdater.prototype =
     ClearPendingReadTimer(); // we are loading / selecting a new message so kill the mark as read timer for the currently viewed message
     gCurrentMessageUri = gDBView.URIForFirstSelectedMessage;
     UpdateStandAloneMessageCounts();
-    SetKeywords(aKeywords);
     goUpdateCommand("button_delete");
     goUpdateCommand("button_junk");
     goUpdateCommand("button_goBack");
@@ -216,17 +215,13 @@ function OnLoadMessageWindow()
   InitMsgWindow();
 
   messenger.setWindow(window, msgWindow);
-  AddDataSources();
   // FIX ME - later we will be able to use onload from the overlay
   OnLoadMsgHeaderPane();
 
-  try {
-    var nsIFolderListener = Ci.nsIFolderListener;
-    var notifyFlags = nsIFolderListener.removed | nsIFolderListener.event | nsIFolderListener.intPropertyChanged;
-    mailSession.AddFolderListener(folderListener, notifyFlags);
-  } catch (ex) {
-    dump("Error adding to session: " +ex + "\n");
-  }
+  var nsIFolderListener = Ci.nsIFolderListener;
+  var notifyFlags = nsIFolderListener.removed | nsIFolderListener.event |
+                    nsIFolderListener.intPropertyChanged;
+  MailServices.mailSession.AddFolderListener(folderListener, notifyFlags);
 
   var originalView = null;
   var folder = null;
@@ -442,11 +437,6 @@ function GetLoadedMsgFolder()
   return gCurrentFolderUri ? GetMsgFolderFromUri(gCurrentFolderUri) : null;
 }
 
-function GetSelectedFolderURI()
-{
-  return gCurrentFolderUri;
-}
-
 function GetLoadedMessage()
 {
   return gCurrentMessageUri;
@@ -623,7 +613,6 @@ var MessageWindowController =
       case "cmd_print":
       case "cmd_printpreview":
       case "cmd_printSetup":
-      case "cmd_close":
       case "cmd_settingsOffline":
       case "cmd_createFilterFromPopup":
       case "cmd_createFilterFromMenu":
@@ -693,7 +682,7 @@ var MessageWindowController =
       case "cmd_saveAsFile":
         return true;
       case "cmd_saveAsTemplate":
-        var target = gMessageBrowser.contentPrincipal.URI.scheme;
+        var target = getMessageBrowser().contentPrincipal.URI.scheme;
         return target != "news";
       case "cmd_viewPageSource":
       case "cmd_reload":
@@ -725,7 +714,6 @@ var MessageWindowController =
         return !Services.io.offline;
       case "cmd_settingsOffline":
         return IsAccountOfflineEnabled();
-      case "cmd_close":
       case "cmd_nextMsg":
       case "button_next":
       case "cmd_nextUnreadMsg":
@@ -773,9 +761,6 @@ var MessageWindowController =
 
     switch ( command )
     {
-      case "cmd_close":
-        CloseMailWindow();
-        break;
       case "cmd_getNewMessages":
         MsgGetMessage();
         break;

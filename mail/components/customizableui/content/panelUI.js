@@ -11,14 +11,19 @@
   InitViewHeadersMenu InitViewLayoutStyleMenu MozXULElement msgWindow
   onViewToolbarsPopupShowing RefreshCustomViewsPopup RefreshTagsPopup
   RefreshViewPopup SanitizeAttachmentDisplayName Services ShortcutUtils
-  UpdateCharsetMenu updateEditUIVisibility UpdateFullZoomMenu XPCOMUtils */
+  StringBundle UpdateCharsetMenu updateEditUIVisibility UpdateFullZoomMenu
+  XPCOMUtils */
 
 ChromeUtils.defineModuleGetter(
   this,
   "AppMenuNotifications",
   "resource://gre/modules/AppMenuNotifications.jsm"
 );
-
+ChromeUtils.defineModuleGetter(
+  this,
+  "ExtensionsUI",
+  "resource:///modules/ExtensionsUI.jsm"
+);
 ChromeUtils.defineModuleGetter(
   this,
   "PanelMultiView",
@@ -53,12 +58,14 @@ const PanelUI = {
     return {
       mainView: "appMenu-mainView",
       multiView: "appMenu-multiView",
-      menuButtonMail: "button-appmenu",
-      menuButtonChat: "button-chat-appmenu",
+      menuButton: "button-appmenu",
       panel: "appMenu-popup",
+      addonNotificationContainer: "appMenu-addon-banners",
       navbar: "mail-bar3",
     };
   },
+
+  kAppMenuButtons: new Set(),
 
   /**
    * Used for the View / Text Encoding view.
@@ -131,14 +138,8 @@ const PanelUI = {
 
   init() {
     this._initElements();
-
-    [this.menuButtonMail, this.menuButtonChat].forEach(button => {
-      // There's no chat button in the messageWindow.xul context.
-      if (button) {
-        button.addEventListener("mousedown", this);
-        button.addEventListener("keypress", this);
-      }
-    });
+    this.initAppMenuButton("button-appmenu", "mail-toolbox");
+    this.initAppMenuButton("button-chat-appmenu", "chat-view-toolbox");
 
     this.menuButton = this.menuButtonMail;
 
@@ -203,6 +204,25 @@ const PanelUI = {
     }
   },
 
+  initAppMenuButton(id, toolboxId) {
+    let button = document.getElementById(id);
+    if (!button) {
+      // If not in the document, the button should be in the toolbox palette,
+      // which isn't part of the document.
+      let toolbox = document.getElementById(toolboxId);
+      if (toolbox) {
+        button = toolbox.palette.querySelector(`#${id}`);
+      }
+    }
+
+    if (button) {
+      button.addEventListener("mousedown", PanelUI);
+      button.addEventListener("keypress", PanelUI);
+
+      this.kAppMenuButtons.add(button);
+    }
+  },
+
   _eventListenersAdded: false,
   _ensureEventListenersAdded() {
     if (this._eventListenersAdded) {
@@ -237,7 +257,7 @@ const PanelUI = {
     window.removeEventListener("activate", this);
 
     [this.menuButtonMail, this.menuButtonChat].forEach(button => {
-      // There's no chat button in the messageWindow.xul context.
+      // There's no chat button in the messageWindow.xhtml context.
       if (button) {
         button.removeEventListener("mousedown", this);
         button.removeEventListener("keypress", this);
@@ -407,7 +427,7 @@ const PanelUI = {
           "subviewbutton subviewbutton-iconic"
         );
         break;
-      case "appMenu-preferencesView":
+      case "appMenu-customizeView":
         onViewToolbarsPopupShowing(
           event,
           "mail-toolbox",
@@ -486,12 +506,6 @@ const PanelUI = {
 
   get isReady() {
     return !!this._isReady;
-  },
-
-  get isNotificationPanelOpen() {
-    let panelState = this.notificationPanel.state;
-
-    return panelState == "showing" || panelState == "open";
   },
 
   /**
@@ -698,8 +712,8 @@ const PanelUI = {
     const viewBody = event.target.querySelector(".panel-subview-body");
 
     // First clear out the old attachment items. They are above the separator.
-    while (viewBody.firstChild.localName == "toolbarbutton") {
-      viewBody.firstChild.remove();
+    while (viewBody.firstElementChild.localName == "toolbarbutton") {
+      viewBody.firstElementChild.remove();
     }
 
     for (const [attachmentIndex, attachment] of currentAttachments.entries()) {
@@ -741,9 +755,7 @@ const PanelUI = {
 
     // Find the separator index.
     let separatorIndex = 0;
-    while (
-      viewBody.childNodes[separatorIndex].localName != "toolbarseparator"
-    ) {
+    while (viewBody.children[separatorIndex].localName != "toolbarseparator") {
       separatorIndex += 1;
     }
 
@@ -777,7 +789,7 @@ const PanelUI = {
       item.setAttribute("disabled", "true");
     }
 
-    viewBody.insertBefore(item, viewBody.childNodes[separatorIndex]);
+    viewBody.insertBefore(item, viewBody.children[separatorIndex]);
   },
 
   /**
@@ -800,8 +812,8 @@ const PanelUI = {
     const viewBody = attachmentView.querySelector(".panel-subview-body");
 
     // Clear out old view items.
-    while (viewBody.firstChild) {
-      viewBody.firstChild.remove();
+    while (viewBody.firstElementChild) {
+      viewBody.firstElementChild.remove();
     }
 
     // Create the "open" item.
@@ -941,8 +953,8 @@ const PanelUI = {
     const showDetectors = panelView.getAttribute("detectors") != "false";
 
     // Clear the view before recreating it.
-    while (parent.firstChild) {
-      parent.firstChild.remove();
+    while (parent.firstElementChild) {
+      parent.firstElementChild.remove();
     }
 
     if (showDetectors) {
@@ -1003,8 +1015,8 @@ const PanelUI = {
     const doc = parent.ownerDocument;
 
     // Clear the view before recreating it.
-    while (parent.firstChild) {
-      parent.firstChild.remove();
+    while (parent.firstElementChild) {
+      parent.firstElementChild.remove();
     }
 
     // Populate the view with toolbarbuttons.
@@ -1073,18 +1085,11 @@ const PanelUI = {
     quitButton.setAttribute("tooltiptext", tooltipString);
   },
 
-  _hidePopup() {
-    if (this.isNotificationPanelOpen) {
-      this.notificationPanel.hidePopup();
-    }
-  },
-
   _updateNotifications(notificationsChanged) {
     let notifications = this._notifications;
     if (!notifications || !notifications.length) {
       if (notificationsChanged) {
         this._clearAllNotifications();
-        this._hidePopup();
       }
       return;
     }
@@ -1093,7 +1098,6 @@ const PanelUI = {
       (window.fullScreen && FullScreen.navToolboxHidden) ||
       document.fullscreenElement
     ) {
-      this._hidePopup();
       return;
     }
 
@@ -1110,7 +1114,6 @@ const PanelUI = {
           n.options.onDismissed(window);
         }
       });
-      this._hidePopup();
       this._clearBadge();
       if (!notifications[0].options.badgeOnly) {
         this._showBannerItem(notifications[0]);
@@ -1121,60 +1124,18 @@ const PanelUI = {
         (window.fullScreen && this.autoHideToolbarInFullScreen) ||
         Services.focus.activeWindow !== window
       ) {
-        this._hidePopup();
         this._showBadge(doorhangers[0]);
         this._showBannerItem(doorhangers[0]);
       } else {
         this._clearBadge();
-        this._showNotificationPanel(doorhangers[0]);
       }
     } else {
-      this._hidePopup();
       this._showBadge(notifications[0]);
       this._showBannerItem(notifications[0]);
     }
   },
 
-  _showNotificationPanel(notification) {
-    this._refreshNotificationPanel(notification);
-
-    if (this.isNotificationPanelOpen) {
-      return;
-    }
-
-    if (notification.options.beforeShowDoorhanger) {
-      notification.options.beforeShowDoorhanger(document);
-    }
-
-    let anchor = this._getPanelAnchor(this.menuButton);
-
-    this.notificationPanel.hidden = false;
-
-    // Insert Fluent files when needed before notification is opened
-    MozXULElement.insertFTLIfNeeded("branding/brand.ftl");
-    MozXULElement.insertFTLIfNeeded("browser/appMenuNotifications.ftl");
-
-    // After Fluent files are loaded into document replace data-lazy-l10n-ids with actual ones
-    document
-      .getElementById("appMenu-notification-popup")
-      .querySelectorAll("[data-lazy-l10n-id]")
-      .forEach(el => {
-        el.setAttribute("data-l10n-id", el.getAttribute("data-lazy-l10n-id"));
-        el.removeAttribute("data-lazy-l10n-id");
-      });
-
-    this.notificationPanel.openPopup(anchor, "bottomcenter topright");
-  },
-
-  _clearNotificationPanel() {
-    for (let popupnotification of this.notificationPanel.children) {
-      popupnotification.hidden = true;
-      popupnotification.notification = null;
-    }
-  },
-
   _clearAllNotifications() {
-    this._clearNotificationPanel();
     this._clearBadge();
     this._clearBannerItem();
   },
@@ -1188,42 +1149,11 @@ const PanelUI = {
     return text;
   },
 
-  _refreshNotificationPanel(notification) {
-    this._clearNotificationPanel();
-
-    let popupnotificationID = this._getPopupId(notification);
-    let popupnotification = document.getElementById(popupnotificationID);
-
-    popupnotification.setAttribute("id", popupnotificationID);
-    popupnotification.setAttribute(
-      "buttoncommand",
-      "PanelUI._onNotificationButtonEvent(event, 'buttoncommand');"
-    );
-    popupnotification.setAttribute(
-      "secondarybuttoncommand",
-      "PanelUI._onNotificationButtonEvent(event, 'secondarybuttoncommand');"
-    );
-
-    if (notification.options.message) {
-      let desc = this._formatDescriptionMessage(notification);
-      popupnotification.setAttribute("label", desc.start);
-      popupnotification.setAttribute("name", desc.name);
-      popupnotification.setAttribute("endlabel", desc.end);
-    }
-    if (notification.options.onRefresh) {
-      notification.options.onRefresh(window);
-    }
-    if (notification.options.popupIconURL) {
-      popupnotification.setAttribute("icon", notification.options.popupIconURL);
-    }
-
-    popupnotification.notification = notification;
-    popupnotification.show();
-  },
-
   _showBadge(notification) {
     let badgeStatus = this._getBadgeStatus(notification);
-    this.menuButton.setAttribute("badge-status", badgeStatus);
+    for (let menuButton of this.kAppMenuButtons) {
+      menuButton.setAttribute("badge-status", badgeStatus);
+    }
   },
 
   // "Banner item" here refers to an item in the hamburger panel menu. They will
@@ -1244,7 +1174,9 @@ const PanelUI = {
   },
 
   _clearBadge() {
-    this.menuButton.removeAttribute("badge-status");
+    for (let menuButton of this.kAppMenuButtons) {
+      menuButton.removeAttribute("badge-status");
+    }
   },
 
   _clearBannerItem() {
@@ -1329,7 +1261,7 @@ XPCOMUtils.defineConstant(this, "PanelUI", PanelUI);
  * @return  the selected locale
  */
 function getLocale() {
-  return Services.locale.appLocaleAsLangTag;
+  return Services.locale.appLocaleAsBCP47;
 }
 
 /**
@@ -1338,3 +1270,95 @@ function getLocale() {
 function getNotificationFromElement(aElement) {
   return aElement.closest("popupnotification");
 }
+
+/**
+ * This object is Thunderbird's version of the same object in
+ * browser/base/content/browser-addons.js.
+ */
+var gExtensionsNotifications = {
+  initialized: false,
+  init() {
+    this.updateAlerts();
+    this.boundUpdate = this.updateAlerts.bind(this);
+    ExtensionsUI.on("change", this.boundUpdate);
+    this.initialized = true;
+  },
+
+  uninit() {
+    // uninit() can race ahead of init() in some cases, if that happens,
+    // we have no handler to remove.
+    if (!this.initialized) {
+      return;
+    }
+    ExtensionsUI.off("change", this.boundUpdate);
+  },
+
+  _createAddonButton(text, icon, callback) {
+    let button = document.createXULElement("toolbarbutton");
+    button.setAttribute("label", text);
+    button.setAttribute("tooltiptext", text);
+    const DEFAULT_EXTENSION_ICON =
+      "chrome://mozapps/skin/extensions/extensionGeneric.svg";
+    button.setAttribute("image", icon || DEFAULT_EXTENSION_ICON);
+    button.className = "addon-banner-item";
+
+    button.addEventListener("command", callback);
+    PanelUI.addonNotificationContainer.appendChild(button);
+  },
+
+  updateAlerts() {
+    let tabmail = document.getElementById("tabmail");
+    let sideloaded = ExtensionsUI.sideloaded;
+    let updates = ExtensionsUI.updates;
+    let bundle = new StringBundle(
+      "chrome://messenger/locale/addons.properties"
+    );
+
+    let container = PanelUI.addonNotificationContainer;
+
+    while (container.firstChild) {
+      container.firstChild.remove();
+    }
+
+    let items = 0;
+    for (let update of updates) {
+      if (++items > 4) {
+        break;
+      }
+      let text = bundle.getFormattedString("webextPerms.updateMenuItem", [
+        update.addon.name,
+      ]);
+      this._createAddonButton(text, update.addon.iconURL, evt => {
+        ExtensionsUI.showUpdate(tabmail.selectedBrowser, update);
+      });
+    }
+
+    let appName;
+    for (let addon of sideloaded) {
+      if (++items > 4) {
+        break;
+      }
+      if (!appName) {
+        let brandBundle = document.getElementById("bundle_brand");
+        appName = brandBundle.getString("brandShortName");
+      }
+
+      let text = bundle.getFormattedString("webextPerms.sideloadMenuItem", [
+        addon.name,
+        appName,
+      ]);
+      this._createAddonButton(text, addon.iconURL, evt => {
+        // We need to hide the main menu manually because the toolbarbutton is
+        // removed immediately while processing this event, and PanelUI is
+        // unable to identify which panel should be closed automatically.
+        PanelUI.hide();
+        ExtensionsUI.showSideloaded(tabmail.selectedBrowser, addon);
+      });
+    }
+  },
+};
+
+addEventListener("load", () => gExtensionsNotifications.init(), { once: true });
+addEventListener("unload", () => gExtensionsNotifications.uninit(), {
+  once: true,
+});

@@ -9,13 +9,13 @@
 // Wrap in a block to prevent leaking to window scope.
 {
   /**
-   * The MozChatGroup widget displays chat group name and behave as a
+   * The MozChatGroupRichlistitem widget displays chat group name and behave as a
    * expansion twisty for groups such as "Conversations",
    * "Online Contacts" and "Offline Contacts".
    *
    * @extends {MozElements.MozRichlistitem}
    */
-  class MozChatGroup extends MozElements.MozRichlistitem {
+  class MozChatGroupRichlistitem extends MozElements.MozRichlistitem {
     static get inheritedAttributes() {
       return {
         label: "value=name",
@@ -26,7 +26,7 @@
         return;
       }
 
-      this.setAttribute("is", "chat-group");
+      this.setAttribute("is", "chat-group-richlistitem");
       this.setAttribute("collapsed", "true");
 
       this._image = document.createXULElement("image");
@@ -93,11 +93,11 @@
       let contactElt;
       if (tagName) {
         contactElt = document.createXULElement("richlistitem", {
-          is: "chat-imconv",
+          is: "chat-imconv-richlistitem",
         });
       } else {
         contactElt = document.createXULElement("richlistitem", {
-          is: "chat-contact",
+          is: "chat-contact-richlistitem",
         });
       }
       if (this.classList.contains("closed")) {
@@ -121,7 +121,7 @@
         }
       }
       let last = end == 0 ? this : this.contacts[end - 1];
-      this.parentNode.insertBefore(contactElt, last.nextSibling);
+      this.parentNode.insertBefore(contactElt, last.nextElementSibling);
       contactElt.build(contact);
       contactElt.group = this;
       this.contacts.splice(end, 0, contactElt);
@@ -131,7 +131,7 @@
       return contactElt;
     }
 
-    updateContactPosition(subject) {
+    updateContactPosition(subject, tagName) {
       let contactElt = this.contactsById[subject.id];
       let index = this.contacts.indexOf(contactElt);
       if (index == -1) {
@@ -152,10 +152,11 @@
             this.contacts[index + 1].contact
           ) > 0)
       ) {
-        let oldItem = this.removeContact(subject);
-        let newItem = this.addContact(subject);
         let list = this.parentNode;
-        if (list.selectedItem == oldItem) {
+        let selectedItem = list.selectedItem;
+        let oldItem = this.removeContact(subject);
+        let newItem = this.addContact(subject, tagName);
+        if (selectedItem == oldItem) {
           list.selectedItem = newItem;
         }
       }
@@ -236,11 +237,11 @@
     }
   }
 
-  MozXULElement.implementCustomInterface(MozChatGroup, [
+  MozXULElement.implementCustomInterface(MozChatGroupRichlistitem, [
     Ci.nsIDOMXULSelectControlItemElement,
   ]);
 
-  customElements.define("chat-group", MozChatGroup, {
+  customElements.define("chat-group-richlistitem", MozChatGroupRichlistitem, {
     extends: "richlistitem",
   });
 }

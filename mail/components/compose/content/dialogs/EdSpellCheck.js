@@ -139,8 +139,8 @@ function InitLanguageMenu(aCurLang) {
 
   // Remove any languages from the list.
   var languageMenuPopup = gDialog.LanguageMenulist.menupopup;
-  while (languageMenuPopup.firstChild.localName != "menuseparator") {
-    languageMenuPopup.firstChild.remove();
+  while (languageMenuPopup.firstElementChild.localName != "menuseparator") {
+    languageMenuPopup.firstElementChild.remove();
   }
 
   var defaultItem = null;
@@ -339,7 +339,7 @@ function AddToDictionary() {
 
 function EditDictionary() {
   window.openDialog(
-    "chrome://messenger/content/messengercompose/EdDictionary.xul",
+    "chrome://messenger/content/messengercompose/EdDictionary.xhtml",
     "_blank",
     "chrome,close,titlebar,modal",
     "",

@@ -14,19 +14,19 @@ function run_test() {
 }
 
 function test_found() {
-  search.getProviders({}).forEach(search.removeProvider, search);
+  search.getProviders().forEach(search.removeProvider, search);
 
-  equal(search.getProviders({}).length, 0);
+  equal(search.getProviders().length, 0);
 
   let provider1 = {
     id: 1,
-    searchForCalendars: function() {},
+    searchForCalendars() {},
   };
 
   let provider2 = {
     id: 2,
     called: false,
-    searchForCalendars: function(aStr, aHint, aMax, aListener) {
+    searchForCalendars(aStr, aHint, aMax, aListener) {
       ok(!this.called);
       this.called = true;
 
@@ -42,16 +42,16 @@ function test_found() {
   provider2.wrappedJSObject = provider2;
 
   search.addProvider(provider1);
-  equal(search.getProviders({}).length, 1);
+  equal(search.getProviders().length, 1);
   search.addProvider(provider2);
-  equal(search.getProviders({}).length, 2);
+  equal(search.getProviders().length, 2);
   search.removeProvider(provider1);
-  equal(search.getProviders({}).length, 1);
-  equal(search.getProviders({})[0].wrappedJSObject.id, 2);
+  equal(search.getProviders().length, 1);
+  equal(search.getProviders()[0].wrappedJSObject.id, 2);
 
   let listener = {
     called: false,
-    onResult: function(request, result) {
+    onResult(request, result) {
       ok(!this.called);
       this.called = true;
 
@@ -66,17 +66,17 @@ function test_found() {
 }
 
 function test_failure() {
-  search.getProviders({}).forEach(search.removeProvider, search);
+  search.getProviders().forEach(search.removeProvider, search);
 
   let provider = {
-    searchForCalendars: function(aStr, aHint, aMax, aListener) {
+    searchForCalendars(aStr, aHint, aMax, aListener) {
       throw new Error("error");
     },
   };
 
   let listener = {
     called: false,
-    onResult: function(request, result) {
+    onResult(request, result) {
       ok(!this.called);
       this.called = true;
       equal(result.length, 0);
@@ -90,14 +90,14 @@ function test_failure() {
 }
 
 function test_cancel() {
-  search.getProviders({}).forEach(search.removeProvider, search);
+  search.getProviders().forEach(search.removeProvider, search);
 
   let provider = {
     QueryInterface: cal.generateQI([Ci.calICalendarSearchProvider, Ci.calIOperation]),
-    searchForCalendars: function(aStr, aHint, aMax, aListener) {
+    searchForCalendars(aStr, aHint, aMax, aListener) {
       Services.tm.currentThread.dispatch(
         {
-          run: function() {
+          run() {
             dump("Cancelling search...");
             operation.cancel();
           },
@@ -113,14 +113,14 @@ function test_cancel() {
     isPending: true,
     cancelCalled: false,
     status: Cr.NS_OK,
-    cancel: function() {
+    cancel() {
       this.cancelCalled = true;
     },
   };
 
   let listener = {
     called: false,
-    onResult: function(request, result) {
+    onResult(request, result) {
       equal(result, null);
 
       // If an exception occurs, the operation is not added to the opgroup

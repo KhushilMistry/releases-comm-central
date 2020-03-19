@@ -58,7 +58,7 @@ AddrBookMailingList.prototype = {
       classID: Components.ID("{e96ee804-0bd3-472f-81a6-8a9d65277ad3}"),
 
       get propertiesChromeURI() {
-        return "chrome://messenger/content/addressbook/abAddressBookNameDialog.xul";
+        return "chrome://messenger/content/addressbook/abAddressBookNameDialog.xhtml";
       },
       get UID() {
         return self._uid;
@@ -222,11 +222,20 @@ AddrBookMailingList.prototype = {
       get localId() {
         return self._localId;
       },
+      get firstName() {
+        return "";
+      },
+      get lastName() {
+        return self._name;
+      },
       get displayName() {
         return self._name;
       },
       set displayName(value) {
         self._name = value;
+      },
+      get primaryEmail() {
+        return "";
       },
 
       generateName(generateFormat) {

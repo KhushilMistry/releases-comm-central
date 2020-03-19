@@ -28,6 +28,7 @@
 #include "mozilla/Services.h"
 #include "mozilla/SlicedInputStream.h"
 #include "mozilla/mailnews/MimeHeaderParser.h"
+#include "mozilla/Utf8.h"
 #include "nsContentUtils.h"
 #include "nsIURIMutator.h"
 
@@ -887,7 +888,7 @@ nsresult nsNNTPProtocol::LoadUrl(nsIURI *aURL, nsISupports *aConsumer) {
   NS_ASSERTION(NS_SUCCEEDED(rv), "failed to parse news url");
   // if (NS_FAILED(rv)) return rv;
   // XXX group returned from ParseURL is assumed to be in UTF-8
-  NS_ASSERTION(MsgIsUTF8(group), "newsgroup name is not in UTF-8");
+  NS_ASSERTION(mozilla::IsUtf8(group), "newsgroup name is not in UTF-8");
   NS_ASSERTION(m_nntpServer, "Parsing must result in an m_nntpServer");
 
   MOZ_LOG(NNTP, LogLevel::Info,
@@ -2712,7 +2713,7 @@ nsNNTPProtocol::Notify(nsITimer *timer) {
 }
 
 void nsNNTPProtocol::TimerCallback() {
-  MOZ_LOG(NNTP, LogLevel::Info, ("nsNNTPProtocol::TimerCallback\n"));
+  MOZ_LOG(NNTP, LogLevel::Info, ("nsNNTPProtocol::TimerCallback"));
   m_nextState = NNTP_READ_LIST;
 
   // process whatever is already in the buffer at least once.
@@ -4276,12 +4277,12 @@ nsresult nsNNTPProtocol::ProcessProtocolState(nsIURI *url,
         if (m_responseCode != MK_NNTP_RESPONSE_ARTICLE_NOTFOUND &&
             m_responseCode != MK_NNTP_RESPONSE_ARTICLE_NONEXIST)
           return CloseConnection();
-        MOZ_FALLTHROUGH;
+        [[fallthrough]];
       case NEWS_FREE:
         // Remember when we last used this connection
         m_lastActiveTimeStamp = PR_Now();
         CleanupAfterRunningUrl();
-        MOZ_FALLTHROUGH;
+        [[fallthrough]];
       case NNTP_SUSPENDED:
         return NS_OK;
         break;

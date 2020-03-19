@@ -15,8 +15,6 @@ var RDF;
 var msgComposeType;
 var msgComposeFormat;
 
-var mailSession;
-
 var gMessengerBundle;
 var gBrandBundle;
 
@@ -29,9 +27,6 @@ var gAccountCentralLoaded = true;
 //End progress and Status variables
 
 var gOfflineManager;
-
-// cache the last keywords
-var gLastKeywords = "";
 
 function OnMailWindowUnload()
 {
@@ -51,11 +46,9 @@ function OnMailWindowUnload()
     dbview.close();
   }
 
-  var mailSession = Cc["@mozilla.org/messenger/services/session;1"]
-                      .getService();
-  if (mailSession instanceof Ci.nsIMsgMailSession)
-    mailSession.RemoveFolderListener(folderListener);
-  mailSession.RemoveMsgWindow(msgWindow);
+  MailServices.mailSession.RemoveFolderListener(folderListener);
+
+  MailServices.mailSession.RemoveMsgWindow(msgWindow);
   messenger.setWindow(null, null);
 
   msgWindow.closeWindow();
@@ -189,8 +182,6 @@ function CreateMailWindowGlobals()
   msgComposeService = Cc['@mozilla.org/messengercompose;1']
                         .getService(Ci.nsIMsgComposeService);
 
-  mailSession = Cc["@mozilla.org/messenger/services/session;1"].getService(Ci.nsIMsgMailSession);
-
   accountManager = Cc["@mozilla.org/messenger/account-manager;1"].getService(Ci.nsIMsgAccountManager);
 
   RDF = Cc['@mozilla.org/rdf/rdf-service;1']
@@ -221,7 +212,7 @@ function InitMsgWindow()
   msgWindow.domWindow = window;
   msgWindow.statusFeedback = statusFeedback;
   msgWindow.msgHeaderSink = messageHeaderSink;
-  mailSession.AddMsgWindow(msgWindow);
+  MailServices.mailSession.AddMsgWindow(msgWindow);
 
   var messagepane = getMessageBrowser();
   messagepane.docShell.allowAuth = false;
@@ -345,26 +336,6 @@ function messagePaneOnClick(event)
   return true;
 }
 
-function AddDataSources()
-{
-  SetupMoveCopyMenus('moveMenu', accountManagerDataSource, folderDataSource);
-  SetupMoveCopyMenus('copyMenu', accountManagerDataSource, folderDataSource);
-  SetupMoveCopyMenus('button-file', accountManagerDataSource, folderDataSource);
-  SetupMoveCopyMenus('mailContext-copyMenu', accountManagerDataSource, folderDataSource);
-  SetupMoveCopyMenus('mailContext-moveMenu', accountManagerDataSource, folderDataSource);
-}
-
-function SetupMoveCopyMenus(menuid, accountManagerDataSource, folderDataSource)
-{
-  var menu = document.getElementById(menuid);
-  if (menu)
-  {
-    menu.database.AddDataSource(accountManagerDataSource);
-    menu.database.AddDataSource(folderDataSource);
-    menu.setAttribute('ref', 'msgaccounts:/');
-  }
-}
-
 // We're going to implement our status feedback for the mail window in JS now.
 // the following contains the implementation of our status feedback object
 
@@ -480,11 +451,6 @@ nsMsgStatusFeedback.prototype =
   },
    _stopMeteors : function()
     {
-      if(gTimelineEnabled){
-        gTimelineService.stopTimer("FolderLoading");
-        gTimelineService.markTimer("FolderLoading");
-        gTimelineService.resetTimer("FolderLoading");
-      }
       this.ensureStatusFields();
       this.showStatusString(this.myDefaultStatus);
 
@@ -630,46 +596,6 @@ function GetSearchSession()
     return gSearchSession;
   else
     return null;
-}
-
-function SetKeywords(aKeywords)
-{
-  // we cache the last keywords.
-  // if there is no chagne, we do nothing.
-  // most of the time, this will be the case.
-  if (aKeywords == gLastKeywords)
-    return;
-
-  // these are the UI elements who care about keywords
-  var elements = document.getElementsByAttribute("keywordrelated","true");
-  var len = elements.length;
-  for (var i=0; i<len; i++) {
-    var element = elements[i];
-    var originalclass = element.getAttribute("originalclass");
-
-    // we use XBL for certain headers.
-    // if the element has keywordrelated="true"
-    // but no original class, it's an XBL widget
-    // so to get the real element, use getAnonymousElementByAttribute()
-    if (!originalclass) {
-      element = document.getAnonymousElementByAttribute(element, "keywordrelated", "true");
-      originalclass = element.getAttribute("originalclass");
-    }
-
-    if (aKeywords) {
-      if (element.getAttribute("appendoriginalclass") == "true") {
-        aKeywords += " " + originalclass;
-      }
-      element.setAttribute("class", aKeywords);
-    }
-    else {
-      // if no keywords, reset class to the original class
-      element.setAttribute("class", originalclass);
-    }
-  }
-
-  // cache the keywords
-  gLastKeywords = aKeywords;
 }
 
 function MailSetCharacterSet(aEvent)

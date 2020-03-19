@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -15,6 +15,7 @@
 #include "nsServiceManagerUtils.h"
 #include "nsTreeColumns.h"
 #include "mozilla/dom/DataTransfer.h"
+#include "mozilla/Utf8.h"
 
 nsSubscribableServer::nsSubscribableServer(void) {
   mDelimiter = '.';
@@ -114,7 +115,7 @@ nsSubscribableServer::SetState(const nsACString &aPath, bool aState,
   NS_ASSERTION(!aPath.IsEmpty() && aStateChanged, "no path or stateChanged");
   if (aPath.IsEmpty() || !aStateChanged) return NS_ERROR_NULL_POINTER;
 
-  NS_ASSERTION(MsgIsUTF8(aPath), "aPath is not in UTF-8");
+  NS_ASSERTION(mozilla::IsUtf8(aPath), "aPath is not in UTF-8");
 
   *aStateChanged = false;
 

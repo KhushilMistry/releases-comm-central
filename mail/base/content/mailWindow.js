@@ -21,15 +21,15 @@ var { MailServices } = ChromeUtils.import(
   "resource:///modules/MailServices.jsm"
 );
 var { appIdleManager } = ChromeUtils.import(
-  "resource:///modules/appIdleManager.js"
+  "resource:///modules/AppIdleManager.jsm"
 );
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { MailUtils } = ChromeUtils.import("resource:///modules/MailUtils.jsm");
 var { XPCOMUtils } = ChromeUtils.import(
   "resource://gre/modules/XPCOMUtils.jsm"
 );
-var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/log4moz.js");
-var { Gloda } = ChromeUtils.import("resource:///modules/gloda/public.js");
+var { Log4Moz } = ChromeUtils.import("resource:///modules/gloda/Log4moz.jsm");
+var { Gloda } = ChromeUtils.import("resource:///modules/gloda/GlodaPublic.jsm");
 
 // This file stores variables common to mail windows
 var messenger;
@@ -47,9 +47,9 @@ var gMailWindowLog = Log4Moz.getConfiguredLogger(
 );
 
 /**
- * Called by messageWindow.xul:onunload,  the 'single message display window'.
+ * Called by messageWindow.xhtml:onunload,  the 'single message display window'.
  *
- * Also called by messenger.xul:onunload's (the 3-pane window inside of tabs
+ * Also called by messenger.xhtml:onunload's (the 3-pane window inside of tabs
  *  window) unload function, OnUnloadMessenger.
  */
 function OnMailWindowUnload() {
@@ -190,7 +190,7 @@ function CreateMailWindowGlobals() {
     .getInterface(Ci.nsIWebNavigation)
     .QueryInterface(Ci.nsIDocShellTreeItem)
     .treeOwner.QueryInterface(Ci.nsIInterfaceRequestor)
-    .getInterface(Ci.nsIXULWindow).XULBrowserWindow = window.MsgStatusFeedback;
+    .getInterface(Ci.nsIAppWindow).XULBrowserWindow = window.MsgStatusFeedback;
 
   window.browserDOMWindow = new nsBrowserAccess();
 
@@ -210,8 +210,6 @@ function CreateMailWindowGlobals() {
   );
 
   accountManager = MailServices.accounts;
-
-  msgWindow.notificationCallbacks = new BadCertHandler();
 }
 
 function InitMsgWindow() {
@@ -676,33 +674,7 @@ function UpdateFullZoomMenu() {
   cmdItem.setAttribute("checked", !ZoomManager.useFullZoom);
 }
 
-/**
- * This class implements nsIBadCertListener2.  Its job is to prevent "bad cert"
- * security dialogs from being shown to the user.  Currently it puts up the
- * cert override dialog, though we'd like to give the user more detailed
- * information in the future.
- */
-function BadCertHandler() {}
-
-BadCertHandler.prototype = {
-  // Suppress any certificate errors
-  notifyCertProblem(socketInfo, status, targetSite) {
-    setTimeout(InformUserOfCertError, 0, socketInfo, status, targetSite);
-    return true;
-  },
-
-  // nsIInterfaceRequestor
-  getInterface(iid) {
-    return this.QueryInterface(iid);
-  },
-
-  // nsISupports
-  QueryInterface: ChromeUtils.generateQI([
-    "nsIBadCertListener2",
-    "nsIInterfaceRequestor",
-  ]),
-};
-
+// TODO: Add new error handling that uses this code. See bug 1547096.
 function InformUserOfCertError(socketInfo, secInfo, targetSite) {
   let params = {
     exceptionAdded: false,
@@ -711,7 +683,7 @@ function InformUserOfCertError(socketInfo, secInfo, targetSite) {
     location: targetSite,
   };
   window.openDialog(
-    "chrome://pippki/content/exceptionDialog.xul",
+    "chrome://pippki/content/exceptionDialog.xhtml",
     "",
     "chrome,centerscreen,modal",
     params
@@ -724,24 +696,34 @@ nsBrowserAccess.prototype = {
   QueryInterface: ChromeUtils.generateQI(["nsIBrowserDOMWindow"]),
 
   // The following function may be called during account creation, it is called by
-  // the Mozmill test test-newmailaccount.js::test_window_open_link_opening_behaviour.
+  // the test browser_newmailaccount.js::test_window_open_link_opening_behaviour.
   createContentWindow(
     aURI,
     aOpener,
     aWhere,
     aFlags,
-    aTriggeringPrincipal = null
+    aTriggeringPrincipal = null,
+    aCsp = null
   ) {
     return this.getContentWindowOrOpenURI(
       null,
       aOpener,
       aWhere,
       aFlags,
-      aTriggeringPrincipal
+      aTriggeringPrincipal,
+      aCsp,
+      true
     );
   },
 
-  openURI(aURI, aOpener, aWhere, aFlags, aTriggeringPrincipal = null) {
+  openURI(
+    aURI,
+    aOpener,
+    aWhere,
+    aFlags,
+    aTriggeringPrincipal = null,
+    aCsp = null
+  ) {
     if (!aURI) {
       Cu.reportError("openURI should only be called with a valid URI");
       throw Cr.NS_ERROR_FAILURE;
@@ -751,7 +733,9 @@ nsBrowserAccess.prototype = {
       aOpener,
       aWhere,
       aFlags,
-      aTriggeringPrincipal
+      aTriggeringPrincipal,
+      aCsp,
+      false
     );
   },
 
@@ -760,7 +744,9 @@ nsBrowserAccess.prototype = {
     aOpener,
     aWhere,
     aFlags,
-    aTriggeringPrincipal
+    aTriggeringPrincipal,
+    aCsp,
+    aSkipLoad
   ) {
     const nsIBrowserDOMWindow = Ci.nsIBrowserDOMWindow;
     let isExternal = !!(aFlags & nsIBrowserDOMWindow.OPEN_EXTERNAL);
@@ -812,6 +798,7 @@ nsBrowserAccess.prototype = {
       background: loadInBackground,
       opener: aOpener,
       clickHandler,
+      skipLoad: aSkipLoad,
     });
 
     let docShell = newTab.browser.docShell;
